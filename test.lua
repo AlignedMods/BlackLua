@@ -1,2 +1,6 @@
-local var = 432.77 / 48.9
-local var2 = var + 9 - 4.2 * 43.2
+function func(name) 
+    local var = 69.420
+    local var2 = var * var + 48.3
+end
+
+func(6.4)

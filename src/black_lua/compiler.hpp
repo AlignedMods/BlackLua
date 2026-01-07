@@ -204,6 +204,7 @@ namespace BlackLua {
     };
 
     struct NodeFunction {
+        Token Name;
         std::string Signature;
         std::vector<Node*> Arguments;
         std::vector<Node*> Body;
@@ -283,8 +284,13 @@ namespace BlackLua {
         Node* Peek(size_t amount = 0);
         Node* Consume();
 
+        void EmitNode(Node* node);
+
         void EmitNodeValue(Node* node);
-        void EmitNodeVar();
+        void EmitNodeVar(Node* node);
+
+        void EmitNodeFunction(Node* node);
+        void EmitNodeFunctionCall(Node* node);
 
     private:
         std::string m_Output;

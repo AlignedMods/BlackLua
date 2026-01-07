@@ -76,19 +76,20 @@ namespace BlackLua {
         NodeFunction* node = new NodeFunction();
 
         if (Match(TokenType::Identifier)) {
-            std::string sig;
+            std::string sig = "FUNC__BLUA_";
 
             Token ident = Consume();
             sig += ident.Data;
+            node->Name = ident;
 
             if (Match(TokenType::LeftParen)) {
                 Consume();
-                sig += '(';
+                sig += 'Z';
 
                 while (Match(TokenType::Identifier)) {
                     Node* arg = ParseVariable(false);
 
-                    sig += "_,";
+                    sig += "a";
                     node->Arguments.push_back(arg);
                 }
 
@@ -98,8 +99,6 @@ namespace BlackLua {
                 }
 
                 Consume();
-
-                sig += ')';
 
                 node->Signature = sig;
 
@@ -136,10 +135,10 @@ namespace BlackLua {
         Token ident = Consume();
         Consume(); // Eat '('
 
-        std::string sig = ident.Data + '(';
+        std::string sig = "FUNC__BLUA_" + ident.Data + 'Z';
 
         while (!Match(TokenType::RightParen) && Peek()) {
-            sig += "_,";
+            sig += "a";
 
             Node* param = ParseValue();
 
@@ -151,7 +150,6 @@ namespace BlackLua {
             exit(-1);
         }
         Consume();
-        sig += ')';
 
         node->Signature = sig;
 

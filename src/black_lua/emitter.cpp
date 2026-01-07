@@ -15,9 +15,7 @@ namespace BlackLua {
 
     void Emitter::EmitImpl() {
         while (Peek()) {
-            if (Peek()->Type == NodeType::Var) {
-                EmitNodeVar();
-            }
+            EmitNode(Consume());
         }
     }
 
@@ -35,12 +33,28 @@ namespace BlackLua {
         return m_Nodes.at(m_Index++);
     }
 
+    void Emitter::EmitNode(Node* node) {
+        if (node->Type == NodeType::Var) {
+            EmitNodeVar(node);
+        } else if (node->Type == NodeType::Function) {
+            EmitNodeFunction(node);
+        } else if (node->Type == NodeType::FunctionCall) {
+            EmitNodeFunctionCall(node);
+        }
+    }
+
     void Emitter::EmitNodeValue(Node* node) {
         switch (node->Type) {
             case NodeType::Number: {
                 NodeNumber* number = std::get<NodeNumber*>(node->Data);
 
                 m_Output += std::to_string(number->Number);
+                break;
+            }
+            case NodeType::Var: {
+                NodeVar* var = std::get<NodeVar*>(node->Data);
+
+                m_Output += var->Identifier.Data;
                 break;
             }
             case NodeType::VarRef: {
@@ -71,8 +85,7 @@ namespace BlackLua {
         }
     }
 
-    void Emitter::EmitNodeVar() {
-        Node* node = Consume();
+    void Emitter::EmitNodeVar(Node* node) {
         NodeVar* var = std::get<NodeVar*>(node->Data);
         
         if (!var->Global) {
@@ -86,6 +99,41 @@ namespace BlackLua {
             EmitNodeValue(var->Value);
         }
 
+        m_Output += '\n';
+    }
+
+    void Emitter::EmitNodeFunction(Node* node) {
+        NodeFunction* func = std::get<NodeFunction*>(node->Data);
+
+        m_Output += "function ";
+        m_Output += func->Signature;
+        m_Output += '(';
+
+        for (const auto& arg : func->Arguments) {
+            EmitNodeValue(arg);
+        }
+
+        m_Output += ")\n";
+
+        for (const auto& statement : func->Body) {
+            m_Output += "    ";
+            EmitNode(statement);
+        }
+
+        m_Output += "end\n";
+    }
+
+    void Emitter::EmitNodeFunctionCall(Node* node) {
+        NodeFunctionCall* funcCall = std::get<NodeFunctionCall*>(node->Data);
+
+        m_Output += funcCall->Signature;
+        m_Output += '(';
+
+        for (const auto& param : funcCall->Paramaters) {
+            EmitNodeValue(param);
+        }
+
+        m_Output += ')';
         m_Output += '\n';
     }
 

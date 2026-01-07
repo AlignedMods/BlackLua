@@ -35,6 +35,18 @@ namespace BlackLua {
         return m_Tokens.at(m_Index++);
     }
 
+    bool Parser::Match(TokenType type) {
+        if (!Peek()) {
+            return false;
+        }
+
+        if (Peek()->Type == type) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     Node* Parser::ParseIdentifier() {
         return ParseVariable(true);
     }
@@ -53,14 +65,61 @@ namespace BlackLua {
     Node* Parser::ParseFunction() {
         Consume(); // Eat "function"
 
-        if (!Peek()) {
+        NodeFunction* node = new NodeFunction();
+
+        if (Match(TokenType::Identifier)) {
+            std::string sig;
+
+            Token ident = Consume();
+            sig += ident.Data;
+
+            if (Match(TokenType::LeftParen)) {
+                Consume();
+                sig += '(';
+
+                while (Match(TokenType::Identifier)) {
+                    Node* arg = ParseVariable(false);
+
+                    sig += '_';
+                    node->Arguments.push_back(arg);
+                }
+
+                if (!Match(TokenType::RightParen)) {
+                    std::cerr << "Expected ')' after function declaration!" <<  '\n';
+                    exit(-1);
+                }
+
+                Consume();
+
+                sig += ')';
+
+                node->Signature = sig;
+
+                if (Peek()->Type != TokenType::End) {
+                    // Get the function body
+                    while (!Match(TokenType::End) && Peek()) {
+                        Node* stmt = ParseStatement();
+
+                        node->Body.push_back(stmt);
+                    }
+                }
+
+                if (Peek()) {
+                    Consume(); // Eat "end"
+                } else {
+                    std::cerr << "Expected end after function implementation!" <<  '\n';
+                    exit(-1);
+                }
+            } else {
+                std::cerr << "Expected '(' after \"" << ident.Data << "\"!" <<  '\n';
+                exit(-1);
+            }
+        } else {
             std::cerr << "Expected identifier after \"local\"!" << '\n';
             exit(-1);
         }
 
-        Token ident = Consume();
-
-
+        return CreateNode(NodeType::Function, node);
     }
 
     Node* Parser::ParseVariable(bool global) {
@@ -70,13 +129,9 @@ namespace BlackLua {
         node->Identifier = ident;
         node->Global = global;
         
-        if (Peek()) {
-            Token t = *Peek();
-
-            if (t.Type == TokenType::Eq) {
-                Consume();
-                node->Value = ParseExpression();
-            }
+        if (Match(TokenType::Eq)) {
+            Consume();
+            node->Value = ParseExpression();
         }
 
         return CreateNode(NodeType::Var, node);
@@ -100,10 +155,12 @@ namespace BlackLua {
                 break;
             }
         }
+
+        return nullptr;
     }
 
     BinExprType Parser::ParseOperator() {
-        Token op = Consume();
+        Token op = *Peek();
 
         switch (op.Type) {
             case TokenType::Add: return BinExprType::Add;
@@ -119,11 +176,17 @@ namespace BlackLua {
         BinExprType op = BinExprType::Invalid;
         if (Peek()) {
             op = ParseOperator();
+
+            if (op == BinExprType::Invalid) {
+                return lhsNode;
+            } else {
+                Consume(); // Eat the operator
+            }
         } else {
             return lhsNode;
         }
 
-        if (Peek() && op != BinExprType::Invalid) {
+        if (Peek()) {
             Node* rhsNode = ParseExpression();
 
             NodeBinExpr* node = new NodeBinExpr();
@@ -143,7 +206,10 @@ namespace BlackLua {
         } else if (Peek()->Type == TokenType::Function) {
             return ParseFunction();
         } else if (Peek()->Type == TokenType::Identifier) {
-            ParseIdentifier();
+            return ParseIdentifier();
+        } else {
+            BLUA_ASSERT(false, "Unreachable!");
+            Consume();
         }
     }
 

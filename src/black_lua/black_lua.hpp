@@ -6,5 +6,5 @@
 #include <unordered_map>
 
 #ifndef BLUA_ASSERT
-    #define BLUA_ASSERT(condition, error) do { if (!(condition)) { std::cerr << "Assertion failed at: " << __LINE__ << ", " << __FILE__ << "\nError: " << error; abort(); } } while(0)
+    #define BLUA_ASSERT(condition, error) do { if (!(condition)) { std::cerr << "Assertion failed at: " << __LINE__ << ", " << __FILE__ << "\nError: " << error; __debugbreak(); abort(); } } while(0)
 #endif

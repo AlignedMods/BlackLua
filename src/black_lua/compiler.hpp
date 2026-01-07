@@ -174,6 +174,7 @@ namespace BlackLua {
         Number,
         Var,
         VarRef,
+        Function,
         Binary // Binary expression (5 + 3 / 5, 3 * 4, 9 - 3, ...)
     };
 
@@ -202,7 +203,9 @@ namespace BlackLua {
     };
 
     struct NodeFunction {
-        Token Identifier;
+        std::string Signature;
+        std::vector<Node*> Arguments;
+        std::vector<Node*> Body;
     };
 
     // NOTE: RHS can be nullptr if there is no right hand side
@@ -214,7 +217,7 @@ namespace BlackLua {
 
     struct Node {
         NodeType Type = NodeType::Number;
-        std::variant<NodeNumber*, NodeVar*, NodeVarRef*, NodeBinExpr*> Data;
+        std::variant<NodeNumber*, NodeVar*, NodeVarRef*, NodeFunction*, NodeBinExpr*> Data;
     };
 
     class Parser {
@@ -230,6 +233,10 @@ namespace BlackLua {
 
         Token* Peek(size_t count = 0);
         Token Consume();
+
+        // Checks if the current token matches with the requested type
+        // This function cannot fail
+        bool Match(TokenType type);
 
         Node* ParseIdentifier();
         Node* ParseLocal();

@@ -175,6 +175,7 @@ namespace BlackLua {
         Var,
         VarRef,
         Function,
+        FunctionCall,
         Binary // Binary expression (5 + 3 / 5, 3 * 4, 9 - 3, ...)
     };
 
@@ -208,6 +209,11 @@ namespace BlackLua {
         std::vector<Node*> Body;
     };
 
+    struct NodeFunctionCall {
+        std::string Signature;
+        std::vector<Node*> Paramaters;
+    };
+
     // NOTE: RHS can be nullptr if there is no right hand side
     struct NodeBinExpr {
         Node* LHS = nullptr;
@@ -217,7 +223,7 @@ namespace BlackLua {
 
     struct Node {
         NodeType Type = NodeType::Number;
-        std::variant<NodeNumber*, NodeVar*, NodeVarRef*, NodeFunction*, NodeBinExpr*> Data;
+        std::variant<NodeNumber*, NodeVar*, NodeVarRef*, NodeFunction*, NodeFunctionCall*, NodeBinExpr*> Data;
     };
 
     class Parser {
@@ -241,6 +247,7 @@ namespace BlackLua {
         Node* ParseIdentifier();
         Node* ParseLocal();
         Node* ParseFunction();
+        Node* ParseFunctionCall();
         Node* ParseVariable(bool global); // This function expects the first token to be the identifier!
 
         Node* ParseValue();
@@ -262,6 +269,27 @@ namespace BlackLua {
         Nodes m_Nodes;
         size_t m_Index = 0;
         Lexer::Tokens m_Tokens;
+    };
+
+    class Emitter {
+    public:
+        static Emitter Emit(const Parser::Nodes& nodes);
+
+        const std::string& GetOutput() const;
+
+    private:
+        void EmitImpl();
+
+        Node* Peek(size_t amount = 0);
+        Node* Consume();
+
+        void EmitNodeValue(Node* node);
+        void EmitNodeVar();
+
+    private:
+        std::string m_Output;
+        size_t m_Index = 0;
+        Parser::Nodes m_Nodes;
     };
 
 } // namespace BlackLua

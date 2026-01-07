@@ -2,20 +2,20 @@
 
 #define BLUA_TOKEN(str, type)        \
     if (buf == str) {                \
-        AddToken(TokenType::##type); \
+        AddToken(TokenType::type);   \
         foundToken = true;           \
         continue;                    \
     }
 
 #define BLUA_TOKEN_C(character, type) \
     if (c == character) {             \
-        AddToken(TokenType::##type);  \
+        AddToken(TokenType::type);    \
         continue;                     \
     }
 
 #define BLUA_TOKEN_DATA(str, type, data)   \
     if (buf == str) {                      \
-        AddToken(TokenType::##type, data); \
+        AddToken(TokenType::type, data);   \
         foundToken = true;                 \
         continue;                          \
     }

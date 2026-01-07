@@ -48,6 +48,14 @@ namespace BlackLua {
     }
 
     Node* Parser::ParseIdentifier() {
+        if (Peek(1)) {
+            Token t = Peek()[1];
+
+            if (t.Type == TokenType::LeftParen) {
+                return ParseFunctionCall();
+            }
+        }
+
         return ParseVariable(true);
     }
 
@@ -80,7 +88,7 @@ namespace BlackLua {
                 while (Match(TokenType::Identifier)) {
                     Node* arg = ParseVariable(false);
 
-                    sig += '_';
+                    sig += "_,";
                     node->Arguments.push_back(arg);
                 }
 
@@ -120,6 +128,34 @@ namespace BlackLua {
         }
 
         return CreateNode(NodeType::Function, node);
+    }
+
+    Node* Parser::ParseFunctionCall() {
+        NodeFunctionCall* node = new NodeFunctionCall();
+
+        Token ident = Consume();
+        Consume(); // Eat '('
+
+        std::string sig = ident.Data + '(';
+
+        while (!Match(TokenType::RightParen) && Peek()) {
+            sig += "_,";
+
+            Node* param = ParseValue();
+
+            node->Paramaters.push_back(param);
+        }
+
+        if (!Match(TokenType::RightParen)) {
+            std::cerr << "Expected ')' after function call!\n";
+            exit(-1);
+        }
+        Consume();
+        sig += ')';
+
+        node->Signature = sig;
+
+        return CreateNode(NodeType::FunctionCall, node);
     }
 
     Node* Parser::ParseVariable(bool global) {

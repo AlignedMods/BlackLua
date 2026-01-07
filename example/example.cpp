@@ -17,7 +17,9 @@ int main() {
     }
 
     BlackLua::Parser p = BlackLua::Parser::Parse(l.GetTokens());
-    std::cout << "bye";
+
+    BlackLua::Emitter e = BlackLua::Emitter::Emit(p.GetNodes());
+    std::cout << "Output: " << e.GetOutput() << '\n';
 
     return 0;
 }

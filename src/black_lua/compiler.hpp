@@ -176,7 +176,9 @@ namespace BlackLua {
         VarRef,
         Function,
         FunctionCall,
-        Binary // Binary expression (5 + 3 / 5, 3 * 4, 9 - 3, ...)
+        Binary, // Binary expression (5 + 3 / 5, 3 * 4, 9 - 3, ...)
+        If,
+        Return
     };
 
     enum class BinExprType {
@@ -184,7 +186,12 @@ namespace BlackLua {
         Add,
         Sub,
         Mul,
-        Div
+        Div,
+
+        Less,
+        LessOrEq,
+        Greater,
+        GreaterOrEq
     };
 
     struct Node; // Forward declaration of Expr
@@ -222,9 +229,18 @@ namespace BlackLua {
         BinExprType Type = BinExprType::Invalid;
     };
 
+    struct NodeIf {
+        Node* Expression = nullptr;
+        std::vector<Node*> Body;
+    };
+
+    struct NodeReturn {
+        Node* Value = nullptr;
+    };
+
     struct Node {
         NodeType Type = NodeType::Number;
-        std::variant<NodeNumber*, NodeVar*, NodeVarRef*, NodeFunction*, NodeFunctionCall*, NodeBinExpr*> Data;
+        std::variant<NodeNumber*, NodeVar*, NodeVarRef*, NodeFunction*, NodeFunctionCall*, NodeBinExpr*, NodeIf*, NodeReturn*> Data;
     };
 
     class Parser {
@@ -253,6 +269,10 @@ namespace BlackLua {
 
         Node* ParseValue();
         BinExprType ParseOperator();
+
+        Node* ParseIf();
+
+        Node* ParseReturn();
 
         Node* ParseExpression();
 
@@ -286,11 +306,15 @@ namespace BlackLua {
 
         void EmitNode(Node* node);
 
-        void EmitNodeValue(Node* node);
+        void EmitNodeExpression(Node* node);
         void EmitNodeVar(Node* node);
 
         void EmitNodeFunction(Node* node);
         void EmitNodeFunctionCall(Node* node);
+
+        void EmitNodeIf(Node* node);
+
+        void EmitNodeReturn(Node* node);
 
     private:
         std::string m_Output;

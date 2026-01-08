@@ -169,6 +169,27 @@ namespace BlackLua {
                     }
                 }
 
+                // Special case if there is a less than sign (<), this could be either a less than or less than equal check (<=)
+                if (c == '<') {
+                    bool isEq = false;
+
+                    if (Peek()) {
+                        char nc = *Peek();
+
+                        if (nc == '=') {
+                            isEq = true;
+                        }
+                    }
+
+                    if (isEq) {
+                        AddToken(TokenType::LessOrEq);
+                        continue;
+                    } else {
+                        AddToken(TokenType::Less);
+                        continue;
+                    }
+                }
+
                 continue;
             } else {
                 Consume();

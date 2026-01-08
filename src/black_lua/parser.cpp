@@ -76,7 +76,7 @@ namespace BlackLua {
         NodeFunction* node = new NodeFunction();
 
         if (Match(TokenType::Identifier)) {
-            std::string sig = "FUNC__BLUA_";
+            std::string sig = "fB5";
 
             Token ident = Consume();
             sig += ident.Data;
@@ -135,7 +135,7 @@ namespace BlackLua {
         Token ident = Consume();
         Consume(); // Eat '('
 
-        std::string sig = "FUNC__BLUA_" + ident.Data + 'Z';
+        std::string sig = "fB5" + ident.Data + 'Z';
 
         while (!Match(TokenType::RightParen) && Peek()) {
             sig += "a";
@@ -183,6 +183,14 @@ namespace BlackLua {
                 break;
             }
             case TokenType::Identifier: {
+                if (Peek()) {
+                    Token t = *Peek();
+
+                    if (t.Type == TokenType::LeftParen) {
+                        return ParseFunctionCall();
+                    }
+                }
+
                 NodeVarRef* node = new NodeVarRef(value);
 
                 return CreateNode(NodeType::VarRef, node);
@@ -201,6 +209,10 @@ namespace BlackLua {
             case TokenType::Sub: return BinExprType::Sub;
             case TokenType::Mul: return BinExprType::Mul;
             case TokenType::Div: return BinExprType::Div;
+            case TokenType::Less: return BinExprType::Less;
+            case TokenType::LessOrEq: return BinExprType::LessOrEq;
+            case TokenType::Greater: return BinExprType::Greater;
+            case TokenType::GreaterOrEq: return BinExprType::GreaterOrEq;
             default: return BinExprType::Invalid;
         }
     }
@@ -234,6 +246,42 @@ namespace BlackLua {
         return nullptr;
     }
 
+    Node* Parser::ParseIf() {
+        NodeIf* node = new NodeIf();
+
+        Consume(); // Eat "if"
+        
+        Node* expr = ParseExpression();
+        node->Expression = expr;
+
+        Consume(); // Eat "then"
+
+        if (Peek()->Type != TokenType::End) {
+            // Get the if body
+            while (!Match(TokenType::End) && Peek()) {
+                Node* stmt = ParseStatement();
+
+                node->Body.push_back(stmt);
+            }
+        }
+
+        Consume(); // Eat "end"
+
+        return CreateNode(NodeType::If, node);
+    }
+
+    Node* Parser::ParseReturn() {
+        NodeReturn* node = new NodeReturn();
+
+        Consume(); // Eat "return"
+
+        Node* expr = ParseExpression();
+
+        node->Value = expr;
+
+        return CreateNode(NodeType::Return, node);
+    }
+
     Node* Parser::ParseStatement() {
         if (Peek()->Type == TokenType::Local) {
             return ParseLocal();
@@ -241,10 +289,16 @@ namespace BlackLua {
             return ParseFunction();
         } else if (Peek()->Type == TokenType::Identifier) {
             return ParseIdentifier();
+        } else if (Peek()->Type == TokenType::If) {
+            return ParseIf();
+        } else if (Peek()->Type == TokenType::Return) {
+            return ParseReturn();
         } else {
             BLUA_ASSERT(false, "Unreachable!");
             Consume();
         }
+
+        return nullptr;
     }
 
 } // namespace BlackLua

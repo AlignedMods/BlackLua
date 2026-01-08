@@ -1,6 +1,9 @@
-function func(name) 
-    local var = 69.420
-    local var2 = var * var + 48.3
+function AddFive(var)
+    return var + 5
 end
 
-func(6.4)
+if 5 < 4 then
+    local hello = 7.5
+    hello = hello + 6
+    hello = AddFive(1)
+end

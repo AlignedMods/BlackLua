@@ -40,10 +40,14 @@ namespace BlackLua {
             EmitNodeFunction(node);
         } else if (node->Type == NodeType::FunctionCall) {
             EmitNodeFunctionCall(node);
+        } else if (node->Type == NodeType::If) {
+            EmitNodeIf(node);
+        } else if (node->Type == NodeType::Return) {
+            EmitNodeReturn(node);
         }
     }
 
-    void Emitter::EmitNodeValue(Node* node) {
+    void Emitter::EmitNodeExpression(Node* node) {
         switch (node->Type) {
             case NodeType::Number: {
                 NodeNumber* number = std::get<NodeNumber*>(node->Data);
@@ -66,7 +70,7 @@ namespace BlackLua {
             case NodeType::Binary: {
                 NodeBinExpr* binExpr = std::get<NodeBinExpr*>(node->Data);
 
-                EmitNodeValue(binExpr->LHS);
+                EmitNodeExpression(binExpr->LHS);
 
                 if (binExpr->Type == BinExprType::Add) {
                     m_Output += " + ";
@@ -76,9 +80,21 @@ namespace BlackLua {
                     m_Output += " * ";
                 } else if (binExpr->Type == BinExprType::Div) {
                     m_Output += " / ";
+                } else if (binExpr->Type == BinExprType::Less) {
+                    m_Output += " < ";
+                } else if (binExpr->Type == BinExprType::LessOrEq) {
+                    m_Output += " <= ";
+                } else if (binExpr->Type == BinExprType::Greater) {
+                    m_Output += " > ";
+                } else if (binExpr->Type == BinExprType::GreaterOrEq) {
+                    m_Output += " >= ";
                 }
 
-                EmitNodeValue(binExpr->RHS);
+                EmitNodeExpression(binExpr->RHS);
+                break;
+            }
+            case NodeType::FunctionCall: {
+                EmitNodeFunctionCall(node);
                 break;
             }
             default: BLUA_ASSERT(false, "Unreachable!"); break;
@@ -96,7 +112,7 @@ namespace BlackLua {
         
         if (var->Value) {
             m_Output += " = ";
-            EmitNodeValue(var->Value);
+            EmitNodeExpression(var->Value);
         }
 
         m_Output += '\n';
@@ -110,7 +126,7 @@ namespace BlackLua {
         m_Output += '(';
 
         for (const auto& arg : func->Arguments) {
-            EmitNodeValue(arg);
+            EmitNodeExpression(arg);
         }
 
         m_Output += ")\n";
@@ -130,10 +146,33 @@ namespace BlackLua {
         m_Output += '(';
 
         for (const auto& param : funcCall->Paramaters) {
-            EmitNodeValue(param);
+            EmitNodeExpression(param);
         }
 
         m_Output += ')';
+        m_Output += '\n';
+    }
+
+    void Emitter::EmitNodeIf(Node* node) {
+        NodeIf* nif = std::get<NodeIf*>(node->Data);
+
+        m_Output += "if ";
+        EmitNodeExpression(nif->Expression);
+        m_Output += " then\n";
+
+        for (const auto& statement : nif->Body) {
+            m_Output += "    ";
+            EmitNode(statement);
+        }
+
+        m_Output += "end\n";
+    }
+
+    void Emitter::EmitNodeReturn(Node* node) {
+        NodeReturn* ret = std::get<NodeReturn*>(node->Data);
+
+        m_Output += "return ";
+        EmitNodeExpression(ret->Value);
         m_Output += '\n';
     }
 

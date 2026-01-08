@@ -1,5 +1,7 @@
 #include "compiler.hpp"
 
+#include <string>
+
 namespace BlackLua {
 
     Emitter Emitter::Emit(const Parser::Nodes& nodes) {
@@ -58,13 +60,13 @@ namespace BlackLua {
             case NodeType::Var: {
                 NodeVar* var = std::get<NodeVar*>(node->Data);
 
-                m_Output += var->Identifier.Data;
+                m_Output += var->Identifier.Data.c_str();
                 break;
             }
             case NodeType::VarRef: {
                 NodeVarRef* varRef = std::get<NodeVarRef*>(node->Data);
 
-                m_Output += varRef->Identifier.Data;
+                m_Output += varRef->Identifier.Data.c_str();
                 break;
             }
             case NodeType::Binary: {
@@ -108,7 +110,7 @@ namespace BlackLua {
             m_Output += "local ";
         }
 
-        m_Output += var->Identifier.Data;
+        m_Output += var->Identifier.Data.c_str();
         
         if (var->Value) {
             m_Output += " = ";
@@ -122,7 +124,7 @@ namespace BlackLua {
         NodeFunction* func = std::get<NodeFunction*>(node->Data);
 
         m_Output += "function ";
-        m_Output += func->Signature;
+        m_Output += func->Signature.c_str();
         m_Output += '(';
 
         for (const auto& arg : func->Arguments) {
@@ -142,7 +144,7 @@ namespace BlackLua {
     void Emitter::EmitNodeFunctionCall(Node* node) {
         NodeFunctionCall* funcCall = std::get<NodeFunctionCall*>(node->Data);
 
-        m_Output += funcCall->Signature;
+        m_Output += funcCall->Signature.c_str();
         m_Output += '(';
 
         for (const auto& param : funcCall->Paramaters) {

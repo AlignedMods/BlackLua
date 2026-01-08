@@ -1,5 +1,5 @@
 function AddFive(var)
-    return var + 5
+    return 5
 end
 
 if 5 < 4 then

@@ -4,6 +4,7 @@
 
 #include <variant>
 #include <memory>
+#include <vector>
 
 namespace BlackLua {
 
@@ -277,6 +278,16 @@ namespace BlackLua {
         Node* ParseExpression();
 
         Node* ParseStatement();
+
+        template <typename T>
+        T* Allocate() {
+            return GetAllocator()->AllocateNamed<T>();
+        }
+
+        template <typename T, typename... Args>
+        T* Allocate(Args&&... args) {
+            return GetAllocator()->AllocateNamed<T>(std::forward<Args>(args)...);
+        }
 
         template <typename T>
         Node* CreateNode(NodeType type, T* node) {

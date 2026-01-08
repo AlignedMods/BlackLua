@@ -11,6 +11,8 @@ int main() {
     std::string contents = ss.str();
     ss.flush();
 
+    BlackLua::SetupDefaultAllocator();
+
     BlackLua::Lexer l = BlackLua::Lexer::Parse(contents);
     for (const auto& token : l.GetTokens()) {
         std::cout << "Token: " << BlackLua::TokenTypeToString(token.Type) << '\n';

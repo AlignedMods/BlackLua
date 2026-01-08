@@ -1,5 +1,7 @@
 #include "compiler.hpp"
 
+#include <string>
+
 namespace BlackLua {
 
     Parser Parser::Parse(const Lexer::Tokens& tokens) {
@@ -73,7 +75,7 @@ namespace BlackLua {
     Node* Parser::ParseFunction() {
         Consume(); // Eat "function"
 
-        NodeFunction* node = new NodeFunction();
+        NodeFunction* node = Allocate<NodeFunction>();
 
         if (Match(TokenType::Identifier)) {
             std::string sig = "fB5";
@@ -111,7 +113,7 @@ namespace BlackLua {
                     }
                 }
 
-                if (Peek()) {
+                if (Match(TokenType::End)) {
                     Consume(); // Eat "end"
                 } else {
                     std::cerr << "Expected end after function implementation!" <<  '\n';
@@ -130,12 +132,14 @@ namespace BlackLua {
     }
 
     Node* Parser::ParseFunctionCall() {
-        NodeFunctionCall* node = new NodeFunctionCall();
+        NodeFunctionCall* node = Allocate<NodeFunctionCall>();
 
         Token ident = Consume();
         Consume(); // Eat '('
 
-        std::string sig = "fB5" + ident.Data + 'Z';
+        std::string sig = "fB5";
+        sig += ident.Data;
+        sig += 'Z';
 
         while (!Match(TokenType::RightParen) && Peek()) {
             sig += "a";
@@ -159,7 +163,7 @@ namespace BlackLua {
     Node* Parser::ParseVariable(bool global) {
         Token ident = Consume();
 
-        NodeVar* node = new NodeVar();
+        NodeVar* node = Allocate<NodeVar>();
         node->Identifier = ident;
         node->Global = global;
         
@@ -172,26 +176,29 @@ namespace BlackLua {
     }
 
     Node* Parser::ParseValue() {
-        Token value = Consume();
+        Token value = *Peek();
 
         switch (value.Type) {
             case TokenType::NumLit: {
-                double num = std::stod(value.Data);
-                NodeNumber* node = new NodeNumber(num);
+                Consume();
+
+                double num = std::stod(value.Data.c_str());
+                NodeNumber* node = Allocate<NodeNumber>(num);
                 
                 return CreateNode(NodeType::Number, node);
                 break;
             }
             case TokenType::Identifier: {
-                if (Peek()) {
-                    Token t = *Peek();
+                if (Peek(1)) {
+                    Token t = Peek()[1];
 
                     if (t.Type == TokenType::LeftParen) {
                         return ParseFunctionCall();
                     }
                 }
 
-                NodeVarRef* node = new NodeVarRef(value);
+                Consume();
+                NodeVarRef* node = Allocate<NodeVarRef>(value);
 
                 return CreateNode(NodeType::VarRef, node);
                 break;
@@ -235,7 +242,7 @@ namespace BlackLua {
         if (Peek()) {
             Node* rhsNode = ParseExpression();
 
-            NodeBinExpr* node = new NodeBinExpr();
+            NodeBinExpr* node = Allocate<NodeBinExpr>();
             node->LHS = lhsNode;
             node->RHS = rhsNode;
             node->Type = op;
@@ -247,7 +254,7 @@ namespace BlackLua {
     }
 
     Node* Parser::ParseIf() {
-        NodeIf* node = new NodeIf();
+        NodeIf* node = Allocate<NodeIf>();
 
         Consume(); // Eat "if"
         
@@ -259,6 +266,8 @@ namespace BlackLua {
         if (Peek()->Type != TokenType::End) {
             // Get the if body
             while (!Match(TokenType::End) && Peek()) {
+                std::cout << "If body: " << TokenTypeToString(Peek()->Type) << '\n';
+
                 Node* stmt = ParseStatement();
 
                 node->Body.push_back(stmt);
@@ -271,7 +280,7 @@ namespace BlackLua {
     }
 
     Node* Parser::ParseReturn() {
-        NodeReturn* node = new NodeReturn();
+        NodeReturn* node = Allocate<NodeReturn>();
 
         Consume(); // Eat "return"
 

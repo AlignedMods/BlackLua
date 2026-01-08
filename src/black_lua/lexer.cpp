@@ -79,7 +79,10 @@ namespace BlackLua {
                 BLUA_TOKEN("local", Local);
 
                 if (!foundToken) {
-                    BLUA_TOKEN_DATA(buf, Identifier, buf); 
+                    // BLUA_TOKEN_DATA(buf, Identifier, buf); 
+                    AddToken(TokenType::Identifier, buf);
+                    foundToken = true;
+                    continue;
                 }
 
                 continue;

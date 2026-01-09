@@ -195,7 +195,12 @@ namespace BlackLua {
 
                 continue;
             } else {
-                Consume();
+                char c = Consume();
+
+                if (c == '\n') {
+                    m_CurrentLine++;
+                }
+
                 continue;
             }
         }
@@ -219,6 +224,7 @@ namespace BlackLua {
         Token token;
         token.Type = type;
         token.Data = data;
+        token.Line = m_CurrentLine;
         m_Tokens.push_back(token);
     }
 

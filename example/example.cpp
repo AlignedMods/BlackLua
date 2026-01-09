@@ -20,8 +20,12 @@ int main() {
 
     BlackLua::Parser p = BlackLua::Parser::Parse(l.GetTokens());
 
-    BlackLua::Emitter e = BlackLua::Emitter::Emit(p.GetNodes());
-    std::cout << "Output: " << e.GetOutput() << '\n';
+    if (p.IsValid()) {
+        BlackLua::Emitter e = BlackLua::Emitter::Emit(p.GetNodes());
+        std::cout << "Output: " << e.GetOutput() << '\n';
+    } else {
+        std::cerr << "No output generated.";
+    }
 
     return 0;
 }

@@ -141,6 +141,7 @@ namespace BlackLua {
     struct Token {
         TokenType Type = TokenType::And;
         std::string Data;
+        int Line = 0;
     };
 
     class Lexer {
@@ -169,9 +170,12 @@ namespace BlackLua {
         Tokens m_Tokens;
         size_t m_Index = 0;
         std::string m_Source;
+        int m_CurrentLine = 1;
     };
 
     enum class NodeType {
+        Nil,
+        Bool,
         Number,
         Var,
         VarRef,
@@ -179,6 +183,10 @@ namespace BlackLua {
         FunctionCall,
         Binary, // Binary expression (5 + 3 / 5, 3 * 4, 9 - 3, ...)
         If,
+        Else,
+        ElseIf,
+        While,
+        Repeat,
         Return
     };
 
@@ -196,6 +204,12 @@ namespace BlackLua {
     };
 
     struct Node; // Forward declaration of Expr
+
+    struct NodeNil {};
+
+    struct NodeBool {
+        bool Value = false;
+    };
 
     struct NodeNumber {
         double Number = 0.0;
@@ -230,7 +244,26 @@ namespace BlackLua {
         BinExprType Type = BinExprType::Invalid;
     };
 
+    struct NodeElse;
+    struct NodeElseIf;
+
     struct NodeIf {
+        Node* Expression = nullptr;
+        std::vector<Node*> Body;
+        NodeElse* Else = nullptr;
+        std::vector<NodeElseIf*> ElseIfs;
+    };
+
+    struct NodeElse {
+        std::vector<Node*> Body;
+    };
+
+    struct NodeElseIf {
+        Node* Expression = nullptr;
+        std::vector<Node*> Body;
+    };
+
+    struct NodeWhile {
         Node* Expression = nullptr;
         std::vector<Node*> Body;
     };
@@ -240,8 +273,8 @@ namespace BlackLua {
     };
 
     struct Node {
-        NodeType Type = NodeType::Number;
-        std::variant<NodeNumber*, NodeVar*, NodeVarRef*, NodeFunction*, NodeFunctionCall*, NodeBinExpr*, NodeIf*, NodeReturn*> Data;
+        NodeType Type = NodeType::Nil;
+        std::variant<NodeNil*, NodeBool*, NodeNumber*, NodeVar*, NodeVarRef*, NodeFunction*, NodeFunctionCall*, NodeBinExpr*, NodeIf*, NodeElse*, NodeElseIf*, NodeWhile*, NodeReturn*> Data;
     };
 
     class Parser {
@@ -251,6 +284,7 @@ namespace BlackLua {
         static Parser Parse(const Lexer::Tokens& tokens);
 
         const Nodes& GetNodes() const;
+        bool IsValid() const;
 
     private:
         void ParseImpl();
@@ -272,12 +306,17 @@ namespace BlackLua {
         BinExprType ParseOperator();
 
         Node* ParseIf();
+        NodeElse* ParseElse();
+
+        Node* ParseWhile();
 
         Node* ParseReturn();
 
         Node* ParseExpression();
 
         Node* ParseStatement();
+
+        void ErrorExpected(const std::string& msg);
 
         template <typename T>
         T* Allocate() {
@@ -301,6 +340,7 @@ namespace BlackLua {
         Nodes m_Nodes;
         size_t m_Index = 0;
         Lexer::Tokens m_Tokens;
+        bool m_Error = false;
     };
 
     class Emitter {
@@ -324,6 +364,8 @@ namespace BlackLua {
         void EmitNodeFunctionCall(Node* node);
 
         void EmitNodeIf(Node* node);
+
+        void EmitNodeWhile(Node* node);
 
         void EmitNodeReturn(Node* node);
 

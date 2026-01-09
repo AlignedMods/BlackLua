@@ -44,6 +44,8 @@ namespace BlackLua {
             EmitNodeFunctionCall(node);
         } else if (node->Type == NodeType::If) {
             EmitNodeIf(node);
+        } else if (node->Type == NodeType::While) {
+            EmitNodeWhile(node);
         } else if (node->Type == NodeType::Return) {
             EmitNodeReturn(node);
         }
@@ -51,6 +53,21 @@ namespace BlackLua {
 
     void Emitter::EmitNodeExpression(Node* node) {
         switch (node->Type) {
+            case NodeType::Nil: {
+                m_Output += "nil";
+                break;
+            }
+            case NodeType::Bool: {
+                NodeBool* nbool = std::get<NodeBool*>(node->Data);
+
+                if (nbool->Value == false) {
+                    m_Output += "false";
+                } else {
+                    m_Output += "true";
+                }
+
+                break;
+            }
             case NodeType::Number: {
                 NodeNumber* number = std::get<NodeNumber*>(node->Data);
 
@@ -163,6 +180,30 @@ namespace BlackLua {
         m_Output += " then\n";
 
         for (const auto& statement : nif->Body) {
+            m_Output += "    ";
+            EmitNode(statement);
+        }
+
+        if (nif->Else) {
+            m_Output += "else\n";
+
+            for (const auto& statement : nif->Else->Body) {
+                m_Output += "    ";
+                EmitNode(statement);
+            }
+        }
+
+        m_Output += "end\n";
+    }
+
+    void Emitter::EmitNodeWhile(Node* node) {
+        NodeWhile* nwhile = std::get<NodeWhile*>(node->Data);
+
+        m_Output += "while ";
+        EmitNodeExpression(nwhile->Expression);
+        m_Output += " do\n";
+
+        for (const auto& statement : nwhile->Body) {
             m_Output += "    ";
             EmitNode(statement);
         }

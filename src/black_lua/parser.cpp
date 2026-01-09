@@ -16,6 +16,10 @@ namespace BlackLua {
         return m_Nodes;
     }
 
+    bool Parser::IsValid() const {
+        return !m_Error;
+    }
+
     void Parser::ParseImpl() {
         while (Peek()) {
             Node* node = ParseStatement();
@@ -179,6 +183,24 @@ namespace BlackLua {
         Token value = *Peek();
 
         switch (value.Type) {
+            case TokenType::Nil: {
+                Consume();
+
+                return CreateNode(NodeType::Nil, Allocate<NodeNil>());
+                break;
+            }
+            case TokenType::False: {
+                Consume();
+
+                return CreateNode(NodeType::Bool, Allocate<NodeBool>(false));
+                break;
+            }
+            case TokenType::True: {
+                Consume();
+
+                return CreateNode(NodeType::Bool, Allocate<NodeBool>(true));
+                break;
+            }
             case TokenType::NumLit: {
                 Consume();
 
@@ -204,6 +226,8 @@ namespace BlackLua {
                 break;
             }
         }
+
+        ErrorExpected("value");
 
         return nullptr;
     }
@@ -266,17 +290,58 @@ namespace BlackLua {
         if (Peek()->Type != TokenType::End) {
             // Get the if body
             while (!Match(TokenType::End) && Peek()) {
-                std::cout << "If body: " << TokenTypeToString(Peek()->Type) << '\n';
-
-                Node* stmt = ParseStatement();
-
-                node->Body.push_back(stmt);
+                if (Match(TokenType::Else)) {
+                    NodeElse* nElse = ParseElse();
+                    node->Else = nElse;
+                } else {
+                    Node* stmt = ParseStatement();
+                    node->Body.push_back(stmt);
+                }
             }
         }
 
         Consume(); // Eat "end"
 
         return CreateNode(NodeType::If, node);
+    }
+
+    NodeElse* Parser::ParseElse() {
+        NodeElse* node = Allocate<NodeElse>();
+
+        Consume(); // Eat "else"
+
+        if (Peek()->Type != TokenType::End) {
+            // Get the else body
+            while (!Match(TokenType::End) && Peek()) {
+                Node* stmt = ParseStatement();
+                node->Body.push_back(stmt);
+            }
+        }
+
+        return node;
+    }
+
+    Node* Parser::ParseWhile() {
+        NodeWhile* node = Allocate<NodeWhile>();
+
+        Consume(); // Eat "while"
+
+        Node* expr = ParseExpression();
+        node->Expression = expr;
+
+        Consume(); // Eat "do"
+
+        if (Peek()->Type != TokenType::End) {
+            // Get the while body
+            while (!Match(TokenType::End) && Peek()) {
+                Node* stmt = ParseStatement();
+                node->Body.push_back(stmt);
+            }
+        }
+
+        Consume(); // Eat "end"
+
+        return CreateNode(NodeType::While, node);
     }
 
     Node* Parser::ParseReturn() {
@@ -300,6 +365,8 @@ namespace BlackLua {
             return ParseIdentifier();
         } else if (Peek()->Type == TokenType::If) {
             return ParseIf();
+        } else if (Peek()->Type == TokenType::While) {
+            return ParseWhile();
         } else if (Peek()->Type == TokenType::Return) {
             return ParseReturn();
         } else {
@@ -308,6 +375,16 @@ namespace BlackLua {
         }
 
         return nullptr;
+    }
+
+    void Parser::ErrorExpected(const std::string& msg) {
+        if (m_Index > 0) {
+            std::cerr << "Expected " << msg << " after token \"" << TokenTypeToString(m_Tokens[m_Index - 1].Type) << "\" on line " << m_Tokens[m_Index - 1].Line << "!\n";
+        } else {
+            std::cerr << "Expected " << msg << "!\n";
+        }
+
+        m_Error = true;
     }
 
 } // namespace BlackLua

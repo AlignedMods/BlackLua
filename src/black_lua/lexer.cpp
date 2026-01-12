@@ -20,7 +20,7 @@
         continue;                          \
     }
 
-namespace BlackLua {
+namespace BlackLua::Internal {
 
     Lexer Lexer::Parse(const std::string& source) {
         Lexer l;
@@ -193,6 +193,22 @@ namespace BlackLua {
                     }
                 }
 
+                if (c == '"') {
+                    while (Peek()) {
+                        char nc = Consume();
+                    
+                        if (nc == '"' || nc == EOF) {
+                            break;
+                        }
+
+                        buf += nc;
+                    }
+
+                    AddToken(TokenType::StrLit, buf);
+
+                    continue;
+                }
+
                 continue;
             } else {
                 char c = Consume();
@@ -228,4 +244,4 @@ namespace BlackLua {
         m_Tokens.push_back(token);
     }
 
-} // namespace BlackLua
+} // namespace BlackLua::Internal

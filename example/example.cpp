@@ -1,31 +1,14 @@
 #include "black_lua/black_lua.hpp"
 #include "black_lua/compiler.hpp"
 
-#include <fstream>
-#include <sstream>
-
 int main() {
-    std::ifstream file("test.lua");
-    std::stringstream ss;
-    ss << file.rdbuf();
-    std::string contents = ss.str();
-    ss.flush();
-
     BlackLua::SetupDefaultAllocator();
 
-    BlackLua::Lexer l = BlackLua::Lexer::Parse(contents);
-    for (const auto& token : l.GetTokens()) {
-        std::cout << "Token: " << BlackLua::TokenTypeToString(token.Type) << '\n';
-    }
+    BlackLua::LuaContext context = BlackLua::LuaContext::Create();
 
-    BlackLua::Parser p = BlackLua::Parser::Parse(l.GetTokens());
-
-    if (p.IsValid()) {
-        BlackLua::Emitter e = BlackLua::Emitter::Emit(p.GetNodes());
-        std::cout << "Output: " << e.GetOutput() << '\n';
-    } else {
-        std::cerr << "No output generated.";
-    }
+    BlackLua::CompiledSource compiled = context.CompileFile("test.lua");
+    std::cout << compiled.Compiled << '\n';
+    context.Run(compiled, "test");
 
     return 0;
 }

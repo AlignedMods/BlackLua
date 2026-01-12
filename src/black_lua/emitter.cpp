@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace BlackLua {
+namespace BlackLua::Internal {
 
     Emitter Emitter::Emit(const Parser::Nodes& nodes) {
         Emitter e;
@@ -72,6 +72,31 @@ namespace BlackLua {
                 NodeNumber* number = std::get<NodeNumber*>(node->Data);
 
                 m_Output += std::to_string(number->Number);
+                break;
+            }
+            case NodeType::String: {
+                NodeString* string = std::get<NodeString*>(node->Data);
+
+                m_Output += '"';
+                m_Output += string->String;
+                m_Output += '"';
+                break;
+            }
+            case NodeType::InitializerList: {
+                NodeInitializerList* initList = std::get<NodeInitializerList*>(node->Data);
+
+                m_Output += "{ ";
+
+                for (size_t i = 0; i < initList->Nodes.size(); i++) {
+                    EmitNodeExpression(initList->Nodes.at(i));
+
+                    if (i != initList->Nodes.size() - 1) {
+                        m_Output += ", ";
+                    }
+                }
+
+                m_Output += " }";
+
                 break;
             }
             case NodeType::Var: {
@@ -219,4 +244,4 @@ namespace BlackLua {
         m_Output += '\n';
     }
 
-} // namespace BlackLua
+} // namespace BlackLua::Internal

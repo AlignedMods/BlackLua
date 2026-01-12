@@ -11,6 +11,8 @@ workspace "BlackLua"
 
         files {"src/**.cpp", "src/**.hpp"}
 
+        includedirs { "src/vendor/lua/src/" }
+
         filter "configurations:Debug"
             symbols "On"
 
@@ -29,10 +31,24 @@ workspace "BlackLua"
 
         includedirs { "src/" }
 
-        links { "BlackLua" }
+        links { "BlackLua", "lua" }
 
         filter "configurations:Debug"
             symbols "On"
 
         filter "configurations:Release"
             optimize "On"
+
+    project "lua"
+        language "C"
+        cdialect "C89"
+        kind "StaticLib"
+        staticruntime "On"
+        
+        targetdir("build/bin/%{cfg.buildcfg}/")
+        objdir("build/obj/%{cfg.buildcfg}/")
+        
+        files { "src/vendor/lua/src/**.c", "src/vendor/lua/src/**.h" }
+        removefiles { "src/vendor/lua/src/lua.c" }
+        
+        includedirs { "src/vendor/lua/src/" }

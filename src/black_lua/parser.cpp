@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace BlackLua {
+namespace BlackLua::Internal {
 
     Parser Parser::Parse(const Lexer::Tokens& tokens) {
         Parser p;
@@ -82,20 +82,14 @@ namespace BlackLua {
         NodeFunction* node = Allocate<NodeFunction>();
 
         if (Match(TokenType::Identifier)) {
-            std::string sig = "fB5";
-
             Token ident = Consume();
-            sig += ident.Data;
             node->Name = ident;
 
             if (Match(TokenType::LeftParen)) {
                 Consume();
-                sig += 'Z';
 
                 while (Match(TokenType::Identifier)) {
                     Node* arg = ParseVariable(false);
-
-                    sig += "a";
                     node->Arguments.push_back(arg);
                 }
 
@@ -105,8 +99,6 @@ namespace BlackLua {
                 }
 
                 Consume();
-
-                node->Signature = sig;
 
                 if (Peek()->Type != TokenType::End) {
                     // Get the function body
@@ -139,15 +131,10 @@ namespace BlackLua {
         NodeFunctionCall* node = Allocate<NodeFunctionCall>();
 
         Token ident = Consume();
+        node->Name = ident;
         Consume(); // Eat '('
 
-        std::string sig = "fB5";
-        sig += ident.Data;
-        sig += 'Z';
-
         while (!Match(TokenType::RightParen) && Peek()) {
-            sig += "a";
-
             Node* param = ParseValue();
 
             node->Paramaters.push_back(param);
@@ -158,8 +145,6 @@ namespace BlackLua {
             exit(-1);
         }
         Consume();
-
-        node->Signature = sig;
 
         return CreateNode(NodeType::FunctionCall, node);
     }
@@ -180,7 +165,7 @@ namespace BlackLua {
     }
 
     Node* Parser::ParseValue() {
-        Token value = *Peek();
+        Token& value = *Peek();
 
         switch (value.Type) {
             case TokenType::Nil: {
@@ -208,6 +193,34 @@ namespace BlackLua {
                 NodeNumber* node = Allocate<NodeNumber>(num);
                 
                 return CreateNode(NodeType::Number, node);
+                break;
+            }
+            case TokenType::StrLit: {
+                Consume();
+
+                std::string_view str = value.Data;
+                NodeString* node = Allocate<NodeString>(str);
+                
+                return CreateNode(NodeType::String, node);
+                break;
+            }
+            case TokenType::LeftCurly: {
+                Consume();
+
+                NodeInitializerList* node = Allocate<NodeInitializerList>();
+
+                while (!Match(TokenType::RightCurly)) {
+                    Node* n = ParseValue();
+                    node->Nodes.push_back(n);
+
+                    if (Match(TokenType::Comma)) {
+                        Consume();
+                    }
+                }
+
+                Consume(); // Eat '}'
+
+                return CreateNode(NodeType::InitializerList, node);
                 break;
             }
             case TokenType::Identifier: {
@@ -387,4 +400,4 @@ namespace BlackLua {
         m_Error = true;
     }
 
-} // namespace BlackLua
+} // namespace BlackLua::Internal

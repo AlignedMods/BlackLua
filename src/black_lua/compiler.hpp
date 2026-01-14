@@ -88,8 +88,19 @@ namespace BlackLua {
             Function,
             Local,
 
+            IntLit, // No decimals are allowed in an integer literal!
             NumLit,
             StrLit,
+
+            Bool,
+
+            Int,
+            Long,
+
+            Float,
+            Double,
+
+            String,
 
             Identifier
         };
@@ -151,8 +162,19 @@ namespace BlackLua {
                 case TokenType::Function: return "function";
                 case TokenType::Local: return "local";
 
+                case TokenType::IntLit: return "int-lit";
                 case TokenType::NumLit: return "num-lit";
                 case TokenType::StrLit: return "str-lit";
+
+                case TokenType::Bool: return "bool";
+
+                case TokenType::Int: return "int";
+                case TokenType::Long: return "long";
+
+                case TokenType::Float: return "float";
+                case TokenType::Double: return "double";
+
+                case TokenType::String: return "string";
 
                 case TokenType::Identifier: return "identifier";
             }
@@ -200,20 +222,16 @@ namespace BlackLua {
         enum class NodeType {
             Nil,
             Bool,
+            Int,
             Number,
             String,
             InitializerList,
-            Var,
+
+            VarDecl,
+            VarSet,
             VarRef,
-            Function,
-            FunctionCall,
-            Binary, // Binary expression (5 + 3 / 5, 3 * 4, 9 - 3, ...)
-            If,
-            Else,
-            ElseIf,
-            While,
-            Repeat,
-            Return
+
+            BinExpr
         };
 
         enum class BinExprType {
@@ -237,6 +255,10 @@ namespace BlackLua {
             bool Value = false;
         };
 
+        struct NodeInt {
+            int64_t Int = 0llu;
+        };
+
         struct NodeNumber {
             double Number = 0.0;
         };
@@ -249,27 +271,19 @@ namespace BlackLua {
             std::vector<Node*> Nodes;
         };
 
-        struct NodeVar {
-            bool Global = false;
-            Token Identifier;
+        struct NodeVarDecl {
+            std::string_view Identifier;
+            Node* Value = nullptr;
+            TokenType Type = TokenType::Nil;
+        };
+
+        struct NodeVarSet {
+            std::string_view Identifier;
             Node* Value = nullptr;
         };
 
         struct NodeVarRef {
-            Token Identifier;
-        };
-
-        struct NodeFunction {
-            Token Name;
-            std::string Signature; // Gets filled in during type checking
-            std::vector<Node*> Arguments;
-            std::vector<Node*> Body;
-        };
-
-        struct NodeFunctionCall {
-            Token Name;
-            std::string Signature; // Gets filled in during type checking
-            std::vector<Node*> Paramaters;
+            std::string_view Identifier;
         };
 
         // NOTE: RHS can be nullptr if there is no right hand side
@@ -279,37 +293,11 @@ namespace BlackLua {
             BinExprType Type = BinExprType::Invalid;
         };
 
-        struct NodeElse;
-        struct NodeElseIf;
-
-        struct NodeIf {
-            Node* Expression = nullptr;
-            std::vector<Node*> Body;
-            NodeElse* Else = nullptr;
-            std::vector<NodeElseIf*> ElseIfs;
-        };
-
-        struct NodeElse {
-            std::vector<Node*> Body;
-        };
-
-        struct NodeElseIf {
-            Node* Expression = nullptr;
-            std::vector<Node*> Body;
-        };
-
-        struct NodeWhile {
-            Node* Expression = nullptr;
-            std::vector<Node*> Body;
-        };
-
-        struct NodeReturn {
-            Node* Value = nullptr;
-        };
-
         struct Node {
             NodeType Type = NodeType::Nil;
-            std::variant<NodeNil*, NodeBool*, NodeNumber*, NodeString*, NodeInitializerList*, NodeVar*, NodeVarRef*, NodeFunction*, NodeFunctionCall*, NodeBinExpr*, NodeIf*, NodeElse*, NodeElseIf*, NodeWhile*, NodeReturn*> Data;
+            std::variant<NodeNil*, NodeBool*, NodeInt*, NodeNumber*, NodeString*, NodeInitializerList*, 
+                         NodeVarDecl*, NodeVarSet*, NodeVarRef*, 
+                         NodeBinExpr*> Data;
         };
 
         class Parser {
@@ -325,33 +313,28 @@ namespace BlackLua {
             void ParseImpl();
 
             Token* Peek(size_t count = 0);
-            Token Consume();
+            Token& Consume();
 
             // Checks if the current token matches with the requested type
             // This function cannot fail
             bool Match(TokenType type);
 
             Node* ParseIdentifier();
-            Node* ParseLocal();
-            Node* ParseFunction();
-            Node* ParseFunctionCall();
-            Node* ParseVariable(bool global); // This function expects the first token to be the identifier!
+            Node* ParseVariableDecl(TokenType type); // This function expects the first token to be the identifier!
 
+            // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables and function calls)
             Node* ParseValue();
             BinExprType ParseOperator();
 
-            Node* ParseIf();
-            NodeElse* ParseElse();
-
-            Node* ParseWhile();
-
-            Node* ParseReturn();
-
+            // Parses an expression (8 + 4, 6.3 - 4, "hello " + "world", ...)
+            // NOTE: For certain reasons a varaible assignment is NOT considered an expression
+            // So local var = 6 is not an expression (6 technically does count as an expression)
             Node* ParseExpression();
 
             Node* ParseStatement();
 
             void ErrorExpected(const std::string& msg);
+            void ErrorRedeclaration(const std::string& msg);
 
             template <typename T>
             T* Allocate() {
@@ -376,16 +359,19 @@ namespace BlackLua {
             size_t m_Index = 0;
             Lexer::Tokens m_Tokens;
             bool m_Error = false;
+
+            std::unordered_map<std::string, bool> m_DeclaredSymbols; // A map of all the declared symbols (variables and such)
         };
 
         // A quick note about the type checker,
         // It doesn't "generate" anything, it only modifies the AST,
-        // It is also technically the only part that is not neccesary for the compiler
+        // It is also technically the only part that is not neccesary for the compiler (not optional though lolz)
         class TypeChecker {
         public:
             static TypeChecker Check(const Parser::Nodes& nodes);
 
             const Parser::Nodes& GetCheckedNodes() const;
+            bool IsValid() const;
 
         private:
             void CheckImpl();
@@ -393,23 +379,19 @@ namespace BlackLua {
             Node* Peek(size_t amount = 0);
             Node* Consume();
 
+            void CheckNodeVarDecl(Node* node);
+
+            void CheckNodeExpression(Node* node, TokenType type);
+
             void CheckNode(Node* node);
 
-            void CheckNodeExpression(Node* node);
-            void CheckNodeVar(Node* node);
-
-            void CheckNodeFunction(Node* node);
-            void CheckNodeFunctionCall(Node* node);
-
-            void CheckNodeIf(Node* node);
-
-            void CheckNodeWhile(Node* node);
-
-            void CheckNodeReturn(Node* node);
+            void WarningMismatchedTypes(TokenType type1, const std::string_view type2);
+            void ErrorMismatchedTypes(TokenType type1, const std::string_view type2);
 
         private:
             Parser::Nodes m_Nodes; // We modify these directly
             size_t m_Index = 0;
+            bool m_Error = false;
         };
 
         class Emitter {
@@ -424,19 +406,11 @@ namespace BlackLua {
             Node* Peek(size_t amount = 0);
             Node* Consume();
 
-            void EmitNode(Node* node);
+            void EmitNodeVarDecl(Node* node);
 
             void EmitNodeExpression(Node* node);
-            void EmitNodeVar(Node* node);
 
-            void EmitNodeFunction(Node* node);
-            void EmitNodeFunctionCall(Node* node);
-
-            void EmitNodeIf(Node* node);
-
-            void EmitNodeWhile(Node* node);
-
-            void EmitNodeReturn(Node* node);
+            void EmitNode(Node* node);
 
         private:
             std::string m_Output;

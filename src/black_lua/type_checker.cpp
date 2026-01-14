@@ -7,6 +7,7 @@ namespace BlackLua::Internal {
     // There are certain default lua functions that we don't want to mangle
     // For example we really do not want "print("hello world")" to become "f_1print("hello world")"
     static std::unordered_map<std::string_view, bool> s_NoMangle = {
+        { "tostring", true },
         { "print", true }
     };
 
@@ -20,6 +21,10 @@ namespace BlackLua::Internal {
 
     const Parser::Nodes& TypeChecker::GetCheckedNodes() const {
         return m_Nodes;
+    }
+
+    bool TypeChecker::IsValid() const {
+        return m_Error == false;
     }
 
     void TypeChecker::CheckImpl() {
@@ -42,91 +47,67 @@ namespace BlackLua::Internal {
         return m_Nodes.at(m_Index++);
     }
 
-    void TypeChecker::CheckNode(Node* node) {
-        if (node->Type == NodeType::Var) {
-            CheckNodeVar(node);
-        } else if (node->Type == NodeType::Function) {
-            CheckNodeFunction(node);
-        } else if (node->Type == NodeType::FunctionCall) {
-            CheckNodeFunctionCall(node);
-        } else if (node->Type == NodeType::If) {
-            CheckNodeIf(node);
-        } else if (node->Type == NodeType::While) {
-            CheckNodeWhile(node);
-        } else if (node->Type == NodeType::Return) {
-            CheckNodeReturn(node);
+    void TypeChecker::CheckNodeVarDecl(Node* node) {
+        NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
+
+        if (decl->Value) {
+            CheckNodeExpression(decl->Value, decl->Type);
         }
     }
 
-    void TypeChecker::CheckNodeExpression(Node* node) {
+    void TypeChecker::CheckNodeExpression(Node* node, TokenType type) {
         switch (node->Type) {
-            case NodeType::FunctionCall:
-                CheckNodeFunctionCall(node);
+            case NodeType::Bool: {
+                if (type != TokenType::Bool) {
+                    ErrorMismatchedTypes(type, "bool");
+                }
+
                 break;
-        }
-    }
+            }
+            case NodeType::Int: {
+                if (type == TokenType::Float || type == TokenType::Double) {
+                    WarningMismatchedTypes(type, "integer");
+                } else if (type != TokenType::Int && type != TokenType::Long) {
+                    ErrorMismatchedTypes(type, "integer");
+                }
 
-    void TypeChecker::CheckNodeVar(Node* node) {
-        NodeVar* var = std::get<NodeVar*>(node->Data);
+                break;
+            }
+            case NodeType::Number: {
+                if (type == TokenType::Int || type == TokenType::Long) {
+                    WarningMismatchedTypes(type, "number");
+                } else if (type != TokenType::Float && type != TokenType::Double) {
+                    ErrorMismatchedTypes(type, "number");
+                }
 
-        if (var->Value) {
-            CheckNodeExpression(var->Value);
-        }
-    }
+                break;
+            }
+            case NodeType::String: {
+                if (type != TokenType::String) {
+                    ErrorMismatchedTypes(type, "string");
+                }
 
-    void TypeChecker::CheckNodeFunction(Node* node) {
-        NodeFunction* func = std::get<NodeFunction*>(node->Data);
-
-        const std::string& name = func->Name.Data;
-        std::string sig = "f_";
-        
-        sig += std::to_string(func->Arguments.size());
-        sig += name;
-
-        func->Signature = sig;
-    }
-
-    void TypeChecker::CheckNodeFunctionCall(Node* node) {
-        NodeFunctionCall* funcCall = std::get<NodeFunctionCall*>(node->Data);
-
-        const std::string& name = funcCall->Name.Data;
-
-        if (!s_NoMangle.contains(name)) {
-            std::string sig = "f_";
-        
-            sig += std::to_string(funcCall->Paramaters.size());
-            sig += name;
-
-            funcCall->Signature = sig;
-        } else {
-            funcCall->Signature = name;
-        }
-    }
-
-    void TypeChecker::CheckNodeIf(Node* node) {
-        NodeIf* nif = std::get<NodeIf*>(node->Data);
-
-        for (const auto& statement : nif->Body) {
-            CheckNode(statement);
-        }
-
-        if (nif->Else) {
-            for (const auto& statement : nif->Else->Body) {
-                CheckNode(statement);
+                break;
             }
         }
     }
 
-    void TypeChecker::CheckNodeWhile(Node* node) {
-        NodeWhile* nwhile = std::get<NodeWhile*>(node->Data);
+    void TypeChecker::CheckNode(Node* node) {
+        NodeType t = node->Type;
 
-        for (const auto& statement : nwhile->Body) {
-            CheckNode(statement);
+        if (t == NodeType::VarDecl) {
+            CheckNodeVarDecl(node);
         }
     }
 
-    void TypeChecker::CheckNodeReturn(Node* node) {
-        // Nothing to do
+    void TypeChecker::WarningMismatchedTypes(TokenType type1, const std::string_view type2) {
+        std::cerr << "Type warning: Assigning " << type2 << " to " << TokenTypeToString(type1) << "!\n";
+    }
+
+    void TypeChecker::ErrorMismatchedTypes(TokenType type1, const std::string_view type2) {
+        std::cerr << "Type error: Cannot assign " << type2 << " to " << TokenTypeToString(type1) << "!\n";
+
+        m_Error = true;
     }
 
 } // namespace BlackLua::Internal

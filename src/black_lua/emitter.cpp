@@ -35,19 +35,14 @@ namespace BlackLua::Internal {
         return m_Nodes.at(m_Index++);
     }
 
-    void Emitter::EmitNode(Node* node) {
-        if (node->Type == NodeType::Var) {
-            EmitNodeVar(node);
-        } else if (node->Type == NodeType::Function) {
-            EmitNodeFunction(node);
-        } else if (node->Type == NodeType::FunctionCall) {
-            EmitNodeFunctionCall(node);
-        } else if (node->Type == NodeType::If) {
-            EmitNodeIf(node);
-        } else if (node->Type == NodeType::While) {
-            EmitNodeWhile(node);
-        } else if (node->Type == NodeType::Return) {
-            EmitNodeReturn(node);
+    void Emitter::EmitNodeVarDecl(Node* node) {
+        NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
+
+        m_Output += "local ";
+        m_Output += decl->Identifier;
+        if (decl->Value) {
+            m_Output += " = ";
+            EmitNodeExpression(decl->Value);
         }
     }
 
@@ -66,6 +61,12 @@ namespace BlackLua::Internal {
                     m_Output += "true";
                 }
 
+                break;
+            }
+             case NodeType::Int: {
+                NodeInt* i = std::get<NodeInt*>(node->Data);
+
+                m_Output += std::to_string(i->Int);
                 break;
             }
             case NodeType::Number: {
@@ -88,7 +89,7 @@ namespace BlackLua::Internal {
                 m_Output += "{ ";
 
                 for (size_t i = 0; i < initList->Nodes.size(); i++) {
-                    EmitNodeExpression(initList->Nodes.at(i));
+                    EmitNode(initList->Nodes.at(i));
 
                     if (i != initList->Nodes.size() - 1) {
                         m_Output += ", ";
@@ -99,19 +100,7 @@ namespace BlackLua::Internal {
 
                 break;
             }
-            case NodeType::Var: {
-                NodeVar* var = std::get<NodeVar*>(node->Data);
-
-                m_Output += var->Identifier.Data.c_str();
-                break;
-            }
-            case NodeType::VarRef: {
-                NodeVarRef* varRef = std::get<NodeVarRef*>(node->Data);
-
-                m_Output += varRef->Identifier.Data.c_str();
-                break;
-            }
-            case NodeType::Binary: {
+            case NodeType::BinExpr: {
                 NodeBinExpr* binExpr = std::get<NodeBinExpr*>(node->Data);
 
                 EmitNodeExpression(binExpr->LHS);
@@ -137,111 +126,16 @@ namespace BlackLua::Internal {
                 EmitNodeExpression(binExpr->RHS);
                 break;
             }
-            case NodeType::FunctionCall: {
-                EmitNodeFunctionCall(node);
-                break;
-            }
             default: BLUA_ASSERT(false, "Unreachable!"); break;
         }
     }
 
-    void Emitter::EmitNodeVar(Node* node) {
-        NodeVar* var = std::get<NodeVar*>(node->Data);
-        
-        if (!var->Global) {
-            m_Output += "local ";
+    void Emitter::EmitNode(Node* node) {
+        NodeType t = node->Type;
+
+        if (t == NodeType::VarDecl) {
+            EmitNodeVarDecl(node);
         }
-
-        m_Output += var->Identifier.Data.c_str();
-        
-        if (var->Value) {
-            m_Output += " = ";
-            EmitNodeExpression(var->Value);
-        }
-
-        m_Output += '\n';
-    }
-
-    void Emitter::EmitNodeFunction(Node* node) {
-        NodeFunction* func = std::get<NodeFunction*>(node->Data);
-
-        m_Output += "function ";
-        m_Output += func->Signature.c_str();
-        m_Output += '(';
-
-        for (const auto& arg : func->Arguments) {
-            EmitNodeExpression(arg);
-        }
-
-        m_Output += ")\n";
-
-        for (const auto& statement : func->Body) {
-            m_Output += "    ";
-            EmitNode(statement);
-        }
-
-        m_Output += "end\n";
-    }
-
-    void Emitter::EmitNodeFunctionCall(Node* node) {
-        NodeFunctionCall* funcCall = std::get<NodeFunctionCall*>(node->Data);
-
-        m_Output += funcCall->Signature.c_str();
-        m_Output += '(';
-
-        for (const auto& param : funcCall->Paramaters) {
-            EmitNodeExpression(param);
-        }
-
-        m_Output += ')';
-        m_Output += '\n';
-    }
-
-    void Emitter::EmitNodeIf(Node* node) {
-        NodeIf* nif = std::get<NodeIf*>(node->Data);
-
-        m_Output += "if ";
-        EmitNodeExpression(nif->Expression);
-        m_Output += " then\n";
-
-        for (const auto& statement : nif->Body) {
-            m_Output += "    ";
-            EmitNode(statement);
-        }
-
-        if (nif->Else) {
-            m_Output += "else\n";
-
-            for (const auto& statement : nif->Else->Body) {
-                m_Output += "    ";
-                EmitNode(statement);
-            }
-        }
-
-        m_Output += "end\n";
-    }
-
-    void Emitter::EmitNodeWhile(Node* node) {
-        NodeWhile* nwhile = std::get<NodeWhile*>(node->Data);
-
-        m_Output += "while ";
-        EmitNodeExpression(nwhile->Expression);
-        m_Output += " do\n";
-
-        for (const auto& statement : nwhile->Body) {
-            m_Output += "    ";
-            EmitNode(statement);
-        }
-
-        m_Output += "end\n";
-    }
-
-    void Emitter::EmitNodeReturn(Node* node) {
-        NodeReturn* ret = std::get<NodeReturn*>(node->Data);
-
-        m_Output += "return ";
-        EmitNodeExpression(ret->Value);
-        m_Output += '\n';
     }
 
 } // namespace BlackLua::Internal

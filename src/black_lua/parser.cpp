@@ -35,7 +35,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    Token Parser::Consume() {
+    Token& Parser::Consume() {
         BLUA_ASSERT(m_Index < m_Tokens.size(), "Consume out of bounds!");
 
         return m_Tokens.at(m_Index++);
@@ -54,114 +54,28 @@ namespace BlackLua::Internal {
     }
 
     Node* Parser::ParseIdentifier() {
-        if (Peek(1)) {
-            Token t = Peek()[1];
-
-            if (t.Type == TokenType::LeftParen) {
-                return ParseFunctionCall();
-            }
-        }
-
-        return ParseVariable(true);
+        BLUA_ASSERT(false, "ok");
     }
 
-    Node* Parser::ParseLocal() {
-        Consume(); // Eat "local"
+    Node* Parser::ParseVariableDecl(TokenType type) {
+        Token& ident = Consume();
 
-        if (!Peek()) {
-            std::cerr << "Expected identifier after \"local\"!" << '\n';
-            exit(-1);
+        if (m_DeclaredSymbols.contains(ident.Data)) {
+            ErrorRedeclaration(ident.Data);
         }
 
-        return ParseVariable(false);
-    }
-
-    Node* Parser::ParseFunction() {
-        Consume(); // Eat "function"
-
-        NodeFunction* node = Allocate<NodeFunction>();
-
-        if (Match(TokenType::Identifier)) {
-            Token ident = Consume();
-            node->Name = ident;
-
-            if (Match(TokenType::LeftParen)) {
-                Consume();
-
-                while (Match(TokenType::Identifier)) {
-                    Node* arg = ParseVariable(false);
-                    node->Arguments.push_back(arg);
-                }
-
-                if (!Match(TokenType::RightParen)) {
-                    std::cerr << "Expected ')' after function declaration!" <<  '\n';
-                    exit(-1);
-                }
-
-                Consume();
-
-                if (Peek()->Type != TokenType::End) {
-                    // Get the function body
-                    while (!Match(TokenType::End) && Peek()) {
-                        Node* stmt = ParseStatement();
-
-                        node->Body.push_back(stmt);
-                    }
-                }
-
-                if (Match(TokenType::End)) {
-                    Consume(); // Eat "end"
-                } else {
-                    std::cerr << "Expected end after function implementation!" <<  '\n';
-                    exit(-1);
-                }
-            } else {
-                std::cerr << "Expected '(' after \"" << ident.Data << "\"!" <<  '\n';
-                exit(-1);
-            }
-        } else {
-            std::cerr << "Expected identifier after \"local\"!" << '\n';
-            exit(-1);
-        }
-
-        return CreateNode(NodeType::Function, node);
-    }
-
-    Node* Parser::ParseFunctionCall() {
-        NodeFunctionCall* node = Allocate<NodeFunctionCall>();
-
-        Token ident = Consume();
-        node->Name = ident;
-        Consume(); // Eat '('
-
-        while (!Match(TokenType::RightParen) && Peek()) {
-            Node* param = ParseValue();
-
-            node->Paramaters.push_back(param);
-        }
-
-        if (!Match(TokenType::RightParen)) {
-            std::cerr << "Expected ')' after function call!\n";
-            exit(-1);
-        }
-        Consume();
-
-        return CreateNode(NodeType::FunctionCall, node);
-    }
-
-    Node* Parser::ParseVariable(bool global) {
-        Token ident = Consume();
-
-        NodeVar* node = Allocate<NodeVar>();
-        node->Identifier = ident;
-        node->Global = global;
+        NodeVarDecl* node = Allocate<NodeVarDecl>();
+        node->Identifier = ident.Data;
+        node->Type = type;
         
         if (Match(TokenType::Eq)) {
             Consume();
             node->Value = ParseExpression();
         }
 
-        return CreateNode(NodeType::Var, node);
+        m_DeclaredSymbols[ident.Data] = true;
+
+        return CreateNode(NodeType::VarDecl, node);
     }
 
     Node* Parser::ParseValue() {
@@ -184,6 +98,15 @@ namespace BlackLua::Internal {
                 Consume();
 
                 return CreateNode(NodeType::Bool, Allocate<NodeBool>(true));
+                break;
+            }
+            case TokenType::IntLit: {
+                Consume();
+
+                int64_t num = std::stoll(value.Data.c_str());
+                NodeInt* node = Allocate<NodeInt>(num);
+                
+                return CreateNode(NodeType::Int, node);
                 break;
             }
             case TokenType::NumLit: {
@@ -210,7 +133,7 @@ namespace BlackLua::Internal {
                 NodeInitializerList* node = Allocate<NodeInitializerList>();
 
                 while (!Match(TokenType::RightCurly)) {
-                    Node* n = ParseValue();
+                    Node* n = ParseStatement();
                     node->Nodes.push_back(n);
 
                     if (Match(TokenType::Comma)) {
@@ -221,21 +144,6 @@ namespace BlackLua::Internal {
                 Consume(); // Eat '}'
 
                 return CreateNode(NodeType::InitializerList, node);
-                break;
-            }
-            case TokenType::Identifier: {
-                if (Peek(1)) {
-                    Token t = Peek()[1];
-
-                    if (t.Type == TokenType::LeftParen) {
-                        return ParseFunctionCall();
-                    }
-                }
-
-                Consume();
-                NodeVarRef* node = Allocate<NodeVarRef>(value);
-
-                return CreateNode(NodeType::VarRef, node);
                 break;
             }
         }
@@ -284,118 +192,45 @@ namespace BlackLua::Internal {
             node->RHS = rhsNode;
             node->Type = op;
 
-            return CreateNode(NodeType::Binary, node);
+            return CreateNode(NodeType::BinExpr, node);
         }
 
         return nullptr;
     }
 
-    Node* Parser::ParseIf() {
-        NodeIf* node = Allocate<NodeIf>();
-
-        Consume(); // Eat "if"
-        
-        Node* expr = ParseExpression();
-        node->Expression = expr;
-
-        Consume(); // Eat "then"
-
-        if (Peek()->Type != TokenType::End) {
-            // Get the if body
-            while (!Match(TokenType::End) && Peek()) {
-                if (Match(TokenType::Else)) {
-                    NodeElse* nElse = ParseElse();
-                    node->Else = nElse;
-                } else {
-                    Node* stmt = ParseStatement();
-                    node->Body.push_back(stmt);
-                }
-            }
-        }
-
-        Consume(); // Eat "end"
-
-        return CreateNode(NodeType::If, node);
-    }
-
-    NodeElse* Parser::ParseElse() {
-        NodeElse* node = Allocate<NodeElse>();
-
-        Consume(); // Eat "else"
-
-        if (Peek()->Type != TokenType::End) {
-            // Get the else body
-            while (!Match(TokenType::End) && Peek()) {
-                Node* stmt = ParseStatement();
-                node->Body.push_back(stmt);
-            }
-        }
-
-        return node;
-    }
-
-    Node* Parser::ParseWhile() {
-        NodeWhile* node = Allocate<NodeWhile>();
-
-        Consume(); // Eat "while"
-
-        Node* expr = ParseExpression();
-        node->Expression = expr;
-
-        Consume(); // Eat "do"
-
-        if (Peek()->Type != TokenType::End) {
-            // Get the while body
-            while (!Match(TokenType::End) && Peek()) {
-                Node* stmt = ParseStatement();
-                node->Body.push_back(stmt);
-            }
-        }
-
-        Consume(); // Eat "end"
-
-        return CreateNode(NodeType::While, node);
-    }
-
-    Node* Parser::ParseReturn() {
-        NodeReturn* node = Allocate<NodeReturn>();
-
-        Consume(); // Eat "return"
-
-        Node* expr = ParseExpression();
-
-        node->Value = expr;
-
-        return CreateNode(NodeType::Return, node);
-    }
-
     Node* Parser::ParseStatement() {
-        if (Peek()->Type == TokenType::Local) {
-            return ParseLocal();
-        } else if (Peek()->Type == TokenType::Function) {
-            return ParseFunction();
-        } else if (Peek()->Type == TokenType::Identifier) {
+        TokenType t = Peek()->Type;
+
+        if (t == TokenType::Identifier) {
             return ParseIdentifier();
-        } else if (Peek()->Type == TokenType::If) {
-            return ParseIf();
-        } else if (Peek()->Type == TokenType::While) {
-            return ParseWhile();
-        } else if (Peek()->Type == TokenType::Return) {
-            return ParseReturn();
-        } else {
-            BLUA_ASSERT(false, "Unreachable!");
-            Consume();
+        } else if (t == TokenType::Bool || t == TokenType::Int || t == TokenType::Long || t == TokenType::Float || t == TokenType::Double || t == TokenType::String) {
+            Consume(); // Consume the type
+            return ParseVariableDecl(t);
         }
+
+        BLUA_ASSERT(false, "Unreachable!");
+        Consume();
 
         return nullptr;
     }
 
     void Parser::ErrorExpected(const std::string& msg) {
         if (m_Index > 0) {
-            std::cerr << "Expected " << msg << " after token \"" << TokenTypeToString(m_Tokens[m_Index - 1].Type) << "\" on line " << m_Tokens[m_Index - 1].Line << "!\n";
+            std::cerr << "Syntax error: Expected " << msg << " after token \"" << TokenTypeToString(m_Tokens[m_Index - 1].Type) << "\" on line " << m_Tokens[m_Index - 1].Line << "!\n";
         } else {
-            std::cerr << "Expected " << msg << "!\n";
+            std::cerr << "Syntax error: Expected " << msg << "!\n";
         }
+
+        m_Error = true;
+    }
+
+    void Parser::ErrorRedeclaration(const std::string& msg) {
+        size_t line = 0;
+        if (m_Index > 0) {
+            line = m_Tokens[m_Index - 1].Line;
+        }
+
+        std::cerr << "Syntax error: Redeclaration of \"" << msg << "\" on line " << line << "!\n";
 
         m_Error = true;
     }

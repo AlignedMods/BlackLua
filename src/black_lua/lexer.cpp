@@ -78,6 +78,16 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN("function", Function);
                 BLUA_TOKEN("local", Local);
 
+                BLUA_TOKEN("bool", Bool);
+
+                BLUA_TOKEN("int", Int);
+                BLUA_TOKEN("long", Long);
+
+                BLUA_TOKEN("float", Float);
+                BLUA_TOKEN("double", Double);
+
+                BLUA_TOKEN("string", String);
+
                 if (!foundToken) {
                     // BLUA_TOKEN_DATA(buf, Identifier, buf); 
                     AddToken(TokenType::Identifier, buf);
@@ -102,7 +112,11 @@ namespace BlackLua::Internal {
                     }
                 }
 
-                AddToken(TokenType::NumLit, buf);
+                if (encounteredPeriod) {
+                    AddToken(TokenType::NumLit, buf);
+                } else {
+                    AddToken(TokenType::IntLit, buf);
+                }
 
                 continue;
             } else if (!std::isspace(*Peek())) {

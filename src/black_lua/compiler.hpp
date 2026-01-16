@@ -231,8 +231,40 @@ namespace BlackLua {
             VarSet,
             VarRef,
 
+            FunctionDecl,
+            FunctionCall,
+
+            Return,
+
             BinExpr
         };
+
+        enum class VariableType {
+            Invalid = 0,
+            Void,
+            Bool,
+            Int,
+            Long,
+            Float,
+            Double,
+            String
+        };
+
+        inline const char* VariableTypeToString(VariableType type) {
+            switch (type) {
+                case VariableType::Invalid: return "invalid";
+                case VariableType::Void: return "void";
+                case VariableType::Bool: return "bool";
+                case VariableType::Int: return "int";
+                case VariableType::Long: return "long";
+                case VariableType::Float: return "float";
+                case VariableType::Double: return "double";
+                case VariableType::String: return "string";
+            }
+
+            BLUA_ASSERT(false, "Unreachable!");
+            return "invalid";
+        }
 
         enum class BinExprType {
             Invalid,
@@ -274,7 +306,7 @@ namespace BlackLua {
         struct NodeVarDecl {
             std::string_view Identifier;
             Node* Value = nullptr;
-            TokenType Type = TokenType::Nil;
+            VariableType Type = VariableType::Invalid;
         };
 
         struct NodeVarSet {
@@ -284,6 +316,27 @@ namespace BlackLua {
 
         struct NodeVarRef {
             std::string_view Identifier;
+        };
+
+        struct NodeFunctionDecl {
+            std::string_view Name;
+            std::string Signature;
+
+            std::vector<Node*> Arguments;
+            std::vector<Node*> Body;
+            bool HasBody = false;
+            TokenType ReturnType = TokenType::Nil;
+        };
+
+        struct NodeFunctionCall {
+            std::string_view Name;
+            std::string Signature;
+
+            std::vector<Node*> Parameters;
+        };
+
+        struct NodeReturn {
+            Node* Value = nullptr;
         };
 
         // NOTE: RHS can be nullptr if there is no right hand side
@@ -296,7 +349,9 @@ namespace BlackLua {
         struct Node {
             NodeType Type = NodeType::Nil;
             std::variant<NodeNil*, NodeBool*, NodeInt*, NodeNumber*, NodeString*, NodeInitializerList*, 
-                         NodeVarDecl*, NodeVarSet*, NodeVarRef*, 
+                         NodeVarDecl*, NodeVarSet*, NodeVarRef*,
+                         NodeFunctionDecl*, NodeFunctionCall*,
+                         NodeReturn*,
                          NodeBinExpr*> Data;
         };
 
@@ -320,21 +375,28 @@ namespace BlackLua {
             bool Match(TokenType type);
 
             Node* ParseIdentifier();
-            Node* ParseVariableDecl(TokenType type); // This function expects the first token to be the identifier!
+            Node* ParseType();
+
+            Node* ParseVariableDecl(VariableType type); // This function expects the first token to be the identifier!
+
+            Node* ParseFunctionDecl();
+            Node* ParseFunctionCall();
+
+            Node* ParseReturn();
 
             // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables and function calls)
             Node* ParseValue();
             BinExprType ParseOperator();
+            VariableType ParseVariableType();
 
             // Parses an expression (8 + 4, 6.3 - 4, "hello " + "world", ...)
             // NOTE: For certain reasons a varaible assignment is NOT considered an expression
-            // So local var = 6 is not an expression (6 technically does count as an expression)
+            // So int var = 6; is not an expression (6 technically does count as an expression)
             Node* ParseExpression();
 
             Node* ParseStatement();
 
             void ErrorExpected(const std::string& msg);
-            void ErrorRedeclaration(const std::string& msg);
 
             template <typename T>
             T* Allocate() {
@@ -359,8 +421,6 @@ namespace BlackLua {
             size_t m_Index = 0;
             Lexer::Tokens m_Tokens;
             bool m_Error = false;
-
-            std::unordered_map<std::string, bool> m_DeclaredSymbols; // A map of all the declared symbols (variables and such)
         };
 
         // A quick note about the type checker,
@@ -380,18 +440,26 @@ namespace BlackLua {
             Node* Consume();
 
             void CheckNodeVarDecl(Node* node);
+            void CheckNodeVarSet(Node* node);
 
-            void CheckNodeExpression(Node* node, TokenType type);
+            void CheckNodeExpression(Node* node, VariableType type);
+
+            void CheckNodeFunctionDecl(Node* node);
+            void CheckNodeFunctionCall(Node* node);
 
             void CheckNode(Node* node);
 
-            void WarningMismatchedTypes(TokenType type1, const std::string_view type2);
-            void ErrorMismatchedTypes(TokenType type1, const std::string_view type2);
+            void WarningMismatchedTypes(VariableType type1, const std::string_view type2);
+            void ErrorMismatchedTypes(VariableType type1, const std::string_view type2);
+            void ErrorRedeclaration(const std::string_view msg);
+            void ErrorUndeclaredIdentifier(const std::string_view msg);
 
         private:
             Parser::Nodes m_Nodes; // We modify these directly
             size_t m_Index = 0;
             bool m_Error = false;
+
+            std::unordered_map<std::string, Node*> m_DeclaredIdentifiers;
         };
 
         class Emitter {
@@ -407,6 +475,12 @@ namespace BlackLua {
             Node* Consume();
 
             void EmitNodeVarDecl(Node* node);
+            void EmitNodeVarSet(Node* node);
+
+            void EmitNodeFunctionDecl(Node* node);
+            void EmitNodeFunctionCall(Node* node);
+
+            void EmitNodeReturn(Node* node);
 
             void EmitNodeExpression(Node* node);
 

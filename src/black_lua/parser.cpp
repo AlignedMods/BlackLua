@@ -21,7 +21,7 @@ namespace BlackLua::Internal {
     }
 
     void Parser::ParseImpl() {
-        while (Peek()) {
+        while (Peek() && !m_Error) {
             Node* node = ParseStatement();
             m_Nodes.push_back(node);
         }
@@ -54,15 +54,52 @@ namespace BlackLua::Internal {
     }
 
     Node* Parser::ParseIdentifier() {
-        BLUA_ASSERT(false, "ok");
-    }
+        if (Peek(1)) {
+            Token& t = Peek()[1];
 
-    Node* Parser::ParseVariableDecl(TokenType type) {
+            if (t.Type == TokenType::LeftParen) {
+                return ParseFunctionCall();
+            }
+        }
+
         Token& ident = Consume();
 
-        if (m_DeclaredSymbols.contains(ident.Data)) {
-            ErrorRedeclaration(ident.Data);
+        NodeVarSet* node = Allocate<NodeVarSet>();
+        node->Identifier = ident.Data;
+        
+        if (Match(TokenType::Eq)) {
+            Consume();
+            node->Value = ParseExpression();
         }
+
+        if (Match(TokenType::Semi)) {
+            Consume();
+        } else {
+            ErrorExpected("';'");
+        }
+
+        return CreateNode(NodeType::VarSet, node);
+    }
+
+    Node* Parser::ParseType() {
+        VariableType type = ParseVariableType();
+        Consume(); // Consume the type (ParseVariableType doesn't)
+
+        if (Peek(1)) {
+            Token t = Peek()[1];
+
+            if (t.Type == TokenType::LeftParen) {
+                return ParseFunctionDecl();
+            } else {
+                return ParseVariableDecl(type);
+            }
+        }
+
+        return nullptr;
+    }
+
+    Node* Parser::ParseVariableDecl(VariableType type) {
+        Token& ident = Consume();
 
         NodeVarDecl* node = Allocate<NodeVarDecl>();
         node->Identifier = ident.Data;
@@ -73,9 +110,131 @@ namespace BlackLua::Internal {
             node->Value = ParseExpression();
         }
 
-        m_DeclaredSymbols[ident.Data] = true;
+        if (Match(TokenType::Semi)) {
+            Consume();
+        } else {
+            ErrorExpected("';'");
+        }
 
         return CreateNode(NodeType::VarDecl, node);
+    }
+
+    Node* Parser::ParseFunctionDecl() {
+        Token& ident = Consume();
+
+        NodeFunctionDecl* node = Allocate<NodeFunctionDecl>();
+        node->Name = ident.Data;
+
+        if (Match(TokenType::LeftParen)) {
+            Consume();
+
+            while (!Match(TokenType::RightParen)) {
+                VariableType type = ParseVariableType();
+                Consume();
+                Token& ident = Consume();
+                
+                NodeVarDecl* var = Allocate<NodeVarDecl>();
+                var->Identifier = ident.Data;
+                var->Type = type;
+                
+                if (Match(TokenType::Eq)) {
+                    Consume();
+                    var->Value = ParseExpression();
+                }
+                Node* n = CreateNode(NodeType::VarDecl, var);
+
+                if (Match(TokenType::Comma)) {
+                    Consume();
+                }
+
+                node->Arguments.push_back(n);
+            }
+
+            if (Match(TokenType::RightParen)) {
+                Consume();
+            } else {
+                ErrorExpected("')'");
+            }
+
+            // Parse function body
+            if (Match(TokenType::Semi)) {
+                Consume();
+            } else if (Match(TokenType::LeftCurly)) {
+                node->HasBody = true;
+                Consume();
+
+                while (!Match(TokenType::RightCurly)) {
+                    Node* n = ParseStatement();
+                    node->Body.push_back(n);
+                }
+
+                if (Match(TokenType::RightCurly)) {
+                    Consume();
+                } else {
+                    ErrorExpected("'}'");
+                }
+            } else {
+                ErrorExpected("';'");
+            }
+        } else {
+            ErrorExpected("'('");
+        }
+
+        return CreateNode(NodeType::FunctionDecl, node);
+    }
+
+    Node* Parser::ParseFunctionCall() {
+        Token& ident = Consume();
+
+        NodeFunctionCall* node = Allocate<NodeFunctionCall>();
+        node->Name = ident.Data;
+
+        if (Match(TokenType::LeftParen)) {
+            Consume();
+
+            while (!Match(TokenType::RightParen)) {
+                Node* val = ParseExpression();
+
+                if (Match(TokenType::Comma)) {
+                    Consume();
+                }
+
+                node->Parameters.push_back(val);
+            }
+
+            if (Match(TokenType::RightParen)) {
+                Consume();
+            } else {
+                ErrorExpected("')'");
+            }
+        } else {
+            ErrorExpected("'('");
+        }
+
+        if (Match(TokenType::Semi)) {
+            Consume();
+        } else {
+            ErrorExpected("';'");
+        }
+
+        return CreateNode(NodeType::FunctionCall, node);
+    }
+
+    Node* Parser::ParseReturn() {
+        Consume(); // Consume "return"
+
+        NodeReturn* node = Allocate<NodeReturn>();
+
+        Node* value = ParseExpression();
+        node->Value = value;
+
+        if (Match(TokenType::Semi)) {
+            Consume();
+        } else {
+            ErrorExpected("';'");
+        }
+
+        return CreateNode(NodeType::Return, node);
     }
 
     Node* Parser::ParseValue() {
@@ -146,6 +305,15 @@ namespace BlackLua::Internal {
                 return CreateNode(NodeType::InitializerList, node);
                 break;
             }
+            case TokenType::Identifier: {
+                Consume();
+
+                NodeVarRef* node = Allocate<NodeVarRef>();
+                node->Identifier = value.Data;
+
+                return CreateNode(NodeType::VarRef, node);
+                break;
+            }
         }
 
         ErrorExpected("value");
@@ -166,6 +334,20 @@ namespace BlackLua::Internal {
             case TokenType::Greater: return BinExprType::Greater;
             case TokenType::GreaterOrEq: return BinExprType::GreaterOrEq;
             default: return BinExprType::Invalid;
+        }
+    }
+
+    VariableType Parser::ParseVariableType() {
+        Token type = *Peek();
+
+        switch (type.Type) {
+            case TokenType::Bool: return VariableType::Bool;
+            case TokenType::Int: return VariableType::Int;
+            case TokenType::Long: return VariableType::Long;
+            case TokenType::Float: return VariableType::Float;
+            case TokenType::Double: return VariableType::Double;
+            case TokenType::String: return VariableType::String;
+            default: return VariableType::Invalid;
         }
     }
 
@@ -203,9 +385,10 @@ namespace BlackLua::Internal {
 
         if (t == TokenType::Identifier) {
             return ParseIdentifier();
-        } else if (t == TokenType::Bool || t == TokenType::Int || t == TokenType::Long || t == TokenType::Float || t == TokenType::Double || t == TokenType::String) {
-            Consume(); // Consume the type
-            return ParseVariableDecl(t);
+        } else if (ParseVariableType() != VariableType::Invalid) {
+            return ParseType();
+        } else if (t == TokenType::Return) {
+            return ParseReturn();
         }
 
         BLUA_ASSERT(false, "Unreachable!");
@@ -220,17 +403,6 @@ namespace BlackLua::Internal {
         } else {
             std::cerr << "Syntax error: Expected " << msg << "!\n";
         }
-
-        m_Error = true;
-    }
-
-    void Parser::ErrorRedeclaration(const std::string& msg) {
-        size_t line = 0;
-        if (m_Index > 0) {
-            line = m_Tokens[m_Index - 1].Line;
-        }
-
-        std::cerr << "Syntax error: Redeclaration of \"" << msg << "\" on line " << line << "!\n";
 
         m_Error = true;
     }

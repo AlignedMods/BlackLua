@@ -1,6 +1,4 @@
-int coolFunc(int param1, float param2, string ok) {
-    bool var = false;
-    var = true;
+int hello() {
+    int hi = 4;
+    hi = 9 + 4 * 4.2 - 4;
 }
-
-coolFunc(5 + 4, 3.4, "hello");

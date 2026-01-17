@@ -31,7 +31,7 @@ namespace BlackLua {
     };
 
     namespace Internal {
-    
+
         enum class TokenType {
             Semi,
             Eq,
@@ -227,11 +227,13 @@ namespace BlackLua {
             String,
             InitializerList,
 
+            Scope,
+
             VarDecl,
-            VarSet,
             VarRef,
 
             FunctionDecl,
+            FunctionImpl,
             FunctionCall,
 
             Return,
@@ -276,8 +278,30 @@ namespace BlackLua {
             Less,
             LessOrEq,
             Greater,
-            GreaterOrEq
+            GreaterOrEq,
+
+            Eq
         };
+
+        inline const char* BinExprTypeToString(BinExprType type) {
+            switch (type) {
+                case BinExprType::Invalid: return "invalid";
+                case BinExprType::Add: return "+";
+                case BinExprType::Sub: return "-";
+                case BinExprType::Mul: return "*";
+                case BinExprType::Div: return "/";
+
+                case BinExprType::Less: return "<";
+                case BinExprType::LessOrEq: return "<=";
+                case BinExprType::Greater: return ">";
+                case BinExprType::GreaterOrEq: return ">=";
+
+                case BinExprType::Eq: return "=";
+            }
+
+            BLUA_ASSERT(false, "Unreachable!");
+            return "invalid";
+        }
 
         struct Node; // Forward declaration of Node
 
@@ -303,14 +327,34 @@ namespace BlackLua {
             std::vector<Node*> Nodes;
         };
 
-        struct NodeVarDecl {
-            std::string_view Identifier;
-            Node* Value = nullptr;
-            VariableType Type = VariableType::Invalid;
+        struct NodeScope {
+            Node** Nodes = nullptr;
+            size_t Capacity = 0;
+            size_t Size = 0;
+
+            inline void Append(Node* node) {
+                if (Capacity == 0) {
+                    Nodes = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * 1));
+                    Capacity = 1;
+                }
+
+                if (Size >= Capacity) {
+                    Capacity *= 2;
+
+                    Node** newNodes = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * Capacity));
+                    memcpy(newNodes, Nodes, sizeof(Node*) * Size);
+                    Nodes = newNodes;
+                }
+
+                Nodes[Size] = node;
+                Size++;
+            }
         };
 
-        struct NodeVarSet {
+        struct NodeVarDecl {
             std::string_view Identifier;
+            VariableType Type = VariableType::Invalid;
+
             Node* Value = nullptr;
         };
 
@@ -323,9 +367,17 @@ namespace BlackLua {
             std::string Signature;
 
             std::vector<Node*> Arguments;
-            std::vector<Node*> Body;
-            bool HasBody = false;
-            TokenType ReturnType = TokenType::Nil;
+            VariableType ReturnType = VariableType::Invalid;
+        };
+
+        struct NodeFunctionImpl {
+            std::string_view Name;
+            std::string Signature;
+
+            std::vector<Node*> Arguments;
+            VariableType ReturnType = VariableType::Invalid;
+
+            Node* Body = nullptr; // Type is always NodeScope
         };
 
         struct NodeFunctionCall {
@@ -349,8 +401,9 @@ namespace BlackLua {
         struct Node {
             NodeType Type = NodeType::Nil;
             std::variant<NodeNil*, NodeBool*, NodeInt*, NodeNumber*, NodeString*, NodeInitializerList*, 
-                         NodeVarDecl*, NodeVarSet*, NodeVarRef*,
-                         NodeFunctionDecl*, NodeFunctionCall*,
+                         NodeScope*,
+                         NodeVarDecl*, NodeVarRef*,
+                         NodeFunctionDecl*, NodeFunctionImpl*, NodeFunctionCall*,
                          NodeReturn*,
                          NodeBinExpr*> Data;
         };
@@ -364,6 +417,8 @@ namespace BlackLua {
             const Nodes& GetNodes() const;
             bool IsValid() const;
 
+            
+
         private:
             void ParseImpl();
 
@@ -374,12 +429,11 @@ namespace BlackLua {
             // This function cannot fail
             bool Match(TokenType type);
 
-            Node* ParseIdentifier();
             Node* ParseType();
 
             Node* ParseVariableDecl(VariableType type); // This function expects the first token to be the identifier!
 
-            Node* ParseFunctionDecl();
+            Node* ParseFunctionDecl(VariableType returnType);
             Node* ParseFunctionCall();
 
             Node* ParseReturn();
@@ -415,6 +469,11 @@ namespace BlackLua {
                 newNode->Data = node;
                 return newNode;
             }
+
+            void PrintNode(Node* node, size_t indentation);
+
+        public:
+            void PrintAST();
 
         private:
             Nodes m_Nodes;

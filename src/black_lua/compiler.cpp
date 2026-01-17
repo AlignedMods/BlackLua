@@ -38,13 +38,15 @@ namespace BlackLua {
         bool valid = true;
 
         if (p.IsValid()) {
-            BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
-            if (c.IsValid()) {
-                BlackLua::Internal::Emitter e = BlackLua::Internal::Emitter::Emit(c.GetCheckedNodes());
-                src.Compiled = e.GetOutput();
-            } else {
-                valid = false;
-            }
+            p.PrintAST();
+
+            // BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
+            // if (c.IsValid()) {
+            //     BlackLua::Internal::Emitter e = BlackLua::Internal::Emitter::Emit(c.GetCheckedNodes());
+            //     src.Compiled = e.GetOutput();
+            // } else {
+            //     valid = false;
+            // }
         } else {
             valid = false;
         }

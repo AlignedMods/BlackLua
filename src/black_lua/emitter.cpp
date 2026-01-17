@@ -47,49 +47,49 @@ namespace BlackLua::Internal {
         m_Output += '\n';
     }
 
-    void Emitter::EmitNodeVarSet(Node* node) {
-        NodeVarSet* decl = std::get<NodeVarSet*>(node->Data);
-
-        m_Output += decl->Identifier;
-        if (decl->Value) {
-            m_Output += " = ";
-            EmitNodeExpression(decl->Value);
-        }
-        m_Output += '\n';
-    }
+    // void Emitter::EmitNodeVarSet(Node* node) {
+    //     NodeVarSet* decl = std::get<NodeVarSet*>(node->Data);
+    // 
+    //     m_Output += decl->Identifier;
+    //     if (decl->Value) {
+    //         m_Output += " = ";
+    //         EmitNodeExpression(decl->Value);
+    //     }
+    //     m_Output += '\n';
+    // }
 
     void Emitter::EmitNodeFunctionDecl(Node* node) {
         NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
 
-        if (decl->HasBody) {
-            m_Output += "function ";
-            m_Output += decl->Signature;
-            m_Output += "(";
-
-            for (size_t i = 0; i < decl->Arguments.size(); i++) {
-                NodeVarDecl* var = std::get<NodeVarDecl*>(decl->Arguments[i]->Data);
-
-                m_Output += var->Identifier;
-
-                if (var->Value) {
-                    m_Output += " = ";
-                    EmitNodeExpression(var->Value);
-                }
-
-                if (i + 1 < decl->Arguments.size()) {
-                    m_Output += ", ";
-                }
-            }
-
-            m_Output += ")\n";
-
-            for (const auto& n : decl->Body) {
-                m_Output += "    ";
-                EmitNode(n);
-            }
-
-            m_Output += "end\n";
-        }
+        // if (decl->HasBody) {
+        //     m_Output += "function ";
+        //     m_Output += decl->Signature;
+        //     m_Output += "(";
+        // 
+        //     for (size_t i = 0; i < decl->Arguments.size(); i++) {
+        //         NodeVarDecl* var = std::get<NodeVarDecl*>(decl->Arguments[i]->Data);
+        // 
+        //         m_Output += var->Identifier;
+        // 
+        //         if (var->Value) {
+        //             m_Output += " = ";
+        //             EmitNodeExpression(var->Value);
+        //         }
+        // 
+        //         if (i + 1 < decl->Arguments.size()) {
+        //             m_Output += ", ";
+        //         }
+        //     }
+        // 
+        //     m_Output += ")\n";
+        // 
+        //     for (const auto& n : decl->Body) {
+        //         m_Output += "    ";
+        //         EmitNode(n);
+        //     }
+        // 
+        //     m_Output += "end\n";
+        // }
     }
 
     void Emitter::EmitNodeFunctionCall(Node* node) {
@@ -205,7 +205,7 @@ namespace BlackLua::Internal {
 
         if (t == NodeType::VarDecl) {
             EmitNodeVarDecl(node);
-        } else if (t == NodeType::VarSet) {
+        // } else if (t == NodeType::VarSet) {
             EmitNodeVarSet(node);
         } else if (t == NodeType::FunctionDecl) {
             EmitNodeFunctionDecl(node);

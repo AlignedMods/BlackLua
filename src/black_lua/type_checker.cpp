@@ -62,17 +62,17 @@ namespace BlackLua::Internal {
     }
 
     void TypeChecker::CheckNodeVarSet(Node* node) {
-        NodeVarSet* set = std::get<NodeVarSet*>(node->Data);
-
-        if (!m_DeclaredIdentifiers.contains(std::string(set->Identifier))) {
-            ErrorUndeclaredIdentifier(set->Identifier);
-        } else {
-            NodeVarDecl* decl = std::get<NodeVarDecl*>(m_DeclaredIdentifiers.at(std::string(set->Identifier))->Data);
-
-            if (set->Value) {
-                CheckNodeExpression(set->Value, decl->Type);
-            }
-        }
+        // NodeVarSet* set = std::get<NodeVarSet*>(node->Data);
+        // 
+        // if (!m_DeclaredIdentifiers.contains(std::string(set->Identifier))) {
+        //     ErrorUndeclaredIdentifier(set->Identifier);
+        // } else {
+        //     NodeVarDecl* decl = std::get<NodeVarDecl*>(m_DeclaredIdentifiers.at(std::string(set->Identifier))->Data);
+        // 
+        //     if (set->Value) {
+        //         CheckNodeExpression(set->Value, decl->Type);
+        //     }
+        // }
     }
 
     void TypeChecker::CheckNodeExpression(Node* node, VariableType type) {
@@ -133,12 +133,12 @@ namespace BlackLua::Internal {
 
         m_DeclaredIdentifiers[sig] = node;
 
-        if (decl->HasBody) {
-            for (const auto& n : decl->Body) {
-                CheckNode(n);
-            }
-        }
-
+        // if (decl->HasBody) {
+        //     for (const auto& n : decl->Body) {
+        //         CheckNode(n);
+        //     }
+        // }
+        // 
         decl->Signature = sig;
     }
 
@@ -161,7 +161,7 @@ namespace BlackLua::Internal {
 
         if (t == NodeType::VarDecl) {
             CheckNodeVarDecl(node);
-        } else if (t == NodeType::VarSet) {
+        // } else if (t == NodeType::VarSet) {
             CheckNodeVarSet(node);
         } else if (t == NodeType::FunctionDecl) {
             CheckNodeFunctionDecl(node);

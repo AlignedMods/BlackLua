@@ -131,15 +131,66 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN_C('{', LeftCurly);
                 BLUA_TOKEN_C('}', RightCurly);
 
-                BLUA_TOKEN_C('+', Add);
-                BLUA_TOKEN_C('-', Sub);
-                BLUA_TOKEN_C('*', Mul);
-                BLUA_TOKEN_C('%', Mod);
-                BLUA_TOKEN_C('#', Hash);
+                if (c == '+') {
+                    bool isInPlace = false;
 
-                // Special case if there is a slash (/), this could be either a division sign or a comment
+                    if (Peek()) {
+                        char nc = *Peek();
+
+                        if (nc == '=') {
+                            Consume();
+                            isInPlace = true;
+                        }
+
+                        if (isInPlace) {
+                            AddToken(TokenType::AddInPlace);
+                        } else {
+                            AddToken(TokenType::Add);
+                        }
+                    }
+                }
+
+                if (c == '-') {
+                    bool isInPlace = false;
+
+                    if (Peek()) {
+                        char nc = *Peek();
+
+                        if (nc == '=') {
+                            Consume();
+                            isInPlace = true;
+                        }
+
+                        if (isInPlace) {
+                            AddToken(TokenType::SubInPlace);
+                        } else {
+                            AddToken(TokenType::Sub);
+                        }
+                    }
+                }
+
+                if (c == '*') {
+                    bool isInPlace = false;
+
+                    if (Peek()) {
+                        char nc = *Peek();
+
+                        if (nc == '=') {
+                            Consume();
+                            isInPlace = true;
+                        }
+
+                        if (isInPlace) {
+                            AddToken(TokenType::MulInPlace);
+                        } else {
+                            AddToken(TokenType::Mul);
+                        }
+                    }
+                }
+
                 if (c == '/') {
                     bool isComment = false;
+                    bool isInPlace = false;
 
                     if (Peek()) {
                         char nc = *Peek(); // Don't consume the character just in case
@@ -147,12 +198,13 @@ namespace BlackLua::Internal {
                         if (nc == '/') {
                             Consume();
                             isComment = true;
+                        } else if (nc == '=') {
+                            Consume();
+                            isInPlace = true;
                         }
                     }
 
-                    if (!isComment) {
-                        AddToken(TokenType::Div);
-                    } else {
+                    if (isComment) {
                         while (Peek()) {
                             char nc = Consume();
 
@@ -160,12 +212,15 @@ namespace BlackLua::Internal {
                                 break;
                             }
                         }
+                    } else if (isInPlace) {
+                        AddToken(TokenType::DivInPlace);
+                    } else {
+                        AddToken(TokenType::Div);
                     }
 
                     continue;
                 }
 
-                // Special case if there is an equal sign (=), this could be either an assignment or conditional check
                 if (c == '=') {
                     bool isEq = false;
 
@@ -186,7 +241,6 @@ namespace BlackLua::Internal {
                     }
                 }
 
-                // Special case if there is a less than sign (<), this could be either a less than or less than equal check (<=)
                 if (c == '<') {
                     bool isEq = false;
 
@@ -203,6 +257,26 @@ namespace BlackLua::Internal {
                         continue;
                     } else {
                         AddToken(TokenType::Less);
+                        continue;
+                    }
+                }
+
+                if (c == '>') {
+                    bool isEq = false;
+
+                    if (Peek()) {
+                        char nc = *Peek();
+
+                        if (nc == '=') {
+                            isEq = true;
+                        }
+                    }
+
+                    if (isEq) {
+                        AddToken(TokenType::GreaterOrEq);
+                        continue;
+                    } else {
+                        AddToken(TokenType::Greater);
                         continue;
                     }
                 }

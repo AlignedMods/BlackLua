@@ -190,6 +190,29 @@ namespace BlackLua::Internal {
         return CreateNode(NodeType::While, node);
     }
 
+    Node* Parser::ParseDoWhile() {
+        Consume(); // Consume "do"
+
+        NodeDoWhile* node = Allocate<NodeDoWhile>();
+        TryConsume(TokenType::LeftCurly, "'}'");
+
+        node->Body = CreateNode(NodeType::Scope, Allocate<NodeScope>());
+
+        while (!Match(TokenType::RightCurly)) {
+            Node* n = ParseStatement();
+            std::get<NodeScope*>(node->Body->Data)->Append(n);
+        }
+
+        TryConsume(TokenType::RightCurly, "'}'");
+
+        TryConsume(TokenType::While, "while");
+        TryConsume(TokenType::LeftParen, "'('");
+        node->Condition = ParseExpression();
+        TryConsume(TokenType::RightParen, "')'");
+
+        return CreateNode(NodeType::DoWhile, node);
+    }
+
     Node* Parser::ParseReturn() {
         Consume(); // Consume "return"
 
@@ -311,9 +334,13 @@ namespace BlackLua::Internal {
 
         switch (op.Type) {
             case TokenType::Add: return BinExprType::Add;
+            case TokenType::AddInPlace: return BinExprType::AddInPlace;
             case TokenType::Sub: return BinExprType::Sub;
+            case TokenType::SubInPlace: return BinExprType::SubInPlace;
             case TokenType::Mul: return BinExprType::Mul;
+            case TokenType::MulInPlace: return BinExprType::MulInPlace;
             case TokenType::Div: return BinExprType::Div;
+            case TokenType::DivInPlace: return BinExprType::DivInPlace;
             case TokenType::Less: return BinExprType::Less;
             case TokenType::LessOrEq: return BinExprType::LessOrEq;
             case TokenType::Greater: return BinExprType::Greater;
@@ -380,6 +407,8 @@ namespace BlackLua::Internal {
             node = ParseType();
         } else if (t == TokenType::While) {
             node = ParseWhile();
+        } else if (t == TokenType::Do) {
+            node = ParseDoWhile();
         } else if (t == TokenType::Return) {
             node = ParseReturn();
         } else {
@@ -496,9 +525,19 @@ namespace BlackLua::Internal {
                 case NodeType::While: {
                     NodeWhile* wh = std::get<NodeWhile*>(n->Data);
 
-                    std::cout << "WhileStatement, Condition: \n";
+                    std::cout << "WhileStatement: \n";
                     PrintNode(wh->Condition, indentation + 4);
                     PrintNode(wh->Body, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::DoWhile: {
+                    NodeDoWhile* dowh = std::get<NodeDoWhile*>(n->Data);
+
+                    std::cout << "DoWhileStatement: \n";
+                    PrintNode(dowh->Body, indentation + 4);
+                    PrintNode(dowh->Condition, indentation + 4);
 
                     break;
                 }

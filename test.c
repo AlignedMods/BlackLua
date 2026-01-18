@@ -16,14 +16,18 @@ int main() {
   // print the first two terms t1 and t2
   printf("Fibonacci Series: %d, %d, ", t1, t2);
   
-  while (i < n) {
-    printf("%d, ", nextTerm);
-    t1 = t2;
-    t2 = nextTerm;
-    nextTerm = t1 + t2;
+  do {
+    i *= 2;
+  } while (i < 10);
 
-    i = i + 1;
-  }
+  // while (i < n) {
+  //   printf("%d, ", nextTerm);
+  //   t1 = t2;
+  //   t2 = nextTerm;
+  //   nextTerm = t1 + t2;
+  // 
+  //   i = i + 1;
+  // }
   
   return 0;
 }

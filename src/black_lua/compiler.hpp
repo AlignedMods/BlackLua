@@ -42,10 +42,10 @@ namespace BlackLua {
             LeftCurly,
             RightCurly,
 
-            Add,
-            Sub,
-            Mul,
-            Div,
+            Add, AddInPlace,
+            Sub, SubInPlace,
+            Mul, MulInPlace,
+            Div, DivInPlace,
             Mod,
             Hash,
             IsEq,
@@ -117,9 +117,13 @@ namespace BlackLua {
                 case TokenType::RightCurly: return "}";
 
                 case TokenType::Add: return "+";
+                case TokenType::AddInPlace: return "+=";
                 case TokenType::Sub: return "-";
+                case TokenType::SubInPlace: return "-=";
                 case TokenType::Mul: return "*";
+                case TokenType::MulInPlace: return "*=";
                 case TokenType::Div: return "/";
+                case TokenType::DivInPlace: return "/=";
                 case TokenType::Mod: return "%";
                 case TokenType::Hash: return "#";
                 case TokenType::IsEq: return "==";
@@ -236,6 +240,7 @@ namespace BlackLua {
             FunctionImpl,
 
             While,
+            DoWhile,
 
             Return,
 
@@ -272,10 +277,10 @@ namespace BlackLua {
 
         enum class BinExprType {
             Invalid,
-            Add,
-            Sub,
-            Mul,
-            Div,
+            Add, AddInPlace,
+            Sub, SubInPlace,
+            Mul, MulInPlace,
+            Div, DivInPlace,
 
             Less,
             LessOrEq,
@@ -289,9 +294,13 @@ namespace BlackLua {
             switch (type) {
                 case BinExprType::Invalid: return "invalid";
                 case BinExprType::Add: return "+";
+                case BinExprType::AddInPlace: return "+=";
                 case BinExprType::Sub: return "-";
+                case BinExprType::SubInPlace: return "-=";
                 case BinExprType::Mul: return "*";
+                case BinExprType::MulInPlace: return "*=";
                 case BinExprType::Div: return "/";
+                case BinExprType::DivInPlace: return "/=";
 
                 case BinExprType::Less: return "<";
                 case BinExprType::LessOrEq: return "<=";
@@ -388,6 +397,12 @@ namespace BlackLua {
             Node* Body = nullptr; // Type is always NodeScope
         };
 
+        struct NodeDoWhile {
+            Node* Body = nullptr; // Type is always NodeScope
+
+            Node* Condition = nullptr;
+        };
+
         struct NodeReturn {
             Node* Value = nullptr;
         };
@@ -412,7 +427,7 @@ namespace BlackLua {
                          NodeScope*,
                          NodeVarDecl*, NodeVarRef*,
                          NodeFunctionDecl*, NodeFunctionImpl*,
-                         NodeWhile*,
+                         NodeWhile*, NodeDoWhile*,
                          NodeReturn*,
                          NodeFunctionCallExpr*, NodeBinExpr*> Data;
         };
@@ -443,6 +458,7 @@ namespace BlackLua {
             Node* ParseFunctionDecl(VariableType returnType);
 
             Node* ParseWhile();
+            Node* ParseDoWhile();
 
             Node* ParseReturn();
 

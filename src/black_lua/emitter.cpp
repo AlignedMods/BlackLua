@@ -93,20 +93,20 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::EmitNodeFunctionCall(Node* node) {
-        NodeFunctionCall* call = std::get<NodeFunctionCall*>(node->Data);
-
-        m_Output += call->Signature;
-        m_Output += "(";
-
-        for (size_t i = 0; i < call->Parameters.size(); i++) {
-            EmitNodeExpression(call->Parameters[i]);
-
-            if (i + 1 < call->Parameters.size()) {
-                m_Output += ", ";
-            }
-        }
-
-        m_Output += ")\n";
+        // NodeFunctionCall* call = std::get<NodeFunctionCall*>(node->Data);
+        // 
+        // m_Output += call->Signature;
+        // m_Output += "(";
+        // 
+        // for (size_t i = 0; i < call->Parameters.size(); i++) {
+        //     EmitNodeExpression(call->Parameters[i]);
+        // 
+        //     if (i + 1 < call->Parameters.size()) {
+        //         m_Output += ", ";
+        //     }
+        // }
+        // 
+        // m_Output += ")\n";
     }
 
     void Emitter::EmitNodeReturn(Node* node) {
@@ -209,7 +209,7 @@ namespace BlackLua::Internal {
             EmitNodeVarSet(node);
         } else if (t == NodeType::FunctionDecl) {
             EmitNodeFunctionDecl(node);
-        } else if (t == NodeType::FunctionCall) {
+        // } else if (t == NodeType::FunctionCall) {
             EmitNodeFunctionCall(node);
         }
     }

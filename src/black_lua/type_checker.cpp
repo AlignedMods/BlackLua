@@ -143,31 +143,31 @@ namespace BlackLua::Internal {
     }
 
     void TypeChecker::CheckNodeFunctionCall(Node* node) {
-        NodeFunctionCall* call = std::get<NodeFunctionCall*>(node->Data);
+        // NodeFunctionCall* call = std::get<NodeFunctionCall*>(node->Data);
 
-        std::string sig(call->Name);
-        sig += "__BL_";
-        sig += std::to_string(call->Parameters.size());
-
-        if (!m_DeclaredIdentifiers.contains(sig)) {
-            ErrorUndeclaredIdentifier(call->Name);
-        }
-
-        call->Signature = sig;
+        // std::string sig(call->Name);
+        // sig += "__BL_";
+        // sig += std::to_string(call->Parameters.size());
+        // 
+        // if (!m_DeclaredIdentifiers.contains(sig)) {
+        //     ErrorUndeclaredIdentifier(call->Name);
+        // }
+        // 
+        // call->Signature = sig;
     }
 
     void TypeChecker::CheckNode(Node* node) {
         NodeType t = node->Type;
 
-        if (t == NodeType::VarDecl) {
-            CheckNodeVarDecl(node);
-        // } else if (t == NodeType::VarSet) {
-            CheckNodeVarSet(node);
-        } else if (t == NodeType::FunctionDecl) {
-            CheckNodeFunctionDecl(node);
-        } else if (t == NodeType::FunctionCall) {
-            CheckNodeFunctionCall(node);
-        }
+        // if (t == NodeType::VarDecl) {
+        //     CheckNodeVarDecl(node);
+        // // } else if (t == NodeType::VarSet) {
+        //     CheckNodeVarSet(node);
+        // } else if (t == NodeType::FunctionDecl) {
+        //     CheckNodeFunctionDecl(node);
+        // } else if (t == NodeType::FunctionCall) {
+        //     CheckNodeFunctionCall(node);
+        // }
     }
 
     void TypeChecker::WarningMismatchedTypes(VariableType type1, const std::string_view type2) {

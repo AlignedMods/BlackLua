@@ -47,6 +47,17 @@ namespace BlackLua::Internal {
         return m_Tokens.at(m_Index++);
     }
 
+    Token* Parser::TryConsume(TokenType type, const std::string& error) {
+        if (Match(type)) {
+            Token& t = Consume();
+            return &t;
+        }
+
+        ErrorExpected(error);
+
+        return nullptr;
+    }
+
     bool Parser::Match(TokenType type) {
         if (!Peek()) {
             return false;
@@ -122,11 +133,7 @@ namespace BlackLua::Internal {
                 args.push_back(n);
             }
 
-            if (Match(TokenType::RightParen)) {
-                Consume();
-            } else {
-                ErrorExpected("')'");
-            }
+            TryConsume(TokenType::RightParen, "')'");
 
             if (Match(TokenType::LeftCurly)) {
                 NodeFunctionImpl* node = Allocate<NodeFunctionImpl>();
@@ -143,11 +150,7 @@ namespace BlackLua::Internal {
                     std::get<NodeScope*>(node->Body->Data)->Append(n);
                 }
 
-                if (Match(TokenType::RightCurly)) {
-                    Consume();
-                } else {
-                    ErrorExpected("'}'");
-                }
+                TryConsume(TokenType::RightCurly, "'}'");
 
                 finalNode = CreateNode(NodeType::FunctionImpl, node);
             } else {
@@ -165,35 +168,26 @@ namespace BlackLua::Internal {
         return finalNode;
     }
 
-    Node* Parser::ParseFunctionCall() {
-        Token& ident = Consume();
+    Node* Parser::ParseWhile() {
+        Consume(); // Consume "while"
 
-        NodeFunctionCall* node = Allocate<NodeFunctionCall>();
-        node->Name = ident.Data;
+        NodeWhile* node = Allocate<NodeWhile>();
 
-        if (Match(TokenType::LeftParen)) {
-            Consume();
+        TryConsume(TokenType::LeftParen, "'('");
+        node->Condition = ParseExpression();
+        TryConsume(TokenType::RightParen, "')'");
+        TryConsume(TokenType::LeftCurly, "'}'");
 
-            while (!Match(TokenType::RightParen)) {
-                Node* val = ParseExpression();
+        node->Body = CreateNode(NodeType::Scope, Allocate<NodeScope>());
 
-                if (Match(TokenType::Comma)) {
-                    Consume();
-                }
-
-                node->Parameters.push_back(val);
-            }
-
-            if (Match(TokenType::RightParen)) {
-                Consume();
-            } else {
-                ErrorExpected("')'");
-            }
-        } else {
-            ErrorExpected("'('");
+        while (!Match(TokenType::RightCurly)) {
+            Node* n = ParseStatement();
+            std::get<NodeScope*>(node->Body->Data)->Append(n);
         }
 
-        return CreateNode(NodeType::FunctionCall, node);
+        TryConsume(TokenType::RightCurly, "'}'");
+
+        return CreateNode(NodeType::While, node);
     }
 
     Node* Parser::ParseReturn() {
@@ -278,15 +272,36 @@ namespace BlackLua::Internal {
             case TokenType::Identifier: {
                 Consume();
 
-                NodeVarRef* node = Allocate<NodeVarRef>();
-                node->Identifier = value.Data;
+                // Check if this is a function call
+                if (Match(TokenType::LeftParen)) {
+                    Consume();
 
-                return CreateNode(NodeType::VarRef, node);
+                    NodeFunctionCallExpr* node = Allocate<NodeFunctionCallExpr>();
+                    node->Name = value.Data;
+
+                    while (!Match(TokenType::RightParen)) {
+                        Node* val = ParseExpression();
+
+                        if (Match(TokenType::Comma)) {
+                            Consume();
+                        }
+
+                        node->Parameters.push_back(val);
+                    }
+
+                    TryConsume(TokenType::RightParen, "')'");
+
+                    return CreateNode(NodeType::FunctionCallExpr, node);
+                } else {
+                    NodeVarRef* node = Allocate<NodeVarRef>();
+                    node->Identifier = value.Data;
+
+                    return CreateNode(NodeType::VarRef, node);
+                }
+                
                 break;
             }
         }
-
-        ErrorExpected("value");
 
         return nullptr;
     }
@@ -324,6 +339,11 @@ namespace BlackLua::Internal {
 
     Node* Parser::ParseExpression() {
         Node* lhsNode = ParseValue();
+
+        if (!lhsNode) {
+            ErrorExpected("expression");
+        }
+
         BinExprType op = BinExprType::Invalid;
         if (Peek()) {
             op = ParseOperator();
@@ -358,6 +378,8 @@ namespace BlackLua::Internal {
 
         if (ParseVariableType() != VariableType::Invalid) {
             node = ParseType();
+        } else if (t == TokenType::While) {
+            node = ParseWhile();
         } else if (t == TokenType::Return) {
             node = ParseReturn();
         } else {
@@ -365,11 +387,7 @@ namespace BlackLua::Internal {
         }
 
         if (m_Tokens[m_Index - 1].Type != TokenType::RightCurly) {
-            if (Match(TokenType::Semi)) {
-                Consume();
-            } else {
-                ErrorExpected("';'");
-            }
+            TryConsume(TokenType::Semi, "';'");
         }
 
         return node;
@@ -391,7 +409,7 @@ namespace BlackLua::Internal {
         std::cout << ident;
 
         if (n == nullptr) {
-            std::cout << "NULL";
+            std::cout << "NULL\n";
         } else {
             switch (n->Type) {
                 case NodeType::Bool: {
@@ -418,6 +436,14 @@ namespace BlackLua::Internal {
                     NodeNumber* num = std::get<NodeNumber*>(n->Data);
 
                     std::cout << "Number, Value: " << num->Number << '\n';
+
+                    break;
+                }
+
+                case NodeType::String: {
+                    NodeString* str = std::get<NodeString*>(n->Data);
+
+                    std::cout << "String, Value: " << str->String << '\n';
 
                     break;
                 }
@@ -463,6 +489,36 @@ namespace BlackLua::Internal {
 
                     std::cout << "FunctionImpl, Name: " << impl->Name << ", Return type: " << VariableTypeToString(impl->ReturnType) << ", Body: \n";
                     PrintNode(impl->Body, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::While: {
+                    NodeWhile* wh = std::get<NodeWhile*>(n->Data);
+
+                    std::cout << "WhileStatement, Condition: \n";
+                    PrintNode(wh->Condition, indentation + 4);
+                    PrintNode(wh->Body, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::Return: {
+                    NodeReturn* ret = std::get<NodeReturn*>(n->Data);
+
+                    std::cout << "Return, Value: \n";
+                    PrintNode(ret->Value, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::FunctionCallExpr: {
+                    NodeFunctionCallExpr* call = std::get<NodeFunctionCallExpr*>(n->Data);
+
+                    std::cout << "FunctionCallExpr, Name: " << call->Name << ", Parameters: \n";
+                    for (const auto& node : call->Parameters) {
+                        PrintNode(node, indentation + 4);
+                    }
 
                     break;
                 }

@@ -6,7 +6,7 @@ int main() {
 
     BlackLua::LuaContext context = BlackLua::LuaContext::Create();
 
-    BlackLua::CompiledSource compiled = context.CompileFile("test.lua");
+    BlackLua::CompiledSource compiled = context.CompileFile("test.c");
     std::cout << compiled.Compiled << '\n';
     context.Run(compiled, "test");
 

@@ -234,10 +234,12 @@ namespace BlackLua {
 
             FunctionDecl,
             FunctionImpl,
-            FunctionCall,
+
+            While,
 
             Return,
 
+            FunctionCallExpr,
             BinExpr
         };
 
@@ -380,15 +382,21 @@ namespace BlackLua {
             Node* Body = nullptr; // Type is always NodeScope
         };
 
-        struct NodeFunctionCall {
-            std::string_view Name;
-            std::string Signature;
+        struct NodeWhile {
+            Node* Condition = nullptr;
 
-            std::vector<Node*> Parameters;
+            Node* Body = nullptr; // Type is always NodeScope
         };
 
         struct NodeReturn {
             Node* Value = nullptr;
+        };
+
+        struct NodeFunctionCallExpr {
+            std::string_view Name;
+            std::string Signature;
+
+            std::vector<Node*> Parameters;
         };
 
         // NOTE: RHS can be nullptr if there is no right hand side
@@ -403,9 +411,10 @@ namespace BlackLua {
             std::variant<NodeNil*, NodeBool*, NodeInt*, NodeNumber*, NodeString*, NodeInitializerList*, 
                          NodeScope*,
                          NodeVarDecl*, NodeVarRef*,
-                         NodeFunctionDecl*, NodeFunctionImpl*, NodeFunctionCall*,
+                         NodeFunctionDecl*, NodeFunctionImpl*,
+                         NodeWhile*,
                          NodeReturn*,
-                         NodeBinExpr*> Data;
+                         NodeFunctionCallExpr*, NodeBinExpr*> Data;
         };
 
         class Parser {
@@ -417,13 +426,12 @@ namespace BlackLua {
             const Nodes& GetNodes() const;
             bool IsValid() const;
 
-            
-
         private:
             void ParseImpl();
 
             Token* Peek(size_t count = 0);
             Token& Consume();
+            Token* TryConsume(TokenType type, const std::string& error);
 
             // Checks if the current token matches with the requested type
             // This function cannot fail
@@ -432,9 +440,9 @@ namespace BlackLua {
             Node* ParseType();
 
             Node* ParseVariableDecl(VariableType type); // This function expects the first token to be the identifier!
-
             Node* ParseFunctionDecl(VariableType returnType);
-            Node* ParseFunctionCall();
+
+            Node* ParseWhile();
 
             Node* ParseReturn();
 

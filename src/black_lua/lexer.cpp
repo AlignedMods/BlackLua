@@ -132,26 +132,26 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN_C('}', RightCurly);
 
                 BLUA_TOKEN_C('+', Add);
+                BLUA_TOKEN_C('-', Sub);
                 BLUA_TOKEN_C('*', Mul);
-                BLUA_TOKEN_C('/', Div);
                 BLUA_TOKEN_C('%', Mod);
                 BLUA_TOKEN_C('#', Hash);
 
-                // Special case if there is a dash (-), this could be either a minus sign or a comment
-                if (c == '-') {
+                // Special case if there is a slash (/), this could be either a division sign or a comment
+                if (c == '/') {
                     bool isComment = false;
 
                     if (Peek()) {
                         char nc = *Peek(); // Don't consume the character just in case
 
-                        if (nc == '-') {
+                        if (nc == '/') {
                             Consume();
                             isComment = true;
                         }
                     }
 
                     if (!isComment) {
-                        AddToken(TokenType::Sub);
+                        AddToken(TokenType::Div);
                     } else {
                         while (Peek()) {
                             char nc = Consume();

@@ -42,11 +42,11 @@ namespace BlackLua {
             LeftCurly,
             RightCurly,
 
-            Add, AddInPlace,
-            Sub, SubInPlace,
-            Mul, MulInPlace,
-            Div, DivInPlace,
-            Mod,
+            Plus, PlusEq,
+            Minus, MinusEq,
+            Star, StarEq,
+            Slash, SlashEq,
+            Percent,
             Hash,
             IsEq,
             IsNotEq,
@@ -83,10 +83,6 @@ namespace BlackLua {
 
             True,
             False,
-            Nil,
-
-            Function,
-            Local,
 
             IntLit, // No decimals are allowed in an integer literal!
             NumLit,
@@ -116,15 +112,15 @@ namespace BlackLua {
                 case TokenType::LeftCurly: return "{";
                 case TokenType::RightCurly: return "}";
 
-                case TokenType::Add: return "+";
-                case TokenType::AddInPlace: return "+=";
-                case TokenType::Sub: return "-";
-                case TokenType::SubInPlace: return "-=";
-                case TokenType::Mul: return "*";
-                case TokenType::MulInPlace: return "*=";
-                case TokenType::Div: return "/";
-                case TokenType::DivInPlace: return "/=";
-                case TokenType::Mod: return "%";
+                case TokenType::Plus: return "+";
+                case TokenType::PlusEq: return "+=";
+                case TokenType::Minus: return "-";
+                case TokenType::MinusEq: return "-=";
+                case TokenType::Star: return "*";
+                case TokenType::StarEq: return "*=";
+                case TokenType::Slash: return "/";
+                case TokenType::SlashEq: return "/=";
+                case TokenType::Percent: return "%";
                 case TokenType::Hash: return "#";
                 case TokenType::IsEq: return "==";
                 case TokenType::IsNotEq: return "~-";
@@ -161,10 +157,6 @@ namespace BlackLua {
 
                 case TokenType::True: return "true";
                 case TokenType::False: return "false";
-                case TokenType::Nil: return "nil";
-
-                case TokenType::Function: return "function";
-                case TokenType::Local: return "local";
 
                 case TokenType::IntLit: return "int-lit";
                 case TokenType::NumLit: return "num-lit";
@@ -224,7 +216,6 @@ namespace BlackLua {
         };
 
         enum class NodeType {
-            Nil,
             Bool,
             Int,
             Number,
@@ -241,6 +232,7 @@ namespace BlackLua {
 
             While,
             DoWhile,
+            For,
 
             Return,
 
@@ -316,7 +308,29 @@ namespace BlackLua {
 
         struct Node; // Forward declaration of Node
 
-        struct NodeNil {};
+        struct NodeList {
+            Node** Items = nullptr;
+            size_t Capacity = 0;
+            size_t Size = 0;
+
+            inline void Append(Node* node) {
+                if (Capacity == 0) {
+                    Items = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * 1));
+                    Capacity = 1;
+                }
+
+                if (Size >= Capacity) {
+                    Capacity *= 2;
+
+                    Node** newItems = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * Capacity));
+                    memcpy(newItems, Items, sizeof(Node*) * Size);
+                    Items = newItems;
+                }
+
+                Items[Size] = node;
+                Size++;
+            }
+        };
 
         struct NodeBool {
             bool Value = false;
@@ -335,31 +349,11 @@ namespace BlackLua {
         };
 
         struct NodeInitializerList {
-            std::vector<Node*> Nodes;
+            NodeList Nodes{};
         };
 
         struct NodeScope {
-            Node** Nodes = nullptr;
-            size_t Capacity = 0;
-            size_t Size = 0;
-
-            inline void Append(Node* node) {
-                if (Capacity == 0) {
-                    Nodes = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * 1));
-                    Capacity = 1;
-                }
-
-                if (Size >= Capacity) {
-                    Capacity *= 2;
-
-                    Node** newNodes = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * Capacity));
-                    memcpy(newNodes, Nodes, sizeof(Node*) * Size);
-                    Nodes = newNodes;
-                }
-
-                Nodes[Size] = node;
-                Size++;
-            }
+            NodeList Nodes{};
         };
 
         struct NodeVarDecl {
@@ -367,6 +361,8 @@ namespace BlackLua {
             VariableType Type = VariableType::Invalid;
 
             Node* Value = nullptr;
+
+            Node* Next = nullptr; // The next variable declaration in the list (if there is a list, such as int x, y, z = 3;), this does mean that variable declarations are recursive!
         };
 
         struct NodeVarRef {
@@ -403,6 +399,14 @@ namespace BlackLua {
             Node* Condition = nullptr;
         };
 
+        struct NodeFor {
+            Node* Prologue = nullptr; // int i = 0;
+            Node* Condition = nullptr; // i < 5;
+            Node* Epilogue = nullptr; // i += 1;
+
+            Node* Body = nullptr;
+        };
+
         struct NodeReturn {
             Node* Value = nullptr;
         };
@@ -422,12 +426,12 @@ namespace BlackLua {
         };
 
         struct Node {
-            NodeType Type = NodeType::Nil;
-            std::variant<NodeNil*, NodeBool*, NodeInt*, NodeNumber*, NodeString*, NodeInitializerList*, 
+            NodeType Type = NodeType::Bool;
+            std::variant<NodeBool*, NodeInt*, NodeNumber*, NodeString*, NodeInitializerList*, 
                          NodeScope*,
                          NodeVarDecl*, NodeVarRef*,
                          NodeFunctionDecl*, NodeFunctionImpl*,
-                         NodeWhile*, NodeDoWhile*,
+                         NodeWhile*, NodeDoWhile*, NodeFor*,
                          NodeReturn*,
                          NodeFunctionCallExpr*, NodeBinExpr*> Data;
         };
@@ -440,6 +444,8 @@ namespace BlackLua {
 
             const Nodes& GetNodes() const;
             bool IsValid() const;
+
+            void PrintAST();
 
         private:
             void ParseImpl();
@@ -459,6 +465,7 @@ namespace BlackLua {
 
             Node* ParseWhile();
             Node* ParseDoWhile();
+            Node* ParseFor();
 
             Node* ParseReturn();
 
@@ -495,9 +502,6 @@ namespace BlackLua {
             }
 
             void PrintNode(Node* node, size_t indentation);
-
-        public:
-            void PrintAST();
 
         private:
             Nodes m_Nodes;

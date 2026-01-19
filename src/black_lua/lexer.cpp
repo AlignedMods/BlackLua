@@ -38,11 +38,11 @@ namespace BlackLua::Internal {
         while (Peek()) {
             std::string buf;
 
-            if (std::isalpha(*Peek())) {
+            if (std::isalpha(*Peek()) || *Peek() == '_') {
                 buf += Consume();
 
                 while (Peek()) {
-                    if (std::isalnum(*Peek())) {
+                    if (std::isalnum(*Peek()) || *Peek() == '_') {
                         buf += Consume();
                     } else {
                         break;
@@ -73,10 +73,6 @@ namespace BlackLua::Internal {
 
                 BLUA_TOKEN("true", True);
                 BLUA_TOKEN("false", False);
-                BLUA_TOKEN("nil", Nil);
-
-                BLUA_TOKEN("function", Function);
-                BLUA_TOKEN("local", Local);
 
                 BLUA_TOKEN("bool", Bool);
 
@@ -131,66 +127,70 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN_C('{', LeftCurly);
                 BLUA_TOKEN_C('}', RightCurly);
 
+                BLUA_TOKEN_C(',', Comma);
+                BLUA_TOKEN_C(':', Colon);
+                BLUA_TOKEN_C('.', Dot);
+
                 if (c == '+') {
-                    bool isInPlace = false;
+                    bool isEq = false;
 
                     if (Peek()) {
                         char nc = *Peek();
 
                         if (nc == '=') {
                             Consume();
-                            isInPlace = true;
+                            isEq = true;
                         }
 
-                        if (isInPlace) {
-                            AddToken(TokenType::AddInPlace);
+                        if (isEq) {
+                            AddToken(TokenType::PlusEq);
                         } else {
-                            AddToken(TokenType::Add);
+                            AddToken(TokenType::Plus);
                         }
                     }
                 }
 
                 if (c == '-') {
-                    bool isInPlace = false;
+                    bool isEq = false;
 
                     if (Peek()) {
                         char nc = *Peek();
 
                         if (nc == '=') {
                             Consume();
-                            isInPlace = true;
+                            isEq = true;
                         }
 
-                        if (isInPlace) {
-                            AddToken(TokenType::SubInPlace);
+                        if (isEq) {
+                            AddToken(TokenType::MinusEq);
                         } else {
-                            AddToken(TokenType::Sub);
+                            AddToken(TokenType::Minus);
                         }
                     }
                 }
 
                 if (c == '*') {
-                    bool isInPlace = false;
+                    bool isEq = false;
 
                     if (Peek()) {
                         char nc = *Peek();
 
                         if (nc == '=') {
                             Consume();
-                            isInPlace = true;
+                            isEq = true;
                         }
 
-                        if (isInPlace) {
-                            AddToken(TokenType::MulInPlace);
+                        if (isEq) {
+                            AddToken(TokenType::StarEq);
                         } else {
-                            AddToken(TokenType::Mul);
+                            AddToken(TokenType::Star);
                         }
                     }
                 }
 
                 if (c == '/') {
                     bool isComment = false;
-                    bool isInPlace = false;
+                    bool isEq = false;
 
                     if (Peek()) {
                         char nc = *Peek(); // Don't consume the character just in case
@@ -200,7 +200,7 @@ namespace BlackLua::Internal {
                             isComment = true;
                         } else if (nc == '=') {
                             Consume();
-                            isInPlace = true;
+                            isEq = true;
                         }
                     }
 
@@ -209,13 +209,14 @@ namespace BlackLua::Internal {
                             char nc = Consume();
 
                             if (nc == '\n' || nc == EOF) {
+                                m_CurrentLine++;
                                 break;
                             }
                         }
-                    } else if (isInPlace) {
-                        AddToken(TokenType::DivInPlace);
+                    } else if (isEq) {
+                        AddToken(TokenType::SlashEq);
                     } else {
-                        AddToken(TokenType::Div);
+                        AddToken(TokenType::Slash);
                     }
 
                     continue;

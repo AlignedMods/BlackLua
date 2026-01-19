@@ -34,8 +34,10 @@ namespace BlackLua::Internal {
     }
 
     Token* Parser::Peek(size_t count) {
+        // While the count is a size_t, you are still allowed to use -1
+        // Even if you pass -1 the actual data underneath is the same
         if (m_Index + count < m_Tokens.size()) {
-            return &m_Tokens.at(m_Index);
+            return &m_Tokens.at(m_Index + count);
         } else {
             return nullptr;
         }
@@ -75,12 +77,23 @@ namespace BlackLua::Internal {
         Consume(); // Consume the type (ParseVariableType doesn't)
 
         if (Peek(1)) {
-            Token t = Peek()[1];
+            Token t = *Peek(1);
 
             if (t.Type == TokenType::LeftParen) {
                 return ParseFunctionDecl(type);
             } else {
-                return ParseVariableDecl(type);
+                Node* node = ParseVariableDecl(type);
+                Node* current = node;
+
+                while (Match(TokenType::Comma)) {
+                    Consume();
+                    
+                    Node* next = ParseVariableDecl(type);
+                    std::get<NodeVarDecl*>(current->Data)->Next = next;
+                    current = next;
+                }
+
+                return node;
             }
         }
 
@@ -93,7 +106,7 @@ namespace BlackLua::Internal {
         NodeVarDecl* node = Allocate<NodeVarDecl>();
         node->Identifier = ident.Data;
         node->Type = type;
-        
+
         if (Match(TokenType::Eq)) {
             Consume();
             node->Value = ParseExpression();
@@ -147,7 +160,7 @@ namespace BlackLua::Internal {
 
                 while (!Match(TokenType::RightCurly)) {
                     Node* n = ParseStatement();
-                    std::get<NodeScope*>(node->Body->Data)->Append(n);
+                    std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
                 }
 
                 TryConsume(TokenType::RightCurly, "'}'");
@@ -182,7 +195,7 @@ namespace BlackLua::Internal {
 
         while (!Match(TokenType::RightCurly)) {
             Node* n = ParseStatement();
-            std::get<NodeScope*>(node->Body->Data)->Append(n);
+            std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
         }
 
         TryConsume(TokenType::RightCurly, "'}'");
@@ -200,7 +213,7 @@ namespace BlackLua::Internal {
 
         while (!Match(TokenType::RightCurly)) {
             Node* n = ParseStatement();
-            std::get<NodeScope*>(node->Body->Data)->Append(n);
+            std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
         }
 
         TryConsume(TokenType::RightCurly, "'}'");
@@ -211,6 +224,34 @@ namespace BlackLua::Internal {
         TryConsume(TokenType::RightParen, "')'");
 
         return CreateNode(NodeType::DoWhile, node);
+    }
+
+    Node* Parser::ParseFor() {
+        Consume(); // Consume "for"
+
+        NodeFor* node = Allocate<NodeFor>();
+        TryConsume(TokenType::LeftParen, "'('");
+
+        node->Prologue = ParseStatement();
+
+        node->Condition = ParseExpression();
+        TryConsume(TokenType::Semi, "';'");
+
+        node->Epilogue = ParseExpression();
+        TryConsume(TokenType::RightParen, "')'");
+
+        TryConsume(TokenType::LeftCurly, "'{'");
+
+        node->Body = CreateNode(NodeType::Scope, Allocate<NodeScope>());
+
+        while (!Match(TokenType::RightCurly)) {
+            Node* n = ParseStatement();
+            std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
+        }
+
+        TryConsume(TokenType::RightCurly, "'}'");
+
+        return CreateNode(NodeType::For, node);
     }
 
     Node* Parser::ParseReturn() {
@@ -228,12 +269,6 @@ namespace BlackLua::Internal {
         Token& value = *Peek();
 
         switch (value.Type) {
-            case TokenType::Nil: {
-                Consume();
-
-                return CreateNode(NodeType::Nil, Allocate<NodeNil>());
-                break;
-            }
             case TokenType::False: {
                 Consume();
 
@@ -279,8 +314,8 @@ namespace BlackLua::Internal {
                 NodeInitializerList* node = Allocate<NodeInitializerList>();
 
                 while (!Match(TokenType::RightCurly)) {
-                    Node* n = ParseStatement();
-                    node->Nodes.push_back(n);
+                    Node* n = ParseExpression();
+                    node->Nodes.Append(n);
 
                     if (Match(TokenType::Comma)) {
                         Consume();
@@ -333,14 +368,14 @@ namespace BlackLua::Internal {
         Token op = *Peek();
 
         switch (op.Type) {
-            case TokenType::Add: return BinExprType::Add;
-            case TokenType::AddInPlace: return BinExprType::AddInPlace;
-            case TokenType::Sub: return BinExprType::Sub;
-            case TokenType::SubInPlace: return BinExprType::SubInPlace;
-            case TokenType::Mul: return BinExprType::Mul;
-            case TokenType::MulInPlace: return BinExprType::MulInPlace;
-            case TokenType::Div: return BinExprType::Div;
-            case TokenType::DivInPlace: return BinExprType::DivInPlace;
+            case TokenType::Plus: return BinExprType::Add;
+            case TokenType::PlusEq: return BinExprType::AddInPlace;
+            case TokenType::Minus: return BinExprType::Sub;
+            case TokenType::MinusEq: return BinExprType::SubInPlace;
+            case TokenType::Star: return BinExprType::Mul;
+            case TokenType::StarEq: return BinExprType::MulInPlace;
+            case TokenType::Slash: return BinExprType::Div;
+            case TokenType::SlashEq: return BinExprType::DivInPlace;
             case TokenType::Less: return BinExprType::Less;
             case TokenType::LessOrEq: return BinExprType::LessOrEq;
             case TokenType::Greater: return BinExprType::Greater;
@@ -409,13 +444,15 @@ namespace BlackLua::Internal {
             node = ParseWhile();
         } else if (t == TokenType::Do) {
             node = ParseDoWhile();
+        } else if (t == TokenType::For) {
+            node = ParseFor();
         } else if (t == TokenType::Return) {
             node = ParseReturn();
         } else {
             node = ParseExpression();
         }
 
-        if (m_Tokens[m_Index - 1].Type != TokenType::RightCurly) {
+        if (Peek(-1)->Type != TokenType::RightCurly) {
             TryConsume(TokenType::Semi, "';'");
         }
 
@@ -424,7 +461,7 @@ namespace BlackLua::Internal {
 
     void Parser::ErrorExpected(const std::string& msg) {
         if (m_Index > 0) {
-            std::cerr << "Syntax error: Expected " << msg << " after token \"" << TokenTypeToString(m_Tokens[m_Index - 1].Type) << "\" on line " << m_Tokens[m_Index - 1].Line << "!\n";
+            std::cerr << "Syntax error: Expected " << msg << " after token \"" << TokenTypeToString(Peek(-1)->Type) << "\" on line " << Peek(-1)->Line << "!\n";
         } else {
             std::cerr << "Syntax error: Expected " << msg << "!\n";
         }
@@ -472,7 +509,18 @@ namespace BlackLua::Internal {
                 case NodeType::String: {
                     NodeString* str = std::get<NodeString*>(n->Data);
 
-                    std::cout << "String, Value: " << str->String << '\n';
+                    std::cout << "String, Value: \"" << str->String << "\"\n";
+
+                    break;
+                }
+
+                case NodeType::InitializerList: {
+                    NodeInitializerList* list = std::get<NodeInitializerList*>(n->Data);
+
+                    std::cout << "InitializerList, Values: \n";
+                    for (size_t i = 0; i < list->Nodes.Size; i++) {
+                        PrintNode(list->Nodes.Items[i], indentation + 4);
+                    }
 
                     break;
                 }
@@ -481,8 +529,8 @@ namespace BlackLua::Internal {
                     NodeScope* scope = std::get<NodeScope*>(n->Data);
 
                     std::cout << "Scope, Body: \n";
-                    for (size_t i = 0; i < scope->Size; i++) {
-                        PrintNode(scope->Nodes[i], indentation + 4);
+                    for (size_t i = 0; i < scope->Nodes.Size; i++) {
+                        PrintNode(scope->Nodes.Items[i], indentation + 4);
                     }
 
                     break;
@@ -493,6 +541,9 @@ namespace BlackLua::Internal {
 
                     std::cout << "VarDecl, Type: " << VariableTypeToString(decl->Type) << ", Name: " << decl->Identifier << ", Value: \n";
                     PrintNode(decl->Value, indentation + 4);
+
+                    std::cout << ident << "Next: \n";
+                    PrintNode(decl->Next, indentation + 4);
 
                     break;
                 }
@@ -538,6 +589,18 @@ namespace BlackLua::Internal {
                     std::cout << "DoWhileStatement: \n";
                     PrintNode(dowh->Body, indentation + 4);
                     PrintNode(dowh->Condition, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::For: {
+                    NodeFor* nfor = std::get<NodeFor*>(n->Data);
+
+                    std::cout << "ForStatement :\n";
+                    PrintNode(nfor->Prologue, indentation + 4);
+                    PrintNode(nfor->Condition, indentation + 4);
+                    PrintNode(nfor->Epilogue, indentation + 4);
+                    PrintNode(nfor->Body, indentation + 4);
 
                     break;
                 }

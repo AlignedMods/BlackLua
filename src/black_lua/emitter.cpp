@@ -118,10 +118,10 @@ namespace BlackLua::Internal {
 
     void Emitter::EmitNodeExpression(Node* node) {
         switch (node->Type) {
-            case NodeType::Nil: {
-                m_Output += "nil";
-                break;
-            }
+            // case NodeType::Nil: {
+            //     m_Output += "nil";
+            //     break;
+            // }
             case NodeType::Bool: {
                 NodeBool* nbool = std::get<NodeBool*>(node->Data);
 
@@ -158,13 +158,13 @@ namespace BlackLua::Internal {
 
                 m_Output += "{ ";
 
-                for (size_t i = 0; i < initList->Nodes.size(); i++) {
-                    EmitNode(initList->Nodes.at(i));
-
-                    if (i != initList->Nodes.size() - 1) {
-                        m_Output += ", ";
-                    }
-                }
+                // for (size_t i = 0; i < initList->Nodes.size(); i++) {
+                //     EmitNode(initList->Nodes.at(i));
+                // 
+                //     if (i != initList->Nodes.size() - 1) {
+                //         m_Output += ", ";
+                //     }
+                // }
 
                 m_Output += " }";
 

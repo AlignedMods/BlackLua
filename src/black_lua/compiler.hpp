@@ -42,8 +42,8 @@ namespace BlackLua {
             LeftCurly,
             RightCurly,
 
-            Plus, PlusEq,
-            Minus, MinusEq,
+            Plus, PlusEq, PlusPlus,
+            Minus, MinusEq, MinusMinus,
             Star, StarEq,
             Slash, SlashEq,
             Percent,
@@ -84,8 +84,12 @@ namespace BlackLua {
             True,
             False,
 
-            IntLit, // No decimals are allowed in an integer literal!
-            NumLit,
+            IntLit,
+            UIntLit,
+            LongLit,
+            ULongLit,
+            FloatLit,
+            DoubleLit,
             StrLit,
 
             Bool,
@@ -114,8 +118,10 @@ namespace BlackLua {
 
                 case TokenType::Plus: return "+";
                 case TokenType::PlusEq: return "+=";
+                case TokenType::PlusPlus: return "++";
                 case TokenType::Minus: return "-";
                 case TokenType::MinusEq: return "-=";
+                case TokenType::MinusMinus: return "--";
                 case TokenType::Star: return "*";
                 case TokenType::StarEq: return "*=";
                 case TokenType::Slash: return "/";
@@ -159,7 +165,11 @@ namespace BlackLua {
                 case TokenType::False: return "false";
 
                 case TokenType::IntLit: return "int-lit";
-                case TokenType::NumLit: return "num-lit";
+                case TokenType::UIntLit: return "uint-lit";
+                case TokenType::LongLit: return "long-lit";
+                case TokenType::ULongLit: return "ulong-lit";
+                case TokenType::FloatLit: return "float-lit";
+                case TokenType::DoubleLit: return "double-lit";
                 case TokenType::StrLit: return "str-lit";
 
                 case TokenType::Bool: return "bool";
@@ -218,7 +228,9 @@ namespace BlackLua {
         enum class NodeType {
             Bool,
             Int,
-            Number,
+            Long,
+            Float,
+            Double,
             String,
             InitializerList,
 
@@ -233,6 +245,8 @@ namespace BlackLua {
             While,
             DoWhile,
             For,
+
+            If,
 
             Return,
 
@@ -269,8 +283,8 @@ namespace BlackLua {
 
         enum class BinExprType {
             Invalid,
-            Add, AddInPlace,
-            Sub, SubInPlace,
+            Add, AddInPlace, AddOne,
+            Sub, SubInPlace, SubOne,
             Mul, MulInPlace,
             Div, DivInPlace,
 
@@ -279,7 +293,8 @@ namespace BlackLua {
             Greater,
             GreaterOrEq,
 
-            Eq
+            Eq,
+            IsEq
         };
 
         inline const char* BinExprTypeToString(BinExprType type) {
@@ -287,8 +302,10 @@ namespace BlackLua {
                 case BinExprType::Invalid: return "invalid";
                 case BinExprType::Add: return "+";
                 case BinExprType::AddInPlace: return "+=";
+                case BinExprType::AddOne: return "++";
                 case BinExprType::Sub: return "-";
                 case BinExprType::SubInPlace: return "-=";
+                case BinExprType::SubOne: return "--";
                 case BinExprType::Mul: return "*";
                 case BinExprType::MulInPlace: return "*=";
                 case BinExprType::Div: return "/";
@@ -300,6 +317,7 @@ namespace BlackLua {
                 case BinExprType::GreaterOrEq: return ">=";
 
                 case BinExprType::Eq: return "=";
+                case BinExprType::IsEq: return "==";
             }
 
             BLUA_ASSERT(false, "Unreachable!");
@@ -337,11 +355,21 @@ namespace BlackLua {
         };
 
         struct NodeInt {
-            int64_t Int = 0llu;
+            int32_t Int = 0;
+            bool Unsigned = false;
         };
 
-        struct NodeNumber {
-            double Number = 0.0;
+        struct NodeLong {
+            int64_t Long = 0;
+            bool Unsigned = false;
+        };
+
+        struct NodeFloat {
+            float Float = 0.0f;
+        };
+
+        struct NodeDouble {
+            double Double = 0.0;
         };
 
         struct NodeString {
@@ -379,7 +407,6 @@ namespace BlackLua {
 
         struct NodeFunctionImpl {
             std::string_view Name;
-            std::string Signature;
 
             std::vector<Node*> Arguments;
             VariableType ReturnType = VariableType::Invalid;
@@ -407,13 +434,18 @@ namespace BlackLua {
             Node* Body = nullptr;
         };
 
+        struct NodeIf {
+            Node* Condition = nullptr;
+
+            Node* Body = nullptr;
+        };
+
         struct NodeReturn {
             Node* Value = nullptr;
         };
 
         struct NodeFunctionCallExpr {
             std::string_view Name;
-            std::string Signature;
 
             std::vector<Node*> Parameters;
         };
@@ -427,11 +459,12 @@ namespace BlackLua {
 
         struct Node {
             NodeType Type = NodeType::Bool;
-            std::variant<NodeBool*, NodeInt*, NodeNumber*, NodeString*, NodeInitializerList*, 
+            std::variant<NodeBool*, NodeInt*, NodeLong*, NodeFloat*, NodeDouble*, NodeString*, NodeInitializerList*, 
                          NodeScope*,
                          NodeVarDecl*, NodeVarRef*,
                          NodeFunctionDecl*, NodeFunctionImpl*,
                          NodeWhile*, NodeDoWhile*, NodeFor*,
+                         NodeIf*,
                          NodeReturn*,
                          NodeFunctionCallExpr*, NodeBinExpr*> Data;
         };
@@ -467,12 +500,16 @@ namespace BlackLua {
             Node* ParseDoWhile();
             Node* ParseFor();
 
+            Node* ParseIf();
+
             Node* ParseReturn();
 
             // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables and function calls)
             Node* ParseValue();
             BinExprType ParseOperator();
             VariableType ParseVariableType();
+
+            Node* ParseScope();
 
             // Parses an expression (8 + 4, 6.3 - 4, "hello " + "world", ...)
             // NOTE: For certain reasons a varaible assignment is NOT considered an expression
@@ -482,6 +519,7 @@ namespace BlackLua {
             Node* ParseStatement();
 
             void ErrorExpected(const std::string& msg);
+            void ErrorTooLarge(const std::string_view value);
 
             template <typename T>
             T* Allocate() {
@@ -512,7 +550,6 @@ namespace BlackLua {
 
         // A quick note about the type checker,
         // It doesn't "generate" anything, it only modifies the AST,
-        // It is also technically the only part that is not neccesary for the compiler (not optional though lolz)
         class TypeChecker {
         public:
             static TypeChecker Check(const Parser::Nodes& nodes);
@@ -526,18 +563,25 @@ namespace BlackLua {
             Node* Peek(size_t amount = 0);
             Node* Consume();
 
+            void CheckNodeScope(Node* node);
+
             void CheckNodeVarDecl(Node* node);
-            void CheckNodeVarSet(Node* node);
 
-            void CheckNodeExpression(Node* node, VariableType type);
-
-            void CheckNodeFunctionDecl(Node* node);
-            void CheckNodeFunctionCall(Node* node);
+            void CheckNodeExpression(VariableType type, Node* node);
 
             void CheckNode(Node* node);
 
-            void WarningMismatchedTypes(VariableType type1, const std::string_view type2);
-            void ErrorMismatchedTypes(VariableType type1, const std::string_view type2);
+            // Gets how "expensive" it is to convert a type2 into a type1
+            // You can think of this as calculating how expensive this expression is:
+            // type1 var = type2;
+            // The bigger the return value is, the more expensive it is to do a conversion
+            // 0 is the best conversion rate (no cast needed), and 3 is the worst conversion rate (impossible conversion)
+            size_t GetConversionRate(VariableType type1, VariableType type2);
+
+            VariableType GetVariableType(Node* node);
+
+            void WarningMismatchedTypes(VariableType type1, VariableType type2);
+            void ErrorMismatchedTypes(VariableType type1, VariableType type2);
             void ErrorRedeclaration(const std::string_view msg);
             void ErrorUndeclaredIdentifier(const std::string_view msg);
 

@@ -122,80 +122,80 @@ namespace BlackLua::Internal {
             //     m_Output += "nil";
             //     break;
             // }
-            case NodeType::Bool: {
-                NodeBool* nbool = std::get<NodeBool*>(node->Data);
-
-                if (nbool->Value == false) {
-                    m_Output += "false";
-                } else {
-                    m_Output += "true";
-                }
-
-                break;
-            }
-             case NodeType::Int: {
-                NodeInt* i = std::get<NodeInt*>(node->Data);
-
-                m_Output += std::to_string(i->Int);
-                break;
-            }
-            case NodeType::Number: {
-                NodeNumber* number = std::get<NodeNumber*>(node->Data);
-
-                m_Output += std::to_string(number->Number);
-                break;
-            }
-            case NodeType::String: {
-                NodeString* string = std::get<NodeString*>(node->Data);
-
-                m_Output += '"';
-                m_Output += string->String;
-                m_Output += '"';
-                break;
-            }
-            case NodeType::InitializerList: {
-                NodeInitializerList* initList = std::get<NodeInitializerList*>(node->Data);
-
-                m_Output += "{ ";
-
-                // for (size_t i = 0; i < initList->Nodes.size(); i++) {
-                //     EmitNode(initList->Nodes.at(i));
-                // 
-                //     if (i != initList->Nodes.size() - 1) {
-                //         m_Output += ", ";
-                //     }
-                // }
-
-                m_Output += " }";
-
-                break;
-            }
-            case NodeType::BinExpr: {
-                NodeBinExpr* binExpr = std::get<NodeBinExpr*>(node->Data);
-
-                EmitNodeExpression(binExpr->LHS);
-
-                if (binExpr->Type == BinExprType::Add) {
-                    m_Output += " + ";
-                } else if (binExpr->Type == BinExprType::Sub) {
-                    m_Output += " - ";
-                } else if (binExpr->Type == BinExprType::Mul) {
-                    m_Output += " * ";
-                } else if (binExpr->Type == BinExprType::Div) {
-                    m_Output += " / ";
-                } else if (binExpr->Type == BinExprType::Less) {
-                    m_Output += " < ";
-                } else if (binExpr->Type == BinExprType::LessOrEq) {
-                    m_Output += " <= ";
-                } else if (binExpr->Type == BinExprType::Greater) {
-                    m_Output += " > ";
-                } else if (binExpr->Type == BinExprType::GreaterOrEq) {
-                    m_Output += " >= ";
-                }
-
-                EmitNodeExpression(binExpr->RHS);
-                break;
-            }
+            // case NodeType::Bool: {
+            //     NodeBool* nbool = std::get<NodeBool*>(node->Data);
+            // 
+            //     if (nbool->Value == false) {
+            //         m_Output += "false";
+            //     } else {
+            //         m_Output += "true";
+            //     }
+            // 
+            //     break;
+            // }
+            //  case NodeType::Int: {
+            //     NodeInt* i = std::get<NodeInt*>(node->Data);
+            // 
+            //     m_Output += std::to_string(i->Int);
+            //     break;
+            // }
+            // case NodeType::Number: {
+            //     NodeNumber* number = std::get<NodeNumber*>(node->Data);
+            // 
+            //     m_Output += std::to_string(number->Number);
+            //     break;
+            // }
+            // case NodeType::String: {
+            //     NodeString* string = std::get<NodeString*>(node->Data);
+            // 
+            //     m_Output += '"';
+            //     m_Output += string->String;
+            //     m_Output += '"';
+            //     break;
+            // }
+            // case NodeType::InitializerList: {
+            //     NodeInitializerList* initList = std::get<NodeInitializerList*>(node->Data);
+            // 
+            //     m_Output += "{ ";
+            // 
+            //     // for (size_t i = 0; i < initList->Nodes.size(); i++) {
+            //     //     EmitNode(initList->Nodes.at(i));
+            //     // 
+            //     //     if (i != initList->Nodes.size() - 1) {
+            //     //         m_Output += ", ";
+            //     //     }
+            //     // }
+            // 
+            //     m_Output += " }";
+            // 
+            //     break;
+            // }
+            // case NodeType::BinExpr: {
+            //     NodeBinExpr* binExpr = std::get<NodeBinExpr*>(node->Data);
+            // 
+            //     EmitNodeExpression(binExpr->LHS);
+            // 
+            //     if (binExpr->Type == BinExprType::Add) {
+            //         m_Output += " + ";
+            //     } else if (binExpr->Type == BinExprType::Sub) {
+            //         m_Output += " - ";
+            //     } else if (binExpr->Type == BinExprType::Mul) {
+            //         m_Output += " * ";
+            //     } else if (binExpr->Type == BinExprType::Div) {
+            //         m_Output += " / ";
+            //     } else if (binExpr->Type == BinExprType::Less) {
+            //         m_Output += " < ";
+            //     } else if (binExpr->Type == BinExprType::LessOrEq) {
+            //         m_Output += " <= ";
+            //     } else if (binExpr->Type == BinExprType::Greater) {
+            //         m_Output += " > ";
+            //     } else if (binExpr->Type == BinExprType::GreaterOrEq) {
+            //         m_Output += " >= ";
+            //     }
+            // 
+            //     EmitNodeExpression(binExpr->RHS);
+            //     break;
+            // }
             default: BLUA_ASSERT(false, "Unreachable!"); break;
         }
     }

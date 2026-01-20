@@ -96,6 +96,9 @@ namespace BlackLua::Internal {
                 buf += Consume();
 
                 bool encounteredPeriod = false;
+                bool isUnsigned = false;
+                bool isLong = false;
+                bool isFloat = false;
 
                 while (Peek()) {
                     if (std::isdigit(*Peek())) {
@@ -108,10 +111,42 @@ namespace BlackLua::Internal {
                     }
                 }
 
-                if (encounteredPeriod) {
-                    AddToken(TokenType::NumLit, buf);
-                } else {
+                // Handle suffixes (u, l, f)
+                while (Peek()) {
+                    if (*Peek() == 'u') {
+                        Consume();
+                        isUnsigned = true;
+                    } else if (*Peek() == 'l') {
+                        Consume();
+                        isLong = true;
+                    } else if (*Peek() == 'f') {
+                        Consume();
+                        isFloat = true;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (isUnsigned && !isFloat) { // "u"
+                    if (isLong) { // "lu/ul"
+                        AddToken(TokenType::ULongLit, buf);
+                        continue;
+                    } else { // "u"
+                        AddToken(TokenType::UIntLit, buf);
+                        continue;
+                    }
+                } else if (isLong && !isFloat) { // "l"
+                    AddToken(TokenType::LongLit, buf);
+                    continue;
+                } else if (isFloat && encounteredPeriod) { // "f"
+                    AddToken(TokenType::FloatLit, buf);
+                    continue;
+                } else if (encounteredPeriod) { // No suffix but this can't be an integer literal
+                    AddToken(TokenType::DoubleLit, buf);
+                    continue;
+                } else { // Finally if all else fails this is an integer literal
                     AddToken(TokenType::IntLit, buf);
+                    continue;
                 }
 
                 continue;
@@ -133,6 +168,7 @@ namespace BlackLua::Internal {
 
                 if (c == '+') {
                     bool isEq = false;
+                    bool isPlus = false;
 
                     if (Peek()) {
                         char nc = *Peek();
@@ -140,10 +176,15 @@ namespace BlackLua::Internal {
                         if (nc == '=') {
                             Consume();
                             isEq = true;
+                        } else if (nc == '+') {
+                            Consume();
+                            isPlus = true;
                         }
 
                         if (isEq) {
                             AddToken(TokenType::PlusEq);
+                        } else if (isPlus) {
+                            AddToken(TokenType::PlusPlus);
                         } else {
                             AddToken(TokenType::Plus);
                         }
@@ -152,6 +193,7 @@ namespace BlackLua::Internal {
 
                 if (c == '-') {
                     bool isEq = false;
+                    bool isMinus = false;
 
                     if (Peek()) {
                         char nc = *Peek();
@@ -159,10 +201,15 @@ namespace BlackLua::Internal {
                         if (nc == '=') {
                             Consume();
                             isEq = true;
+                        } else if (nc == '-') {
+                            Consume();
+                            isMinus = true;
                         }
 
                         if (isEq) {
                             AddToken(TokenType::MinusEq);
+                        } else if (isMinus) {
+                            AddToken(TokenType::MinusMinus);
                         } else {
                             AddToken(TokenType::Minus);
                         }
@@ -229,6 +276,7 @@ namespace BlackLua::Internal {
                         char nc = *Peek();
 
                         if (nc == '=') {
+                            Consume();
                             isEq = true;
                         }
                     }
@@ -249,6 +297,7 @@ namespace BlackLua::Internal {
                         char nc = *Peek();
 
                         if (nc == '=') {
+                            Consume();
                             isEq = true;
                         }
                     }
@@ -269,6 +318,7 @@ namespace BlackLua::Internal {
                         char nc = *Peek();
 
                         if (nc == '=') {
+                            Consume();
                             isEq = true;
                         }
                     }

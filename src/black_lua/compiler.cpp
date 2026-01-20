@@ -33,14 +33,15 @@ namespace BlackLua {
         CompiledSource src{};
 
         BlackLua::Internal::Lexer l = BlackLua::Internal::Lexer::Parse(source);
+
         BlackLua::Internal::Parser p = BlackLua::Internal::Parser::Parse(l.GetTokens());
 
         bool valid = true;
 
         if (p.IsValid()) {
             p.PrintAST();
-
-            // BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
+        
+            BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
             // if (c.IsValid()) {
             //     BlackLua::Internal::Emitter e = BlackLua::Internal::Emitter::Emit(c.GetCheckedNodes());
             //     src.Compiled = e.GetOutput();

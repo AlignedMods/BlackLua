@@ -1,6 +1,8 @@
 #include "compiler.hpp"
 
 #include <string>
+#include <charconv>
+#include <limits>
 
 namespace BlackLua::Internal {
 
@@ -101,84 +103,83 @@ namespace BlackLua::Internal {
     }
 
     Node* Parser::ParseVariableDecl(VariableType type) {
-        Token& ident = Consume();
+        Token* ident = TryConsume(TokenType::Identifier, "identifier");
 
-        NodeVarDecl* node = Allocate<NodeVarDecl>();
-        node->Identifier = ident.Data;
-        node->Type = type;
+        if (ident) {
+            NodeVarDecl* node = Allocate<NodeVarDecl>();
+            node->Identifier = ident->Data;
+            node->Type = type;
 
-        if (Match(TokenType::Eq)) {
-            Consume();
-            node->Value = ParseExpression();
+            if (Match(TokenType::Eq)) {
+                Consume();
+                node->Value = ParseExpression();
+            }
+
+            return CreateNode(NodeType::VarDecl, node);
+        } else {
+            return nullptr;
         }
-
-        return CreateNode(NodeType::VarDecl, node);
     }
 
     Node* Parser::ParseFunctionDecl(VariableType returnType) {
-        Token& ident = Consume();
+        Token* ident = TryConsume(TokenType::Identifier, "identifier");
 
-        Node* finalNode = nullptr;
-        std::vector<Node*> args;
+        if (ident) {
+            Node* finalNode = nullptr;
+            std::vector<Node*> args;
 
-        if (Match(TokenType::LeftParen)) {
-            Consume();
-
-            while (!Match(TokenType::RightParen)) {
-                VariableType type = ParseVariableType();
-                Consume();
-                Token& ident = Consume();
-                
-                NodeVarDecl* var = Allocate<NodeVarDecl>();
-                var->Identifier = ident.Data;
-                var->Type = type;
-                
-                if (Match(TokenType::Eq)) {
-                    Consume();
-                    var->Value = ParseExpression();
-                }
-                Node* n = CreateNode(NodeType::VarDecl, var);
-
-                if (Match(TokenType::Comma)) {
-                    Consume();
-                }
-
-                args.push_back(n);
-            }
-
-            TryConsume(TokenType::RightParen, "')'");
-
-            if (Match(TokenType::LeftCurly)) {
-                NodeFunctionImpl* node = Allocate<NodeFunctionImpl>();
-                node->Name = ident.Data;
-                node->ReturnType = returnType;
-                node->Arguments = args;
-
-                node->Body = CreateNode(NodeType::Scope, Allocate<NodeScope>());
-
+            if (Match(TokenType::LeftParen)) {
                 Consume();
 
-                while (!Match(TokenType::RightCurly)) {
-                    Node* n = ParseStatement();
-                    std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
+                while (!Match(TokenType::RightParen)) {
+                    VariableType type = ParseVariableType();
+                    Consume();
+                    Token& ident = Consume();
+                    
+                    NodeVarDecl* var = Allocate<NodeVarDecl>();
+                    var->Identifier = ident.Data;
+                    var->Type = type;
+                    
+                    if (Match(TokenType::Eq)) {
+                        Consume();
+                        var->Value = ParseExpression();
+                    }
+                    Node* n = CreateNode(NodeType::VarDecl, var);
+
+                    if (Match(TokenType::Comma)) {
+                        Consume();
+                    }
+
+                    args.push_back(n);
                 }
 
-                TryConsume(TokenType::RightCurly, "'}'");
+                TryConsume(TokenType::RightParen, "')'");
 
-                finalNode = CreateNode(NodeType::FunctionImpl, node);
+                if (Match(TokenType::LeftCurly)) {
+                    NodeFunctionImpl* node = Allocate<NodeFunctionImpl>();
+                    node->Name = ident->Data;
+                    node->ReturnType = returnType;
+                    node->Arguments = args;
+
+                    node->Body = ParseScope();
+
+                    finalNode = CreateNode(NodeType::FunctionImpl, node);
+                } else {
+                    NodeFunctionDecl* node = Allocate<NodeFunctionDecl>();
+                    node->Name = ident->Data;
+                    node->ReturnType = returnType;
+                    node->Arguments = args;
+
+                    finalNode = CreateNode(NodeType::FunctionDecl, node);
+                }
             } else {
-                NodeFunctionDecl* node = Allocate<NodeFunctionDecl>();
-                node->Name = ident.Data;
-                node->ReturnType = returnType;
-                node->Arguments = args;
-
-                finalNode = CreateNode(NodeType::FunctionDecl, node);
+                ErrorExpected("'('");
             }
-        } else {
-            ErrorExpected("'('");
-        }
 
-        return finalNode;
+            return finalNode;
+        } else {
+            return nullptr;
+        }
     }
 
     Node* Parser::ParseWhile() {
@@ -189,16 +190,7 @@ namespace BlackLua::Internal {
         TryConsume(TokenType::LeftParen, "'('");
         node->Condition = ParseExpression();
         TryConsume(TokenType::RightParen, "')'");
-        TryConsume(TokenType::LeftCurly, "'}'");
-
-        node->Body = CreateNode(NodeType::Scope, Allocate<NodeScope>());
-
-        while (!Match(TokenType::RightCurly)) {
-            Node* n = ParseStatement();
-            std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
-        }
-
-        TryConsume(TokenType::RightCurly, "'}'");
+        node->Body = ParseScope();
 
         return CreateNode(NodeType::While, node);
     }
@@ -207,16 +199,7 @@ namespace BlackLua::Internal {
         Consume(); // Consume "do"
 
         NodeDoWhile* node = Allocate<NodeDoWhile>();
-        TryConsume(TokenType::LeftCurly, "'}'");
-
-        node->Body = CreateNode(NodeType::Scope, Allocate<NodeScope>());
-
-        while (!Match(TokenType::RightCurly)) {
-            Node* n = ParseStatement();
-            std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
-        }
-
-        TryConsume(TokenType::RightCurly, "'}'");
+        node->Body = ParseScope();
 
         TryConsume(TokenType::While, "while");
         TryConsume(TokenType::LeftParen, "'('");
@@ -232,26 +215,35 @@ namespace BlackLua::Internal {
         NodeFor* node = Allocate<NodeFor>();
         TryConsume(TokenType::LeftParen, "'('");
 
-        node->Prologue = ParseStatement();
+        // We could have a for statement like this: int i = 0; for (; i < 5; i++)
+        if (Match(TokenType::Semi)) {
+            Consume();
+        } else {
+            node->Prologue = ParseStatement();
+        }
 
         node->Condition = ParseExpression();
         TryConsume(TokenType::Semi, "';'");
 
         node->Epilogue = ParseExpression();
         TryConsume(TokenType::RightParen, "')'");
-
-        TryConsume(TokenType::LeftCurly, "'{'");
-
-        node->Body = CreateNode(NodeType::Scope, Allocate<NodeScope>());
-
-        while (!Match(TokenType::RightCurly)) {
-            Node* n = ParseStatement();
-            std::get<NodeScope*>(node->Body->Data)->Nodes.Append(n);
-        }
-
-        TryConsume(TokenType::RightCurly, "'}'");
+        node->Body = ParseScope();
 
         return CreateNode(NodeType::For, node);
+    }
+
+    Node* Parser::ParseIf() {
+        Consume(); // Consume "if"
+
+        NodeIf* node = Allocate<NodeIf>();
+        TryConsume(TokenType::LeftParen, "'('");
+
+        node->Condition = ParseExpression();
+
+        TryConsume(TokenType::RightParen, "')'");
+        node->Body = ParseScope();
+
+        return CreateNode(NodeType::If, node);
     }
 
     Node* Parser::ParseReturn() {
@@ -275,30 +267,86 @@ namespace BlackLua::Internal {
                 return CreateNode(NodeType::Bool, Allocate<NodeBool>(false));
                 break;
             }
+
             case TokenType::True: {
                 Consume();
 
                 return CreateNode(NodeType::Bool, Allocate<NodeBool>(true));
                 break;
             }
+
             case TokenType::IntLit: {
                 Consume();
 
-                int64_t num = std::stoll(value.Data.c_str());
-                NodeInt* node = Allocate<NodeInt>(num);
+                int32_t num = 0;
+                auto [ptr, ec] = std::from_chars(value.Data.data(), value.Data.data() + value.Data.size(), num);
+
+                if (ec != std::errc()) {
+                    ErrorTooLarge(value.Data);
+                }
+
+                NodeInt* node = Allocate<NodeInt>(num, false);
                 
                 return CreateNode(NodeType::Int, node);
                 break;
             }
-            case TokenType::NumLit: {
+
+            case TokenType::UIntLit: {
                 Consume();
 
-                double num = std::stod(value.Data.c_str());
-                NodeNumber* node = Allocate<NodeNumber>(num);
+                uint32_t num = 0;
+                auto [ptr, ec] = std::from_chars(value.Data.data(), value.Data.data() + value.Data.size(), num);
+
+                if (ec != std::errc()) {
+                    ErrorTooLarge(value.Data);
+                }
+
+                NodeInt* node = Allocate<NodeInt>(static_cast<int32_t>(num), true);
                 
-                return CreateNode(NodeType::Number, node);
+                return CreateNode(NodeType::Int, node);
                 break;
             }
+
+            case TokenType::LongLit: {
+                Consume();
+
+                int64_t num = std::stoll(std::string(value.Data));
+                NodeLong* node = Allocate<NodeLong>(num, false);
+                
+                return CreateNode(NodeType::Long, node);
+                break;
+            }
+
+            case TokenType::ULongLit: {
+                Consume();
+
+                uint64_t num = std::stoull(std::string(value.Data));
+                NodeLong* node = Allocate<NodeLong>(static_cast<int64_t>(num), true);
+                
+                return CreateNode(NodeType::Long, node);
+                break;
+            }
+
+            case TokenType::FloatLit: {
+                Consume();
+
+                float f = std::stof(std::string(value.Data));
+                NodeFloat* node = Allocate<NodeFloat>(f);
+                
+                return CreateNode(NodeType::Float, node);
+                break;
+            }
+
+            case TokenType::DoubleLit: {
+                Consume();
+
+                double d = std::stod(std::string(value.Data));
+                NodeDouble* node = Allocate<NodeDouble>(d);
+                
+                return CreateNode(NodeType::Double, node);
+                break;
+            }
+
             case TokenType::StrLit: {
                 Consume();
 
@@ -308,6 +356,7 @@ namespace BlackLua::Internal {
                 return CreateNode(NodeType::String, node);
                 break;
             }
+
             case TokenType::LeftCurly: {
                 Consume();
 
@@ -327,6 +376,7 @@ namespace BlackLua::Internal {
                 return CreateNode(NodeType::InitializerList, node);
                 break;
             }
+
             case TokenType::Identifier: {
                 Consume();
 
@@ -370,8 +420,10 @@ namespace BlackLua::Internal {
         switch (op.Type) {
             case TokenType::Plus: return BinExprType::Add;
             case TokenType::PlusEq: return BinExprType::AddInPlace;
+            case TokenType::PlusPlus: return BinExprType::AddOne;
             case TokenType::Minus: return BinExprType::Sub;
             case TokenType::MinusEq: return BinExprType::SubInPlace;
+            case TokenType::MinusMinus: return BinExprType::SubOne;
             case TokenType::Star: return BinExprType::Mul;
             case TokenType::StarEq: return BinExprType::MulInPlace;
             case TokenType::Slash: return BinExprType::Div;
@@ -381,6 +433,7 @@ namespace BlackLua::Internal {
             case TokenType::Greater: return BinExprType::Greater;
             case TokenType::GreaterOrEq: return BinExprType::GreaterOrEq;
             case TokenType::Eq: return BinExprType::Eq;
+            case TokenType::IsEq: return BinExprType::IsEq;
             default: return BinExprType::Invalid;
         }
     }
@@ -397,6 +450,21 @@ namespace BlackLua::Internal {
             case TokenType::String: return VariableType::String;
             default: return VariableType::Invalid;
         }
+    }
+
+    Node* Parser::ParseScope() {
+        NodeScope* node = Allocate<NodeScope>();
+
+        TryConsume(TokenType::LeftCurly, "'{'");
+
+        while (!Match(TokenType::RightCurly)) {
+            Node* n = ParseStatement();
+            node->Nodes.Append(n);
+        }
+
+        TryConsume(TokenType::RightCurly, "'}'");
+
+        return CreateNode(NodeType::Scope, node);
     }
 
     Node* Parser::ParseExpression() {
@@ -419,7 +487,14 @@ namespace BlackLua::Internal {
             return lhsNode;
         }
 
-        if (Peek()) {
+        if (op == BinExprType::AddOne || op == BinExprType::SubOne) {
+            NodeBinExpr* node = Allocate<NodeBinExpr>();
+            node->LHS = lhsNode;
+            node->RHS = nullptr;
+            node->Type = op;
+
+            return CreateNode(NodeType::BinExpr, node);
+        } else if (Peek()) {
             Node* rhsNode = ParseExpression();
 
             NodeBinExpr* node = Allocate<NodeBinExpr>();
@@ -446,6 +521,8 @@ namespace BlackLua::Internal {
             node = ParseDoWhile();
         } else if (t == TokenType::For) {
             node = ParseFor();
+        } else if (t == TokenType::If) {
+            node = ParseIf();
         } else if (t == TokenType::Return) {
             node = ParseReturn();
         } else {
@@ -460,11 +537,13 @@ namespace BlackLua::Internal {
     }
 
     void Parser::ErrorExpected(const std::string& msg) {
-        if (m_Index > 0) {
-            std::cerr << "Syntax error: Expected " << msg << " after token \"" << TokenTypeToString(Peek(-1)->Type) << "\" on line " << Peek(-1)->Line << "!\n";
-        } else {
-            std::cerr << "Syntax error: Expected " << msg << "!\n";
-        }
+        std::cerr << "Error " << Peek(-1)->Line << ":0: Expected " << msg << " after token \"" << TokenTypeToString(Peek(-1)->Type) << "\"!\n";
+
+        m_Error = true;
+    }
+
+    void Parser::ErrorTooLarge(const std::string_view value) {
+        std::cerr << "Error " << Peek(-1)->Line << ":0: Constant " << value << " is too large!\n";
 
         m_Error = true;
     }
@@ -493,15 +572,43 @@ namespace BlackLua::Internal {
                 case NodeType::Int: {
                     NodeInt* i = std::get<NodeInt*>(n->Data);
 
-                    std::cout << "Int, Value: " << i->Int << '\n';
+                    if (i->Unsigned) {  
+                        std::cout << "Int, Value: " << static_cast<uint32_t>(i->Int) << ", Signed: false \n";
+                    } else {
+                        std::cout << "Int, Value: " << i->Int << ", Signed: true \n";
+                    }
 
                     break;
                 }
 
-                case NodeType::Number: {
-                    NodeNumber* num = std::get<NodeNumber*>(n->Data);
+                case NodeType::Long: {
+                    NodeLong* l = std::get<NodeLong*>(n->Data);
 
-                    std::cout << "Number, Value: " << num->Number << '\n';
+                    if (l->Unsigned) {  
+                        std::cout << "Long, Value: " << static_cast<uint64_t>(l->Long) << ", Signed: false \n";
+                    } else {
+                        std::cout << "Long, Value: " << l->Long << ", Signed: true \n";
+                    }
+
+                    break;
+                }
+
+                case NodeType::Float: {
+                    NodeFloat* f = std::get<NodeFloat*>(n->Data);
+
+                    // For floating point numbers we want all the precision which is why we resort to printf
+                    // This is possible do with std::cout, but is rather clunky. std::format could work nicely here but i don't
+                    // want to depend on c++20. fmt::format is better than std::format but i don't want to drag unnecessary dependencies
+                    // Even though fmt is a really nice library so we might end up using it at one point
+                    printf("Float, Value: %.5f\n", f->Float);
+
+                    break;
+                }
+
+                case NodeType::Double: {
+                    NodeDouble* d = std::get<NodeDouble*>(n->Data);
+
+                    printf("Double, Value: %.15f\n", d->Double);
 
                     break;
                 }
@@ -596,11 +703,21 @@ namespace BlackLua::Internal {
                 case NodeType::For: {
                     NodeFor* nfor = std::get<NodeFor*>(n->Data);
 
-                    std::cout << "ForStatement :\n";
+                    std::cout << "ForStatement: \n";
                     PrintNode(nfor->Prologue, indentation + 4);
                     PrintNode(nfor->Condition, indentation + 4);
                     PrintNode(nfor->Epilogue, indentation + 4);
                     PrintNode(nfor->Body, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::If: {
+                    NodeIf* nif = std::get<NodeIf*>(n->Data);
+
+                    std::cout << "IfStatement: \n";
+                    PrintNode(nif->Condition, indentation + 4);
+                    PrintNode(nif->Body, indentation + 4);
 
                     break;
                 }

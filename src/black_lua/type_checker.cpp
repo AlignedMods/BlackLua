@@ -35,7 +35,7 @@ namespace BlackLua::Internal {
 
     Node* TypeChecker::Peek(size_t count) {
         if (m_Index + count < m_Nodes.size()) {
-            return m_Nodes.at(m_Index);
+            return m_Nodes.at(m_Index + count);
         } else {
             return nullptr;
         }
@@ -47,135 +47,97 @@ namespace BlackLua::Internal {
         return m_Nodes.at(m_Index++);
     }
 
+    void TypeChecker::CheckNodeScope(Node* node) {
+        NodeScope* scope = std::get<NodeScope*>(node->Data);
+
+        for (size_t i = 0; i < scope->Nodes.Size; i++) {
+            CheckNode(scope->Nodes.Items[i]);
+        }
+    }
+
     void TypeChecker::CheckNodeVarDecl(Node* node) {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
 
-        if (m_DeclaredIdentifiers.contains(std::string(decl->Identifier))) {
-            ErrorRedeclaration(decl->Identifier);
-        } else {
-            if (decl->Value) {
-                CheckNodeExpression(decl->Value, decl->Type);
-            }
-
-            m_DeclaredIdentifiers[std::string(decl->Identifier)] = node;
+        if (decl->Value) {
+            CheckNodeExpression(decl->Type, decl->Value);
         }
     }
 
-    void TypeChecker::CheckNodeVarSet(Node* node) {
-        // NodeVarSet* set = std::get<NodeVarSet*>(node->Data);
-        // 
-        // if (!m_DeclaredIdentifiers.contains(std::string(set->Identifier))) {
-        //     ErrorUndeclaredIdentifier(set->Identifier);
-        // } else {
-        //     NodeVarDecl* decl = std::get<NodeVarDecl*>(m_DeclaredIdentifiers.at(std::string(set->Identifier))->Data);
-        // 
-        //     if (set->Value) {
-        //         CheckNodeExpression(set->Value, decl->Type);
-        //     }
-        // }
-    }
-
-    void TypeChecker::CheckNodeExpression(Node* node, VariableType type) {
-        switch (node->Type) {
-            case NodeType::Bool: {
-                if (type != VariableType::Bool) {
-                    ErrorMismatchedTypes(type, "bool");
-                }
-
-                break;
-            }
-            case NodeType::Int: {
-                if (type == VariableType::Float || type == VariableType::Double) {
-                    WarningMismatchedTypes(type, "integer");
-                } else if (type != VariableType::Int && type != VariableType::Long) {
-                    ErrorMismatchedTypes(type, "integer");
-                }
-
-                break;
-            }
-            case NodeType::Number: {
-                if (type == VariableType::Int || type == VariableType::Long) {
-                    WarningMismatchedTypes(type, "number");
-                } else if (type != VariableType::Float && type != VariableType::Double) {
-                    ErrorMismatchedTypes(type, "number");
-                }
-
-                break;
-            }
-            case NodeType::String: {
-                if (type != VariableType::String) {
-                    ErrorMismatchedTypes(type, "string");
-                }
-
-                break;
-            }
-            case NodeType::BinExpr: {
-                NodeBinExpr* binExpr = std::get<NodeBinExpr*>(node->Data);
-
-                CheckNodeExpression(binExpr->LHS, type);
-                CheckNodeExpression(binExpr->RHS, type);
-
-                break;
-            }
+    void TypeChecker::CheckNodeExpression(VariableType type, Node* node) {
+        size_t rate = GetConversionRate(type, GetVariableType(node));
+        
+        if (rate == 1 || rate == 2) {
+            WarningMismatchedTypes(type, GetVariableType(node));
+        } else if (rate == 3) {
+            ErrorMismatchedTypes(type, GetVariableType(node));
         }
-    }
-
-    void TypeChecker::CheckNodeFunctionDecl(Node* node) {
-        NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
-
-        std::string sig(decl->Name);
-        sig += "__BL_";
-        sig += std::to_string(decl->Arguments.size());
-
-        if (m_DeclaredIdentifiers.contains(sig)) {
-            ErrorRedeclaration(decl->Name);
-        }
-
-        m_DeclaredIdentifiers[sig] = node;
-
-        // if (decl->HasBody) {
-        //     for (const auto& n : decl->Body) {
-        //         CheckNode(n);
-        //     }
-        // }
-        // 
-        decl->Signature = sig;
-    }
-
-    void TypeChecker::CheckNodeFunctionCall(Node* node) {
-        // NodeFunctionCall* call = std::get<NodeFunctionCall*>(node->Data);
-
-        // std::string sig(call->Name);
-        // sig += "__BL_";
-        // sig += std::to_string(call->Parameters.size());
-        // 
-        // if (!m_DeclaredIdentifiers.contains(sig)) {
-        //     ErrorUndeclaredIdentifier(call->Name);
-        // }
-        // 
-        // call->Signature = sig;
     }
 
     void TypeChecker::CheckNode(Node* node) {
         NodeType t = node->Type;
 
-        // if (t == NodeType::VarDecl) {
-        //     CheckNodeVarDecl(node);
-        // // } else if (t == NodeType::VarSet) {
-        //     CheckNodeVarSet(node);
-        // } else if (t == NodeType::FunctionDecl) {
-        //     CheckNodeFunctionDecl(node);
-        // } else if (t == NodeType::FunctionCall) {
-        //     CheckNodeFunctionCall(node);
-        // }
+        if (t == NodeType::Scope) {
+            CheckNodeScope(node);
+        } else if (t == NodeType::VarDecl) {
+            CheckNodeVarDecl(node);
+        }
     }
 
-    void TypeChecker::WarningMismatchedTypes(VariableType type1, const std::string_view type2) {
-        std::cerr << "Type warning: Assigning " << type2 << " to " << VariableTypeToString(type1) << "!\n";
+    size_t TypeChecker::GetConversionRate(VariableType type1, VariableType type2) {
+        // Equal types, best possible scenario
+        if (type1 == type2) {
+            return 0;
+        }
+
+        if (type1 == VariableType::Bool || type1 == VariableType::Int || type1 == VariableType::Long) {
+            if (type2 == VariableType::Bool || type2 == VariableType::Int || type2 == VariableType::Long) {
+                return 1;
+            } else if (type2 == VariableType::Float || type2 == VariableType::Double) {
+                return 2;
+            } else {
+                return 3;
+            }
+        }
+
+        if (type1 == VariableType::Float || type1 == VariableType::Double) {
+            if (type2 == VariableType::Float || type2 == VariableType::Double) {
+                return 1;
+            } else if (type2 == VariableType::Bool || type2 == VariableType::Int || type2 == VariableType::Long) {
+                return 2;
+            } else {
+                return 3;
+            }
+        }
+
+        if (type1 == VariableType::String) {
+            if (type2 != VariableType::String) {
+                return 3;
+            }
+        }
+
+        return -1;
     }
 
-    void TypeChecker::ErrorMismatchedTypes(VariableType type1, const std::string_view type2) {
-        std::cerr << "Type error: Cannot assign " << type2 << " to " << VariableTypeToString(type1) << "!\n";
+    VariableType TypeChecker::GetVariableType(Node* node) {
+        switch (node->Type) {
+            case NodeType::Bool: return VariableType::Bool;
+            case NodeType::Int: return VariableType::Int;
+            case NodeType::Long: return VariableType::Long;
+            case NodeType::Float: return VariableType::Float;
+            case NodeType::Double: return VariableType::Double;
+            case NodeType::String: return VariableType::String;
+        }
+
+        BLUA_ASSERT(false, "Unreachable!");
+        return VariableType::Invalid;
+    }
+
+    void TypeChecker::WarningMismatchedTypes(VariableType type1, VariableType type2) {
+        std::cerr << "Type warning: Assigning " << VariableTypeToString(type2) << " to " << VariableTypeToString(type1) << "!\n";
+    }
+
+    void TypeChecker::ErrorMismatchedTypes(VariableType type1, VariableType type2) {
+        std::cerr << "Type error: Cannot assign " << VariableTypeToString(type2) << " to " << VariableTypeToString(type1) << "!\n";
 
         m_Error = true;
     }

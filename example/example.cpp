@@ -1,7 +1,7 @@
 #include "black_lua/black_lua.hpp"
 #include "black_lua/compiler.hpp"
 
-int main() {
+int main(int argc, char** argv) {
     BlackLua::SetupDefaultAllocator();
 
     BlackLua::LuaContext context = BlackLua::LuaContext::Create();

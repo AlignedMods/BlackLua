@@ -1,1 +1,1 @@
-int var = (9 + 6) / 7;
+int hello = (int)(float)1 + 2;

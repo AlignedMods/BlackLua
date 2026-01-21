@@ -258,6 +258,7 @@ namespace BlackLua::Internal {
     }
 
     Node* Parser::ParseValue() {
+        if (!Peek()) { return nullptr; }
         Token& value = *Peek();
 
         switch (value.Type) {
@@ -357,15 +358,39 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case TokenType::Minus: {
+                Consume();
+
+                Node* expr = ParseValue();
+                NodeUnaryExpr* node = Allocate<NodeUnaryExpr>(expr, UnaryExprType::Negate);
+
+                return CreateNode(NodeType::UnaryExpr, node);
+                break;
+            }
+
             case TokenType::LeftParen: {
                 Consume();
 
-                Node* expr = ParseExpression();
-                NodeParenExpr* node = Allocate<NodeParenExpr>(expr);
+                if (ParseVariableType() != VariableType::Invalid) {
+                    VariableType type = ParseVariableType();
 
-                TryConsume(TokenType::RightParen, "')'");
+                    Consume();
+                    TryConsume(TokenType::RightParen, "')'");
 
-                return CreateNode(NodeType::ParenExpr, node);
+                    NodeCastExpr* node = Allocate<NodeCastExpr>();
+                    node->Type = type;
+                    node->Expression = ParseValue();
+
+                    return CreateNode(NodeType::CastExpr, node);
+                } else {
+                    Node* expr = ParseExpression();
+                    NodeParenExpr* node = Allocate<NodeParenExpr>(expr);
+                    
+                    TryConsume(TokenType::RightParen, "')'");
+                    
+                    return CreateNode(NodeType::ParenExpr, node);
+                }
+                
                 break;
             }
 
@@ -451,6 +476,7 @@ namespace BlackLua::Internal {
     }
 
     VariableType Parser::ParseVariableType() {
+        if (!Peek()) { return VariableType::Invalid; }
         Token type = *Peek();
 
         switch (type.Type) {
@@ -472,7 +498,7 @@ namespace BlackLua::Internal {
             case BinExprType::GreaterOrEq:
             case BinExprType::Eq:
             case BinExprType::IsEq:
-                return 0;
+                return 10;
 
             case BinExprType::Add:
             case BinExprType::AddInPlace:
@@ -480,13 +506,13 @@ namespace BlackLua::Internal {
             case BinExprType::Sub:
             case BinExprType::SubInPlace:
             case BinExprType::SubOne:
-                return 1;
+                return 20;
 
             case BinExprType::Mul:
             case BinExprType::MulInPlace:
             case BinExprType::Div:
             case BinExprType::DivInPlace:
-                return 2;
+                return 30;
         }
 
         BLUA_ASSERT(false, "Unreachable");
@@ -522,7 +548,7 @@ namespace BlackLua::Internal {
             BinExprType op = ParseOperator();
             Consume();
 
-            Node* rhsNode = ParseExpression(GetBinaryPrecedence(op));
+            Node* rhsNode = ParseExpression(GetBinaryPrecedence(op) + 1);
 
             NodeBinExpr* newExpr = Allocate<NodeBinExpr>();
             newExpr->LHS = lhsNode;
@@ -542,6 +568,8 @@ namespace BlackLua::Internal {
 
         if (ParseVariableType() != VariableType::Invalid) {
             node = ParseType();
+        } else if (t == TokenType::LeftCurly) {
+            node = ParseScope();
         } else if (t == TokenType::While) {
             node = ParseWhile();
         } else if (t == TokenType::Do) {
@@ -773,6 +801,24 @@ namespace BlackLua::Internal {
                     NodeParenExpr* expr = std::get<NodeParenExpr*>(n->Data);
 
                     std::cout << "ParenExpr, Expression: \n";
+                    PrintNode(expr->Expression, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::CastExpr: {
+                    NodeCastExpr* expr = std::get<NodeCastExpr*>(n->Data);
+
+                    std::cout << "CastExpr, Type: " << VariableTypeToString(expr->Type) << ", Expression: \n";
+                    PrintNode(expr->Expression, indentation + 4);
+
+                    break;
+                }
+
+                case NodeType::UnaryExpr: {
+                    NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(n->Data);
+
+                    std::cout << "UnaryExpr, Operation: " << UnaryExprTypeToString(expr->Type) << ", Expression: \n";
                     PrintNode(expr->Expression, indentation + 4);
 
                     break;

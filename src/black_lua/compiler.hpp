@@ -252,6 +252,8 @@ namespace BlackLua {
 
             FunctionCallExpr,
             ParenExpr,
+            CastExpr,
+            UnaryExpr,
             BinExpr
         };
 
@@ -276,6 +278,25 @@ namespace BlackLua {
                 case VariableType::Float: return "float";
                 case VariableType::Double: return "double";
                 case VariableType::String: return "string";
+            }
+
+            BLUA_ASSERT(false, "Unreachable!");
+            return "invalid";
+        }
+
+        enum class UnaryExprType {
+            Invalid,
+
+            Not, // "!"
+            Negate // "-8.7f"
+        };
+
+        inline const char* UnaryExprTypeToString(UnaryExprType type) {
+            switch (type) {
+                case UnaryExprType::Invalid: return "invalid";
+                
+                case UnaryExprType::Not: return "!";
+                case UnaryExprType::Negate: return "-";
             }
 
             BLUA_ASSERT(false, "Unreachable!");
@@ -455,6 +476,16 @@ namespace BlackLua {
             Node* Expression = nullptr;
         };
 
+        struct NodeCastExpr {
+            VariableType Type = VariableType::Invalid;
+            Node* Expression = nullptr;
+        };
+
+        struct NodeUnaryExpr {
+            Node* Expression = nullptr;
+            UnaryExprType Type = UnaryExprType::Invalid;
+        };
+
         struct NodeBinExpr {
             Node* LHS = nullptr;
             Node* RHS = nullptr;
@@ -470,7 +501,7 @@ namespace BlackLua {
                          NodeWhile*, NodeDoWhile*, NodeFor*,
                          NodeIf*,
                          NodeReturn*,
-                         NodeFunctionCallExpr*, NodeParenExpr*, NodeBinExpr*> Data;
+                         NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
         };
 
         class Parser {

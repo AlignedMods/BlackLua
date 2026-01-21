@@ -75,7 +75,7 @@ namespace BlackLua {
     };
 
     inline void SetupDefaultAllocator() {
-        static Allocator s_Alloc(10 * 1024 * 1024); // 10 MB, should be plenty for any compilation unit
+        static Allocator s_Alloc(40 * 1024 * 1024); // 10 MB, should be plenty for any compilation unit
         Allocator::Set(&s_Alloc);
     }
 

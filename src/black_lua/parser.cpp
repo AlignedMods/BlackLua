@@ -357,6 +357,18 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case TokenType::LeftParen: {
+                Consume();
+
+                Node* expr = ParseExpression();
+                NodeParenExpr* node = Allocate<NodeParenExpr>(expr);
+
+                TryConsume(TokenType::RightParen, "')'");
+
+                return CreateNode(NodeType::ParenExpr, node);
+                break;
+            }
+
             case TokenType::LeftCurly: {
                 Consume();
 
@@ -452,6 +464,35 @@ namespace BlackLua::Internal {
         }
     }
 
+    size_t Parser::GetBinaryPrecedence(BinExprType type) {
+        switch (type) {
+            case BinExprType::Less:
+            case BinExprType::LessOrEq:
+            case BinExprType::Greater:
+            case BinExprType::GreaterOrEq:
+            case BinExprType::Eq:
+            case BinExprType::IsEq:
+                return 0;
+
+            case BinExprType::Add:
+            case BinExprType::AddInPlace:
+            case BinExprType::AddOne:
+            case BinExprType::Sub:
+            case BinExprType::SubInPlace:
+            case BinExprType::SubOne:
+                return 1;
+
+            case BinExprType::Mul:
+            case BinExprType::MulInPlace:
+            case BinExprType::Div:
+            case BinExprType::DivInPlace:
+                return 2;
+        }
+
+        BLUA_ASSERT(false, "Unreachable");
+        return -1;
+    }
+
     Node* Parser::ParseScope() {
         NodeScope* node = Allocate<NodeScope>();
 
@@ -467,45 +508,31 @@ namespace BlackLua::Internal {
         return CreateNode(NodeType::Scope, node);
     }
 
-    Node* Parser::ParseExpression() {
+    Node* Parser::ParseExpression(size_t minbp) {
         Node* lhsNode = ParseValue();
 
         if (!lhsNode) {
             ErrorExpected("expression");
         }
 
-        BinExprType op = BinExprType::Invalid;
-        if (Peek()) {
-            op = ParseOperator();
+        // There are two conditions to this loop
+        // A valid operator (the first half of the check) and a valid precedence (the second half)
+        while ((Peek() && ParseOperator() != BinExprType::Invalid) && 
+               (GetBinaryPrecedence(ParseOperator()) >= minbp)) {
+            BinExprType op = ParseOperator();
+            Consume();
 
-            if (op == BinExprType::Invalid) {
-                return lhsNode;
-            } else {
-                Consume(); // Eat the operator
-            }
-        } else {
-            return lhsNode;
+            Node* rhsNode = ParseExpression(GetBinaryPrecedence(op));
+
+            NodeBinExpr* newExpr = Allocate<NodeBinExpr>();
+            newExpr->LHS = lhsNode;
+            newExpr->RHS = rhsNode;
+            newExpr->Type = op;
+
+            lhsNode = CreateNode(NodeType::BinExpr, newExpr);
         }
 
-        if (op == BinExprType::AddOne || op == BinExprType::SubOne) {
-            NodeBinExpr* node = Allocate<NodeBinExpr>();
-            node->LHS = lhsNode;
-            node->RHS = nullptr;
-            node->Type = op;
-
-            return CreateNode(NodeType::BinExpr, node);
-        } else if (Peek()) {
-            Node* rhsNode = ParseExpression();
-
-            NodeBinExpr* node = Allocate<NodeBinExpr>();
-            node->LHS = lhsNode;
-            node->RHS = rhsNode;
-            node->Type = op;
-
-            return CreateNode(NodeType::BinExpr, node);
-        }
-
-        return nullptr;
+        return lhsNode;
     }
 
     Node* Parser::ParseStatement() {
@@ -738,6 +765,15 @@ namespace BlackLua::Internal {
                     for (const auto& node : call->Parameters) {
                         PrintNode(node, indentation + 4);
                     }
+
+                    break;
+                }
+
+                case NodeType::ParenExpr: {
+                    NodeParenExpr* expr = std::get<NodeParenExpr*>(n->Data);
+
+                    std::cout << "ParenExpr, Expression: \n";
+                    PrintNode(expr->Expression, indentation + 4);
 
                     break;
                 }

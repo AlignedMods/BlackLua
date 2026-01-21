@@ -41,7 +41,7 @@ namespace BlackLua {
         if (p.IsValid()) {
             p.PrintAST();
         
-            BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
+            // BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
             // if (c.IsValid()) {
             //     BlackLua::Internal::Emitter e = BlackLua::Internal::Emitter::Emit(c.GetCheckedNodes());
             //     src.Compiled = e.GetOutput();

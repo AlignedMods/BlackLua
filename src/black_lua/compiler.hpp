@@ -251,6 +251,7 @@ namespace BlackLua {
             Return,
 
             FunctionCallExpr,
+            ParenExpr,
             BinExpr
         };
 
@@ -450,7 +451,10 @@ namespace BlackLua {
             std::vector<Node*> Parameters;
         };
 
-        // NOTE: RHS can be nullptr if there is no right hand side
+        struct NodeParenExpr {
+            Node* Expression = nullptr;
+        };
+
         struct NodeBinExpr {
             Node* LHS = nullptr;
             Node* RHS = nullptr;
@@ -466,7 +470,7 @@ namespace BlackLua {
                          NodeWhile*, NodeDoWhile*, NodeFor*,
                          NodeIf*,
                          NodeReturn*,
-                         NodeFunctionCallExpr*, NodeBinExpr*> Data;
+                         NodeFunctionCallExpr*, NodeParenExpr*, NodeBinExpr*> Data;
         };
 
         class Parser {
@@ -504,17 +508,18 @@ namespace BlackLua {
 
             Node* ParseReturn();
 
-            // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables and function calls)
+            // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables)
             Node* ParseValue();
             BinExprType ParseOperator();
             VariableType ParseVariableType();
+            size_t GetBinaryPrecedence(BinExprType type);
 
             Node* ParseScope();
 
             // Parses an expression (8 + 4, 6.3 - 4, "hello " + "world", ...)
             // NOTE: For certain reasons a varaible assignment is NOT considered an expression
             // So int var = 6; is not an expression (6 technically does count as an expression)
-            Node* ParseExpression();
+            Node* ParseExpression(size_t minbp = 0);
 
             Node* ParseStatement();
 

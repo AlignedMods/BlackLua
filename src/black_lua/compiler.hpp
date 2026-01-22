@@ -627,6 +627,13 @@ namespace BlackLua {
             bool m_Error = false;
 
             std::unordered_map<std::string, VariableType> m_DeclaredSymbols;
+
+            struct Scope {
+                Scope* Parent = nullptr;
+                std::unordered_map<std::string, VariableType> DeclaredSymbols;
+            };
+
+            Scope* m_CurrentScope = nullptr;
         };
 
         class Emitter {

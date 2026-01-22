@@ -4,13 +4,6 @@
 
 namespace BlackLua::Internal {
 
-    // There are certain default lua functions that we don't want to mangle
-    // For example we really do not want "print("hello world")" to become "f_1print("hello world")"
-    static std::unordered_map<std::string_view, bool> s_NoMangle = {
-        { "tostring", true },
-        { "print", true }
-    };
-
     TypeChecker TypeChecker::Check(const Parser::Nodes& nodes) {
         TypeChecker checker;
         checker.m_Nodes = nodes;
@@ -50,19 +43,26 @@ namespace BlackLua::Internal {
     void TypeChecker::CheckNodeScope(Node* node) {
         NodeScope* scope = std::get<NodeScope*>(node->Data);
 
+        Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
+        newScope->Parent = m_CurrentScope;
+        m_CurrentScope = newScope;
+
         for (size_t i = 0; i < scope->Nodes.Size; i++) {
             CheckNode(scope->Nodes.Items[i]);
         }
+
+        m_CurrentScope = m_CurrentScope->Parent;
     }
 
     void TypeChecker::CheckNodeVarDecl(Node* node) {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
 
-        if (m_DeclaredSymbols.contains(std::string(decl->Identifier))) {
+        std::unordered_map<std::string, VariableType>& symbolMap = (m_CurrentScope) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
+        if (symbolMap.contains(std::string(decl->Identifier))) {
             ErrorRedeclaration(decl->Identifier);
         }
 
-        m_DeclaredSymbols[std::string(decl->Identifier)] = decl->Type;
+        symbolMap[std::string(decl->Identifier)] = decl->Type;
 
         if (decl->Value) {
             CheckNodeExpression(decl->Type, decl->Value);
@@ -136,10 +136,23 @@ namespace BlackLua::Internal {
             case NodeType::VarRef: {
                 NodeVarRef* ref = std::get<NodeVarRef*>(node->Data);
 
+                std::string ident(ref->Identifier);
+
+                Scope* currentScope = m_CurrentScope;
+                while (currentScope) {
+                    if (currentScope->DeclaredSymbols.contains(ident)) {
+                        return currentScope->DeclaredSymbols.at(ident);
+                    }
+
+                    currentScope = currentScope->Parent;
+                }
+
+                // Check global symbols
                 if (m_DeclaredSymbols.contains(std::string(ref->Identifier))) {
                     return m_DeclaredSymbols.at(std::string(ref->Identifier));
                 }
 
+                // We haven't found a variable
                 ErrorUndeclaredIdentifier(ref->Identifier);
                 return VariableType::Invalid;
             }

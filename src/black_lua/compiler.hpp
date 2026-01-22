@@ -612,12 +612,12 @@ namespace BlackLua {
             // type1 var = type2;
             // The bigger the return value is, the more expensive it is to do a conversion
             // 0 is the best conversion rate (no cast needed), and 3 is the worst conversion rate (impossible conversion)
-            size_t GetConversionRate(VariableType type1, VariableType type2);
-
-            VariableType GetVariableType(Node* node);
+            size_t GetConversionCost(VariableType type1, VariableType type2);
+            VariableType GetNodeType(Node* node);
 
             void WarningMismatchedTypes(VariableType type1, VariableType type2);
             void ErrorMismatchedTypes(VariableType type1, VariableType type2);
+            void ErrorCannotCast(VariableType type1, VariableType type2);
             void ErrorRedeclaration(const std::string_view msg);
             void ErrorUndeclaredIdentifier(const std::string_view msg);
 

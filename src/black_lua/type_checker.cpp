@@ -64,12 +64,12 @@ namespace BlackLua::Internal {
     }
 
     void TypeChecker::CheckNodeExpression(VariableType type, Node* node) {
-        size_t rate = GetConversionRate(type, GetVariableType(node));
-        
-        if (rate == 1 || rate == 2) {
-            WarningMismatchedTypes(type, GetVariableType(node));
-        } else if (rate == 3) {
-            ErrorMismatchedTypes(type, GetVariableType(node));
+        if (GetNodeType(node) != VariableType::Invalid) {
+            size_t cost = GetConversionCost(type, GetNodeType(node));
+
+            if (cost > 0) {
+                ErrorMismatchedTypes(type, GetNodeType(node));
+            }
         }
     }
 
@@ -80,10 +80,12 @@ namespace BlackLua::Internal {
             CheckNodeScope(node);
         } else if (t == NodeType::VarDecl) {
             CheckNodeVarDecl(node);
+        } else if (t == NodeType::BinExpr) {
+            
         }
     }
 
-    size_t TypeChecker::GetConversionRate(VariableType type1, VariableType type2) {
+    size_t TypeChecker::GetConversionCost(VariableType type1, VariableType type2) {
         // Equal types, best possible scenario
         if (type1 == type2) {
             return 0;
@@ -118,7 +120,7 @@ namespace BlackLua::Internal {
         return -1;
     }
 
-    VariableType TypeChecker::GetVariableType(Node* node) {
+    VariableType TypeChecker::GetNodeType(Node* node) {
         switch (node->Type) {
             case NodeType::Bool: return VariableType::Bool;
             case NodeType::Int: return VariableType::Int;
@@ -126,6 +128,47 @@ namespace BlackLua::Internal {
             case NodeType::Float: return VariableType::Float;
             case NodeType::Double: return VariableType::Double;
             case NodeType::String: return VariableType::String;
+
+            case NodeType::ParenExpr: {
+                NodeParenExpr* expr = std::get<NodeParenExpr*>(node->Data);
+                VariableType type = GetNodeType(expr->Expression);
+
+                return type;
+            }
+
+            case NodeType::CastExpr: {
+                NodeCastExpr* expr = std::get<NodeCastExpr*>(node->Data);
+                VariableType typeToCast = GetNodeType(expr->Expression);
+                VariableType casted = expr->Type;
+
+                size_t cost = GetConversionCost(casted, typeToCast);
+
+                if (cost > 2) {
+                    ErrorCannotCast(casted, typeToCast);
+                }
+
+                return casted;
+            }
+
+            case NodeType::UnaryExpr: {
+                NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(node->Data);
+                VariableType type = GetNodeType(expr->Expression);
+
+                return type;
+            }
+
+            case NodeType::BinExpr: {
+                NodeBinExpr* expr = std::get<NodeBinExpr*>(node->Data);
+                VariableType typeLHS = GetNodeType(expr->LHS);
+                VariableType typeRHS = GetNodeType(expr->RHS);
+
+                if (typeRHS != typeLHS) {
+                    ErrorMismatchedTypes(typeLHS, typeRHS);
+                }
+
+                return typeLHS;
+            }
+            default: return VariableType::Invalid;
         }
 
         BLUA_ASSERT(false, "Unreachable!");
@@ -138,6 +181,12 @@ namespace BlackLua::Internal {
 
     void TypeChecker::ErrorMismatchedTypes(VariableType type1, VariableType type2) {
         std::cerr << "Type error: Cannot assign " << VariableTypeToString(type2) << " to " << VariableTypeToString(type1) << "!\n";
+
+        m_Error = true;
+    }
+
+    void TypeChecker::ErrorCannotCast(VariableType type1, VariableType type2) {
+        std::cerr << "Type error: Cannot cast type " << VariableTypeToString(type2) << " to type " << VariableTypeToString(type1) << "!\n";
 
         m_Error = true;
     }

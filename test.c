@@ -1,1 +1,1 @@
-int hello = (int)(float)1 + 2;
+int hello = -(int)(6.0f + (float)4.0);

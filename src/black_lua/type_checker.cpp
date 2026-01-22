@@ -58,6 +58,12 @@ namespace BlackLua::Internal {
     void TypeChecker::CheckNodeVarDecl(Node* node) {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
 
+        if (m_DeclaredSymbols.contains(std::string(decl->Identifier))) {
+            ErrorRedeclaration(decl->Identifier);
+        }
+
+        m_DeclaredSymbols[std::string(decl->Identifier)] = decl->Type;
+
         if (decl->Value) {
             CheckNodeExpression(decl->Type, decl->Value);
         }
@@ -80,8 +86,6 @@ namespace BlackLua::Internal {
             CheckNodeScope(node);
         } else if (t == NodeType::VarDecl) {
             CheckNodeVarDecl(node);
-        } else if (t == NodeType::BinExpr) {
-            
         }
     }
 
@@ -128,6 +132,17 @@ namespace BlackLua::Internal {
             case NodeType::Float: return VariableType::Float;
             case NodeType::Double: return VariableType::Double;
             case NodeType::String: return VariableType::String;
+
+            case NodeType::VarRef: {
+                NodeVarRef* ref = std::get<NodeVarRef*>(node->Data);
+
+                if (m_DeclaredSymbols.contains(std::string(ref->Identifier))) {
+                    return m_DeclaredSymbols.at(std::string(ref->Identifier));
+                }
+
+                ErrorUndeclaredIdentifier(ref->Identifier);
+                return VariableType::Invalid;
+            }
 
             case NodeType::ParenExpr: {
                 NodeParenExpr* expr = std::get<NodeParenExpr*>(node->Data);

@@ -626,7 +626,7 @@ namespace BlackLua {
             size_t m_Index = 0;
             bool m_Error = false;
 
-            std::unordered_map<std::string, Node*> m_DeclaredIdentifiers;
+            std::unordered_map<std::string, VariableType> m_DeclaredSymbols;
         };
 
         class Emitter {

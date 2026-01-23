@@ -45,6 +45,9 @@ namespace BlackLua::Internal {
 
         Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
         newScope->Parent = m_CurrentScope;
+        if (m_CurrentScope) {
+            newScope->ReturnType = m_CurrentScope->ReturnType;
+        }
         m_CurrentScope = newScope;
 
         for (size_t i = 0; i < scope->Nodes.Size; i++) {
@@ -57,16 +60,57 @@ namespace BlackLua::Internal {
     void TypeChecker::CheckNodeVarDecl(Node* node) {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
 
-        std::unordered_map<std::string, VariableType>& symbolMap = (m_CurrentScope) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
+        std::unordered_map<std::string, Declaration>& symbolMap = (m_CurrentScope) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
         if (symbolMap.contains(std::string(decl->Identifier))) {
             ErrorRedeclaration(decl->Identifier);
         }
 
-        symbolMap[std::string(decl->Identifier)] = decl->Type;
+        symbolMap[std::string(decl->Identifier)] = { decl->Type, node };
 
         if (decl->Value) {
             CheckNodeExpression(decl->Type, decl->Value);
         }
+
+        if (decl->Next) {
+            CheckNodeVarDecl(decl->Next);
+        }
+    }
+
+    void TypeChecker::CheckNodeFunctionImpl(Node* node) {
+        NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(node->Data);
+
+        std::string name(impl->Name);
+        if (m_DeclaredSymbols.contains(name)) {
+            ErrorRedeclaration(impl->Name);
+        }
+
+        m_DeclaredSymbols[name] = { impl->ReturnType, node };
+
+        NodeScope* scope = std::get<NodeScope*>(impl->Body->Data);
+
+        Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
+        newScope->Parent = m_CurrentScope;
+        newScope->ReturnType = impl->ReturnType;
+        m_CurrentScope = newScope;
+
+        for (size_t i = 0; i < impl->Arguments.Size; i++) {
+            CheckNode(impl->Arguments.Items[i]);
+        }
+
+        for (size_t i = 0; i < scope->Nodes.Size; i++) {
+            CheckNode(scope->Nodes.Items[i]);
+        }
+
+        m_CurrentScope = m_CurrentScope->Parent;
+    }
+
+    void TypeChecker::CheckNodeReturn(Node* node) {
+        NodeReturn* ret = std::get<NodeReturn*>(node->Data);
+
+        if (!m_CurrentScope) { ErrorInvalidReturn(); return; }
+        if (m_CurrentScope->ReturnType == VariableType::Invalid) { ErrorInvalidReturn(); return; }
+
+        CheckNodeExpression(m_CurrentScope->ReturnType, ret->Value);
     }
 
     void TypeChecker::CheckNodeExpression(VariableType type, Node* node) {
@@ -86,6 +130,12 @@ namespace BlackLua::Internal {
             CheckNodeScope(node);
         } else if (t == NodeType::VarDecl) {
             CheckNodeVarDecl(node);
+        } else if (t == NodeType::FunctionImpl) {
+            CheckNodeFunctionImpl(node);
+        } else if (t == NodeType::Return) {
+            CheckNodeReturn(node);
+        } else if (t == NodeType::BinExpr) {
+            CheckNodeExpression(VariableType::Invalid, node);
         }
     }
 
@@ -138,10 +188,11 @@ namespace BlackLua::Internal {
 
                 std::string ident(ref->Identifier);
 
+                // Loop backward through all the scopes
                 Scope* currentScope = m_CurrentScope;
                 while (currentScope) {
                     if (currentScope->DeclaredSymbols.contains(ident)) {
-                        return currentScope->DeclaredSymbols.at(ident);
+                        return currentScope->DeclaredSymbols.at(ident).Type;
                     }
 
                     currentScope = currentScope->Parent;
@@ -149,11 +200,45 @@ namespace BlackLua::Internal {
 
                 // Check global symbols
                 if (m_DeclaredSymbols.contains(std::string(ref->Identifier))) {
-                    return m_DeclaredSymbols.at(std::string(ref->Identifier));
+                    return m_DeclaredSymbols.at(std::string(ref->Identifier)).Type;
                 }
 
                 // We haven't found a variable
                 ErrorUndeclaredIdentifier(ref->Identifier);
+                return VariableType::Invalid;
+            }
+
+            case NodeType::FunctionCallExpr: {
+                NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
+                std::string name(expr->Name);
+                if (m_DeclaredSymbols.contains(name)) {
+                    NodeList args;
+                    
+                    switch (m_DeclaredSymbols.at(name).Decl->Type) {
+                        case NodeType::FunctionImpl: {
+                            NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(m_DeclaredSymbols.at(name).Decl->Data);
+                            args = impl->Arguments;
+
+                            break;
+                        }
+                    }
+
+                    if (args.Size != expr->Parameters.size()) {
+                        ErrorNoMatchingFunction(expr->Name);
+                        return VariableType::Invalid;
+                    }
+
+                    for (size_t i = 0; i < args.Size; i++) {
+                        if (std::get<NodeVarDecl*>(args.Items[i]->Data)->Type != GetNodeType(expr->Parameters[i])) {
+                            ErrorNoMatchingFunction(expr->Name);
+                            return VariableType::Invalid;
+                        }
+                    }
+
+                    return m_DeclaredSymbols.at(name).Type;
+                }
+
+                ErrorUndeclaredIdentifier(expr->Name);
                 return VariableType::Invalid;
             }
 
@@ -227,6 +312,18 @@ namespace BlackLua::Internal {
 
     void TypeChecker::ErrorUndeclaredIdentifier(const std::string_view msg) {
         std::cerr << "Type error: Undeclared identifier \"" << msg << "\"!\n";
+
+        m_Error = true;
+    }
+
+    void TypeChecker::ErrorInvalidReturn() {
+        std::cerr << "Type error: Invalid return statement!\n";
+
+        m_Error = true;
+    }
+
+    void TypeChecker::ErrorNoMatchingFunction(const std::string_view func) {
+        std::cerr << "Type error: No matching function to call: \"" << func << "\"!\n";
 
         m_Error = true;
     }

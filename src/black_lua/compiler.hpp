@@ -423,14 +423,14 @@ namespace BlackLua {
             std::string_view Name;
             std::string Signature;
 
-            std::vector<Node*> Arguments;
+            NodeList Arguments;
             VariableType ReturnType = VariableType::Invalid;
         };
 
         struct NodeFunctionImpl {
             std::string_view Name;
 
-            std::vector<Node*> Arguments;
+            NodeList Arguments;
             VariableType ReturnType = VariableType::Invalid;
 
             Node* Body = nullptr; // Type is always NodeScope
@@ -603,6 +603,10 @@ namespace BlackLua {
 
             void CheckNodeVarDecl(Node* node);
 
+            void CheckNodeFunctionImpl(Node* node);
+
+            void CheckNodeReturn(Node* node);
+
             void CheckNodeExpression(VariableType type, Node* node);
 
             void CheckNode(Node* node);
@@ -620,17 +624,25 @@ namespace BlackLua {
             void ErrorCannotCast(VariableType type1, VariableType type2);
             void ErrorRedeclaration(const std::string_view msg);
             void ErrorUndeclaredIdentifier(const std::string_view msg);
+            void ErrorInvalidReturn();
+            void ErrorNoMatchingFunction(const std::string_view func);
 
         private:
             Parser::Nodes m_Nodes; // We modify these directly
             size_t m_Index = 0;
             bool m_Error = false;
 
-            std::unordered_map<std::string, VariableType> m_DeclaredSymbols;
+            struct Declaration {
+                VariableType Type = VariableType::Invalid;
+                Node* Decl = nullptr;
+            };
+
+            std::unordered_map<std::string, Declaration> m_DeclaredSymbols;
 
             struct Scope {
                 Scope* Parent = nullptr;
-                std::unordered_map<std::string, VariableType> DeclaredSymbols;
+                VariableType ReturnType = VariableType::Invalid; // This is only a valid type in function scopes!
+                std::unordered_map<std::string, Declaration> DeclaredSymbols;
             };
 
             Scope* m_CurrentScope = nullptr;

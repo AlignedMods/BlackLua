@@ -126,7 +126,7 @@ namespace BlackLua::Internal {
 
         if (ident) {
             Node* finalNode = nullptr;
-            std::vector<Node*> args;
+            NodeList args;
 
             if (Match(TokenType::LeftParen)) {
                 Consume();
@@ -150,7 +150,7 @@ namespace BlackLua::Internal {
                         Consume();
                     }
 
-                    args.push_back(n);
+                    args.Append(n);
                 }
 
                 TryConsume(TokenType::RightParen, "')'");
@@ -722,6 +722,9 @@ namespace BlackLua::Internal {
                     NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(n->Data);
 
                     std::cout << "FunctionDecl, Name: " << decl->Name << ", Return type: " << VariableTypeToString(decl->ReturnType) << '\n';
+                    for (size_t i = 0; i < decl->Arguments.Size; i++) {
+                        PrintNode(decl->Arguments.Items[i], indentation + 4);
+                    }
 
                     break;
                 }
@@ -729,7 +732,10 @@ namespace BlackLua::Internal {
                 case NodeType::FunctionImpl: {
                     NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(n->Data);
 
-                    std::cout << "FunctionImpl, Name: " << impl->Name << ", Return type: " << VariableTypeToString(impl->ReturnType) << ", Body: \n";
+                    std::cout << "FunctionImpl, Name: " << impl->Name << ", Return type: " << VariableTypeToString(impl->ReturnType) << '\n';
+                    for (size_t i = 0; i < impl->Arguments.Size; i++) {
+                        PrintNode(impl->Arguments.Items[i], indentation + 4);
+                    }
                     PrintNode(impl->Body, indentation + 4);
 
                     break;

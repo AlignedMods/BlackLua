@@ -104,6 +104,20 @@ namespace BlackLua::Internal {
         m_CurrentScope = m_CurrentScope->Parent;
     }
 
+    void TypeChecker::CheckNodeWhile(Node* node) {
+        NodeWhile* wh = std::get<NodeWhile*>(node->Data);
+        
+        CheckNodeExpression(VariableType::Bool, wh->Condition);
+        CheckNodeScope(wh->Body);
+    }
+
+    void TypeChecker::CheckNodeDoWhile(Node* node) {
+        NodeDoWhile* dowh = std::get<NodeDoWhile*>(node->Data);
+
+        CheckNodeScope(dowh->Body);
+        CheckNodeExpression(VariableType::Bool, dowh->Condition);
+    }
+
     void TypeChecker::CheckNodeReturn(Node* node) {
         NodeReturn* ret = std::get<NodeReturn*>(node->Data);
 
@@ -132,6 +146,8 @@ namespace BlackLua::Internal {
             CheckNodeVarDecl(node);
         } else if (t == NodeType::FunctionImpl) {
             CheckNodeFunctionImpl(node);
+        } else if (t == NodeType::While) {
+            CheckNodeWhile(node);
         } else if (t == NodeType::Return) {
             CheckNodeReturn(node);
         } else if (t == NodeType::BinExpr) {
@@ -145,8 +161,8 @@ namespace BlackLua::Internal {
             return 0;
         }
 
-        if (type1 == VariableType::Bool || type1 == VariableType::Int || type1 == VariableType::Long) {
-            if (type2 == VariableType::Bool || type2 == VariableType::Int || type2 == VariableType::Long) {
+        if (type1 == VariableType::Bool || type1 == VariableType::Char || type1 == VariableType::Short || type1 == VariableType::Int || type1 == VariableType::Long) {
+            if (type2 == VariableType::Bool || type2 == VariableType::Char || type2 == VariableType::Short || type2 == VariableType::Int || type2 == VariableType::Long) {
                 return 1;
             } else if (type2 == VariableType::Float || type2 == VariableType::Double) {
                 return 2;
@@ -158,7 +174,7 @@ namespace BlackLua::Internal {
         if (type1 == VariableType::Float || type1 == VariableType::Double) {
             if (type2 == VariableType::Float || type2 == VariableType::Double) {
                 return 1;
-            } else if (type2 == VariableType::Bool || type2 == VariableType::Int || type2 == VariableType::Long) {
+            } else if (type2 == VariableType::Bool || type2 == VariableType::Char || type2 == VariableType::Short || type2 == VariableType::Int || type2 == VariableType::Long) {
                 return 2;
             } else {
                 return 3;
@@ -177,6 +193,7 @@ namespace BlackLua::Internal {
     VariableType TypeChecker::GetNodeType(Node* node) {
         switch (node->Type) {
             case NodeType::Bool: return VariableType::Bool;
+            case NodeType::Char: return VariableType::Char;
             case NodeType::Int: return VariableType::Int;
             case NodeType::Long: return VariableType::Long;
             case NodeType::Float: return VariableType::Float;
@@ -279,8 +296,32 @@ namespace BlackLua::Internal {
                     ErrorMismatchedTypes(typeLHS, typeRHS);
                 }
 
-                return typeLHS;
+                switch (expr->Type) {
+                    case BinExprType::Eq:
+                    case BinExprType::Add:
+                    case BinExprType::AddInPlace:
+                    case BinExprType::AddOne:
+                    case BinExprType::Sub:
+                    case BinExprType::SubInPlace:
+                    case BinExprType::SubOne:
+                    case BinExprType::Mul:
+                    case BinExprType::MulInPlace:
+                    case BinExprType::Div:
+                    case BinExprType::DivInPlace:
+                        return typeLHS;
+                    
+                     case BinExprType::IsEq:
+                     case BinExprType::IsNotEq:
+                     case BinExprType::Less:
+                     case BinExprType::LessOrEq:
+                     case BinExprType::Greater:
+                     case BinExprType::GreaterOrEq:
+                        return VariableType::Bool;
+
+                    default: return VariableType::Invalid;
+                }
             }
+
             default: return VariableType::Invalid;
         }
 

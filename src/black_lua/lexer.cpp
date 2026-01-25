@@ -76,6 +76,8 @@ namespace BlackLua::Internal {
 
                 BLUA_TOKEN("bool", Bool);
 
+                BLUA_TOKEN("char", Char);
+                BLUA_TOKEN("short", Short);
                 BLUA_TOKEN("int", Int);
                 BLUA_TOKEN("long", Long);
 
@@ -290,6 +292,27 @@ namespace BlackLua::Internal {
                     }
                 }
 
+                if (c == '!') {
+                    bool isEq = false;
+
+                    if (Peek()) {
+                        char nc = *Peek();
+
+                        if (nc == '=') {
+                            Consume();
+                            isEq = true;
+                        }
+                    }
+
+                    if (isEq) {
+                        AddToken(TokenType::IsNotEq);
+                        continue;
+                    } else {
+                        AddToken(TokenType::Not);
+                        continue;
+                    }
+                }
+
                 if (c == '<') {
                     bool isEq = false;
 
@@ -332,6 +355,23 @@ namespace BlackLua::Internal {
                     }
                 }
 
+                if (c == '\'') {
+                    char c = 0;
+                    if (Peek()) {
+                        c = Consume();
+                        
+                        if (Peek() && *Peek() == '\'') {
+                            Consume();
+                        } else {
+                            // TODO: Add error message
+                        }
+                    }
+
+                    std::string str;
+                    str += c;
+                    AddToken(TokenType::CharLit, str);
+                }
+
                 if (c == '"') {
                     while (Peek()) {
                         char nc = Consume();
@@ -354,6 +394,7 @@ namespace BlackLua::Internal {
 
                 if (c == '\n') {
                     m_CurrentLine++;
+                    m_CurrentLineStart = m_Index;
                 }
 
                 continue;
@@ -380,6 +421,7 @@ namespace BlackLua::Internal {
         token.Type = type;
         token.Data = data;
         token.Line = m_CurrentLine;
+        token.Column = m_Index - m_CurrentLineStart;
         m_Tokens.push_back(token);
     }
 

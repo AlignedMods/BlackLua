@@ -1,0 +1,14 @@
+int print(long l) { return (int)l; }
+
+int func() {
+    while (0 != 0) {
+        int var = 5;
+    }
+
+    int var = 432423;
+    short s = (short)5742;
+
+    do {
+        print(58l);
+    } while (false);
+}

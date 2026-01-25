@@ -3,7 +3,6 @@
 #include "black_lua.hpp"
 
 #include <variant>
-#include <memory>
 #include <vector>
 #include <unordered_map>
 
@@ -84,6 +83,7 @@ namespace BlackLua {
             True,
             False,
 
+            CharLit,
             IntLit,
             UIntLit,
             LongLit,
@@ -94,6 +94,8 @@ namespace BlackLua {
 
             Bool,
 
+            Char,
+            Short,
             Int,
             Long,
 
@@ -194,6 +196,7 @@ namespace BlackLua {
             TokenType Type = TokenType::And;
             std::string Data;
             int Line = 0;
+            int Column = 0;
         };
 
         class Lexer {
@@ -223,10 +226,13 @@ namespace BlackLua {
             size_t m_Index = 0;
             std::string m_Source;
             int m_CurrentLine = 1;
+            int m_CurrentLineStart = 0; // The number of characters it takes to get to this line (from the start of the file)
         };
 
         enum class NodeType {
             Bool,
+            Char,
+            Short,
             Int,
             Long,
             Float,
@@ -261,6 +267,8 @@ namespace BlackLua {
             Invalid = 0,
             Void,
             Bool,
+            Char,
+            Short,
             Int,
             Long,
             Float,
@@ -273,6 +281,8 @@ namespace BlackLua {
                 case VariableType::Invalid: return "invalid";
                 case VariableType::Void: return "void";
                 case VariableType::Bool: return "bool";
+                case VariableType::Char: return "char";
+                case VariableType::Short: return "short";
                 case VariableType::Int: return "int";
                 case VariableType::Long: return "long";
                 case VariableType::Float: return "float";
@@ -316,7 +326,8 @@ namespace BlackLua {
             GreaterOrEq,
 
             Eq,
-            IsEq
+            IsEq,
+            IsNotEq
         };
 
         inline const char* BinExprTypeToString(BinExprType type) {
@@ -340,6 +351,7 @@ namespace BlackLua {
 
                 case BinExprType::Eq: return "=";
                 case BinExprType::IsEq: return "==";
+                case BinExprType::IsNotEq: return "!=";
             }
 
             BLUA_ASSERT(false, "Unreachable!");
@@ -374,6 +386,10 @@ namespace BlackLua {
 
         struct NodeBool {
             bool Value = false;
+        };
+
+        struct NodeChar {
+            int8_t Char = 0;
         };
 
         struct NodeInt {
@@ -494,7 +510,7 @@ namespace BlackLua {
 
         struct Node {
             NodeType Type = NodeType::Bool;
-            std::variant<NodeBool*, NodeInt*, NodeLong*, NodeFloat*, NodeDouble*, NodeString*, NodeInitializerList*, 
+            std::variant<NodeBool*, NodeChar*, NodeInt*, NodeLong*, NodeFloat*, NodeDouble*, NodeString*, NodeInitializerList*, 
                          NodeScope*,
                          NodeVarDecl*, NodeVarRef*,
                          NodeFunctionDecl*, NodeFunctionImpl*,
@@ -605,6 +621,9 @@ namespace BlackLua {
 
             void CheckNodeFunctionImpl(Node* node);
 
+            void CheckNodeWhile(Node* node);
+            void CheckNodeDoWhile(Node* node);
+
             void CheckNodeReturn(Node* node);
 
             void CheckNodeExpression(VariableType type, Node* node);
@@ -648,11 +667,25 @@ namespace BlackLua {
             Scope* m_CurrentScope = nullptr;
         };
 
+        enum class OpCodeType {
+            Invalid,
+            PushScope,
+            PopScope,
+            PushBytes,
+            StoreLocal
+        };
+
+        struct OpCode {
+            OpCodeType Type = OpCodeType::Invalid;
+            std::variant<uint32_t, size_t> Data;
+        };
+
         class Emitter {
         public:
+            using OpCodes = std::vector<OpCode>;
             static Emitter Emit(const Parser::Nodes& nodes);
 
-            const std::string& GetOutput() const;
+            const OpCodes& GetOpCodes() const;
 
         private:
             void EmitImpl();
@@ -661,19 +694,15 @@ namespace BlackLua {
             Node* Consume();
 
             void EmitNodeVarDecl(Node* node);
-            void EmitNodeVarSet(Node* node);
 
-            void EmitNodeFunctionDecl(Node* node);
-            void EmitNodeFunctionCall(Node* node);
+            void EmitNodeExpression(Node* node, bool allocate = false);
 
-            void EmitNodeReturn(Node* node);
-
-            void EmitNodeExpression(Node* node);
+            size_t GetTypeSize(VariableType type);
 
             void EmitNode(Node* node);
 
         private:
-            std::string m_Output;
+            OpCodes m_OpCodes;
             size_t m_Index = 0;
             Parser::Nodes m_Nodes;
         };

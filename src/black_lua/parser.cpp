@@ -276,6 +276,16 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case TokenType::CharLit: {
+                Consume();
+
+                int8_t ch = static_cast<int8_t>(value.Data[0]);
+                
+                NodeChar* node = Allocate<NodeChar>(ch);
+                return CreateNode(NodeType::Char, node);
+                break;
+            }
+
             case TokenType::IntLit: {
                 Consume();
 
@@ -471,6 +481,7 @@ namespace BlackLua::Internal {
             case TokenType::GreaterOrEq: return BinExprType::GreaterOrEq;
             case TokenType::Eq: return BinExprType::Eq;
             case TokenType::IsEq: return BinExprType::IsEq;
+            case TokenType::IsNotEq: return BinExprType::IsNotEq;
             default: return BinExprType::Invalid;
         }
     }
@@ -481,6 +492,8 @@ namespace BlackLua::Internal {
 
         switch (type.Type) {
             case TokenType::Bool: return VariableType::Bool;
+            case TokenType::Char: return VariableType::Char;
+            case TokenType::Short: return VariableType::Short;
             case TokenType::Int: return VariableType::Int;
             case TokenType::Long: return VariableType::Long;
             case TokenType::Float: return VariableType::Float;
@@ -498,6 +511,7 @@ namespace BlackLua::Internal {
             case BinExprType::GreaterOrEq:
             case BinExprType::Eq:
             case BinExprType::IsEq:
+            case BinExprType::IsNotEq:
                 return 10;
 
             case BinExprType::Add:
@@ -592,13 +606,15 @@ namespace BlackLua::Internal {
     }
 
     void Parser::ErrorExpected(const std::string& msg) {
-        std::cerr << "Error " << Peek(-1)->Line << ":0: Expected " << msg << " after token \"" << TokenTypeToString(Peek(-1)->Type) << "\"!\n";
+        BLUA_FORMAT_ERROR("Error {}:{}: Expected {} after token \"{}\"", Peek(-1)->Line, Peek(-1)->Column, msg, TokenTypeToString(Peek(-1)->Type));
+        // std::cerr << "Error " << Peek(-1)->Line << ":0: Expected " << msg << " after token \"" << TokenTypeToString(Peek(-1)->Type) << "\"!\n";
 
         m_Error = true;
     }
 
     void Parser::ErrorTooLarge(const std::string_view value) {
-        std::cerr << "Error " << Peek(-1)->Line << ":0: Constant " << value << " is too large!\n";
+        BLUA_FORMAT_ERROR("Error {}:{}: Constant {} is too large", Peek(-1)->Line, Peek(-1)->Column, value);
+        // std::cerr << "Error " << Peek(-1)->Line << ":0: Constant " << value << " is too large!\n";
 
         m_Error = true;
     }

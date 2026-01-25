@@ -1,13 +1,16 @@
 #pragma once
 
 #include <cstddef>
-#include <memory>
 #include <utility>
 #include <iostream>
+#include <format>
 
 #ifndef BLUA_ASSERT
     #define BLUA_ASSERT(condition, error) do { if (!(condition)) { std::cerr << "Assertion failed at: " << __LINE__ << ", " << __FILE__ << "\nError: " << error; __debugbreak(); abort(); } } while(0)
 #endif
+
+#define BLUA_FORMAT_PRINT(fmt, ...) std::cout << std::format(fmt, __VA_ARGS__) << '\n'
+#define BLUA_FORMAT_ERROR(fmt, ...) std::cerr << std::format(fmt, __VA_ARGS__) << '\n'
 
 namespace BlackLua {
 
@@ -75,7 +78,7 @@ namespace BlackLua {
     };
 
     inline void SetupDefaultAllocator() {
-        static Allocator s_Alloc(40 * 1024 * 1024); // 10 MB, should be plenty for any compilation unit
+        static Allocator s_Alloc(10 * 1024 * 1024); // 10 MB, should be plenty for any compilation unit
         Allocator::Set(&s_Alloc);
     }
 

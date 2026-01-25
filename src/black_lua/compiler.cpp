@@ -21,6 +21,11 @@ namespace BlackLua {
 
     CompiledSource LuaContext::CompileFile(const std::string& path) {
         std::ifstream file(path);
+        if (!file.is_open()) {
+            std::cerr << "Failed to open file: " << path << "!\n";
+            return {};
+        }
+
         std::stringstream ss;
         ss << file.rdbuf();
         std::string contents = ss.str();

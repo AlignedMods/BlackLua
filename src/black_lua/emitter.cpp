@@ -11,8 +11,8 @@ namespace BlackLua::Internal {
         return e;
     }
 
-    const std::string& Emitter::GetOutput() const {
-        return m_Output;
+    const Emitter::OpCodes& Emitter::GetOpCodes() const {
+        return m_OpCodes;
     }
 
     void Emitter::EmitImpl() {
@@ -38,98 +38,21 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeVarDecl(Node* node) {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
 
-        m_Output += "local ";
-        m_Output += decl->Identifier;
+        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<size_t>(GetTypeSize(decl->Type)));
         if (decl->Value) {
-            m_Output += " = ";
             EmitNodeExpression(decl->Value);
         }
-        m_Output += '\n';
     }
 
-    // void Emitter::EmitNodeVarSet(Node* node) {
-    //     NodeVarSet* decl = std::get<NodeVarSet*>(node->Data);
-    // 
-    //     m_Output += decl->Identifier;
-    //     if (decl->Value) {
-    //         m_Output += " = ";
-    //         EmitNodeExpression(decl->Value);
-    //     }
-    //     m_Output += '\n';
-    // }
-
-    void Emitter::EmitNodeFunctionDecl(Node* node) {
-        NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
-
-        // if (decl->HasBody) {
-        //     m_Output += "function ";
-        //     m_Output += decl->Signature;
-        //     m_Output += "(";
-        // 
-        //     for (size_t i = 0; i < decl->Arguments.size(); i++) {
-        //         NodeVarDecl* var = std::get<NodeVarDecl*>(decl->Arguments[i]->Data);
-        // 
-        //         m_Output += var->Identifier;
-        // 
-        //         if (var->Value) {
-        //             m_Output += " = ";
-        //             EmitNodeExpression(var->Value);
-        //         }
-        // 
-        //         if (i + 1 < decl->Arguments.size()) {
-        //             m_Output += ", ";
-        //         }
-        //     }
-        // 
-        //     m_Output += ")\n";
-        // 
-        //     for (const auto& n : decl->Body) {
-        //         m_Output += "    ";
-        //         EmitNode(n);
-        //     }
-        // 
-        //     m_Output += "end\n";
-        // }
-    }
-
-    void Emitter::EmitNodeFunctionCall(Node* node) {
-        // NodeFunctionCall* call = std::get<NodeFunctionCall*>(node->Data);
-        // 
-        // m_Output += call->Signature;
-        // m_Output += "(";
-        // 
-        // for (size_t i = 0; i < call->Parameters.size(); i++) {
-        //     EmitNodeExpression(call->Parameters[i]);
-        // 
-        //     if (i + 1 < call->Parameters.size()) {
-        //         m_Output += ", ";
-        //     }
-        // }
-        // 
-        // m_Output += ")\n";
-    }
-
-    void Emitter::EmitNodeReturn(Node* node) {
-        NodeReturn* ret = std::get<NodeReturn*>(node->Data);
-
-        m_Output += "return ";
-        EmitNodeExpression(ret->Value);
-    }
-
-    void Emitter::EmitNodeExpression(Node* node) {
+    void Emitter::EmitNodeExpression(Node* node, bool allocate) {
         switch (node->Type) {
-            // case NodeType::Nil: {
-            //     m_Output += "nil";
-            //     break;
-            // }
             // case NodeType::Bool: {
+            //     if (allocate) {
+            //         m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<size_t>(1));
+            //     }
             //     NodeBool* nbool = std::get<NodeBool*>(node->Data);
             // 
-            //     if (nbool->Value == false) {
-            //         m_Output += "false";
-            //     } else {
-            //         m_Output += "true";
-            //     }
+            //     m_OpCodes.emplace_back(OpCodeType::StoreLocal)
             // 
             //     break;
             // }
@@ -200,17 +123,26 @@ namespace BlackLua::Internal {
         }
     }
 
+    size_t Emitter::GetTypeSize(VariableType type) {
+        switch (type) {
+            case VariableType::Void: return 0;
+            case VariableType::Int: return 4;
+            case VariableType::Float: return 4;
+            case VariableType::Long: return 8;
+            case VariableType::Double: return 8;
+            default: BLUA_ASSERT(false, "Unrechable!");
+        }
+
+        return 0;
+    }
+
     void Emitter::EmitNode(Node* node) {
         NodeType t = node->Type;
 
         if (t == NodeType::VarDecl) {
             EmitNodeVarDecl(node);
-        // } else if (t == NodeType::VarSet) {
-            EmitNodeVarSet(node);
-        } else if (t == NodeType::FunctionDecl) {
-            EmitNodeFunctionDecl(node);
-        // } else if (t == NodeType::FunctionCall) {
-            EmitNodeFunctionCall(node);
+        } else {
+            BLUA_ASSERT(false, "Unrechable!");
         }
     }
 

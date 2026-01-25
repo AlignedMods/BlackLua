@@ -677,7 +677,7 @@ namespace BlackLua {
 
         struct OpCode {
             OpCodeType Type = OpCodeType::Invalid;
-            std::variant<uint32_t, size_t> Data;
+            std::variant<int32_t> Data;
         };
 
         class Emitter {

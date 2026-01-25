@@ -38,7 +38,10 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeVarDecl(Node* node) {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
 
-        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<size_t>(GetTypeSize(decl->Type)));
+        OpCode op;
+        op.Type = OpCodeType::PushBytes;
+        op.Data = static_cast<int32_t>(GetTypeSize(decl->Type));
+        m_OpCodes.push_back(op);
         if (decl->Value) {
             EmitNodeExpression(decl->Value);
         }

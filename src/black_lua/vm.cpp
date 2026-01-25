@@ -2,13 +2,50 @@
 
 namespace BlackLua::Internal {
 
+    VM::VM() {
+        m_Stack.resize(4 * 1024 * 1024); // 4MB stack by default
+    }
+
     void VM::PushBytes(size_t amount) {
-        size_t alignedAmount = amount + (8 % amount); // We need to handle 8 byte alignment since some CPU's will require it
-        m_Stack.reserve(m_StackPointer + alignedAmount);
+        size_t alignedAmount = amount + (amount % 8); // We need to handle 8 byte alignment since some CPU's will require it
+        
+        BLUA_ASSERT(m_StackPointer + alignedAmount < m_Stack.max_size(), "Stack overflow, allocating an insane amount of memory!");
+
+        // Keep doubling the stack until it's big enough
+        while (m_StackPointer + alignedAmount > m_Stack.size()) {
+            BLUA_FORMAT_PRINT("Doubling stack size!");
+            m_Stack.resize(m_Stack.size() * 2);
+        }
+
         m_StackPointer += alignedAmount;
 
         m_StackSlots.emplace_back(m_StackPointer - alignedAmount, amount);
         m_StackSlotPointer++;
+    }
+
+    void VM::Pop() {
+        BLUA_ASSERT(m_StackPointer > 0, "Calling Pop() on an empty stack!");
+        StackSlot s = GetStackSlot(-1);
+
+        m_StackPointer = s.Index;
+        m_StackSlotPointer--;
+    }
+
+    void VM::PushScope() {
+        Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
+        newScope->Previous = m_CurrentScope;
+        newScope->Offset = m_StackPointer;
+        newScope->SlotOffset = m_StackSlotPointer;
+
+        m_CurrentScope = newScope;
+    }
+
+    void VM::PopScope() {
+        BLUA_ASSERT(m_CurrentScope, "Calling PopScope() with no active scope!");
+
+        m_StackPointer = m_CurrentScope->Offset;
+        m_StackSlotPointer = m_CurrentScope->SlotOffset;
+        m_CurrentScope = m_CurrentScope->Previous;
     }
 
     void VM::StoreBool(int32_t slot, bool b) {
@@ -66,6 +103,15 @@ namespace BlackLua::Internal {
         BLUA_ASSERT(s.Size == 8, "Cannot store a double in a stack slot with a size that isn't 8!");
 
         memcpy(&m_Stack[s.Index], &d, 8);
+    }
+
+    void VM::Copy(int32_t dstSlot, int32_t srcSlot) {
+        StackSlot dst = GetStackSlot(dstSlot);
+        StackSlot src = GetStackSlot(srcSlot);
+
+        BLUA_ASSERT(dst.Size == src.Size, "Invalid Copy() call, sizes of both slots must be the same!");
+
+        memcpy(&m_Stack[dst.Index], &m_Stack[src.Index], src.Size);
     }
 
     bool VM::GetBool(int32_t slot) {
@@ -136,6 +182,214 @@ namespace BlackLua::Internal {
         double d = 0;
         memcpy(&d, &m_Stack[s.Index], 8);
         return d;
+    }
+
+    void VM::AddIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid AddIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                AddGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                AddGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                AddGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                AddGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::SubIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid SubIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                SubGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                SubGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                SubGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                SubGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::MulIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid MulIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                MulGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                MulGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                MulGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                MulGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::DivIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid DivIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                DivGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                DivGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                DivGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                DivGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::AddFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid AddFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                AddGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                AddGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::SubFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid SubFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                SubGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                SubGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::MulFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid MulFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                MulGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                MulGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::DivFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid DivFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                DivGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                DivGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
     }
 
     StackSlot VM::GetStackSlot(int32_t slot) {

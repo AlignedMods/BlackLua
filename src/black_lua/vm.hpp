@@ -13,12 +13,20 @@ namespace BlackLua::Internal {
 
     class VM {
     public:
+        VM();
+
         // Increments the stack pointer by specified amount of bytes
         // Also creates a new stack slot, which gets set as the current stack slot
         void PushBytes(size_t amount);
+
+        // Pops the current stack slot
+        void Pop();
+
+        // Creates a new scope
+        void PushScope();
+        // Removes the current scope and goes back to the previous one (if there is one)
+        void PopScope();
         
-        // Stores a 32 bit integer in a stack slot
-        // NOTE: This function does NOT allocate stack space!
         void StoreBool(int32_t slot, bool b);
         void StoreChar(int32_t slot, int8_t c);
         void StoreShort(int32_t slot, int16_t ch);
@@ -26,6 +34,9 @@ namespace BlackLua::Internal {
         void StoreLong(int32_t slot, int64_t l);
         void StoreFloat(int32_t slot, float f);
         void StoreDouble(int32_t slot, double d);
+
+        // Copies the memory at one slot (srcSlot) to another slot (dstSlot)
+        void Copy(int32_t dstSlot, int32_t srcSlot);
 
         bool GetBool(int32_t slot);
         int8_t GetChar(int32_t slot);
@@ -35,13 +46,117 @@ namespace BlackLua::Internal {
         float GetFloat(int32_t slot);
         double GetDouble(int32_t slot);
 
+
+        // Adds two integral values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void AddIntegral(int32_t lhs, int32_t rhs);
+        // Substracts two integral values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void SubIntegral(int32_t lhs, int32_t rhs);
+        // Multiplies two integral values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void MulIntegral(int32_t lhs, int32_t rhs);
+        // Divides two integral values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void DivIntegral(int32_t lhs, int32_t rhs);
+
+        // Add two floating point values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void AddFloating(int32_t lhs, int32_t rhs);
+        // Substracts two floating point values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void SubFloating(int32_t lhs, int32_t rhs);
+        // Multiplies two floating point values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void MulFloating(int32_t lhs, int32_t rhs);
+        // Div two floating point values and pushes the result to the stack
+        // NOTE: The sizes of both sides must be the same
+        void DivFloating(int32_t lhs, int32_t rhs);
+
         StackSlot GetStackSlot(int32_t slot);
+
+    private:
+        // Helpers to avoid a LOT of repetition (NOTE: They may look quite ugly because they need to handle a lot of possible combinations)
+        template <typename T>
+        void AddGeneric(int32_t lhs, int32_t rhs) {
+            StackSlot __LHS = GetStackSlot(lhs);
+            StackSlot __RHS = GetStackSlot(rhs);
+            T l{};
+            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            T r{};
+            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+
+            T result = l + r;
+
+            PushBytes(__LHS.Size);
+            StackSlot newSlot = GetStackSlot(-1);
+
+            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+        }
+
+        template <typename T>
+        void SubGeneric(int32_t lhs, int32_t rhs) {
+            StackSlot __LHS = GetStackSlot(lhs);
+            StackSlot __RHS = GetStackSlot(rhs);
+            T l{};
+            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            T r{};
+            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+
+            T result = l - r;
+
+            PushBytes(__LHS.Size);
+            StackSlot newSlot = GetStackSlot(-1);
+
+            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+        }
+
+        template <typename T>
+        void MulGeneric(int32_t lhs, int32_t rhs) {
+            StackSlot __LHS = GetStackSlot(lhs);
+            StackSlot __RHS = GetStackSlot(rhs);
+            T l{};
+            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            T r{};
+            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+
+            T result = l * r;
+
+            PushBytes(__LHS.Size);
+            StackSlot newSlot = GetStackSlot(-1);
+
+            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+        }
+
+        template <typename T>
+        void DivGeneric(int32_t lhs, int32_t rhs) {
+            StackSlot __LHS = GetStackSlot(lhs);
+            StackSlot __RHS = GetStackSlot(rhs);
+            T l{};
+            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            T r{};
+            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+
+            T result = l / r;
+
+            PushBytes(__LHS.Size);
+            StackSlot newSlot = GetStackSlot(-1);
+
+            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+        }
 
     private:
         std::vector<uint8_t> m_Stack;
         size_t m_StackPointer = 0;
         std::vector<StackSlot> m_StackSlots;
         int32_t m_StackSlotPointer = 0;
+
+        struct Scope {
+            Scope* Previous = nullptr;
+            size_t Offset = 0;
+            size_t SlotOffset = 0;
+        };
+        Scope* m_CurrentScope = nullptr;
     };
 
 } // namespace BlackLua::Internal

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "black_lua.hpp"
+#include "vm.hpp"
 
 #include <variant>
 #include <vector>
@@ -665,19 +666,6 @@ namespace BlackLua {
             };
 
             Scope* m_CurrentScope = nullptr;
-        };
-
-        enum class OpCodeType {
-            Invalid,
-            PushScope,
-            PopScope,
-            PushBytes,
-            StoreLocal
-        };
-
-        struct OpCode {
-            OpCodeType Type = OpCodeType::Invalid;
-            std::variant<int32_t> Data;
         };
 
         class Emitter {

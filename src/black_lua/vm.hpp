@@ -3,8 +3,52 @@
 #include "black_lua.hpp"
 
 #include <vector>
+#include <variant>
 
 namespace BlackLua::Internal {
+
+    enum class OpCodeType {
+        Invalid,
+        Nop,
+
+        PushBytes,
+        Pop,
+        PushScope,
+        PopScope,
+        Store,
+        Get, // Automaticaly pushes the value onto the stack
+        Copy, // Copies a value into another slot
+
+        AddIntegral,
+        SubIntegral,
+        MulIntegral,
+        DivIntegral,
+        AddFloating,
+        SubFloating,
+        MulFloating,
+        DivFloating
+    };
+
+    struct OpCodeStore {
+        int32_t SlotIndex = 0;
+        void* Data = nullptr; // NOTE: The VM should not care what this contains, it should just copy it to a slot
+                              // Another note: The VM should not free this memory, it should be part of the arena allocator
+    };
+
+    struct OpCodeCopy {
+        int32_t DstSlot = 0;
+        int32_t SrcSlot = 0;
+    };
+
+    struct OpCodeMath {
+        int32_t LHSSlot = 0;
+        int32_t RHSSlot = 0;
+    };
+
+    struct OpCode {
+        OpCodeType Type = OpCodeType::Invalid;
+        std::variant<int32_t, OpCodeStore, OpCodeCopy, OpCodeMath> Data;
+    };
 
     struct StackSlot {
         size_t Index = 0;
@@ -73,6 +117,14 @@ namespace BlackLua::Internal {
         // NOTE: The sizes of both sides must be the same
         void DivFloating(int32_t lhs, int32_t rhs);
 
+        // Run an array of op codes in the VM, executing each operations one at a time
+        void RunByteCode(OpCode* data, size_t count);
+
+        // NOTE: The "slot" parameter can be either negative or positive
+        // If it's negative, it accesses from the top of stack backwards,
+        // AKA: return stack[top of stack + slot]
+        // If it's positive though, it accesses from the start of the stack,
+        // AKA: return stack[slot]
         StackSlot GetStackSlot(int32_t slot);
 
     private:
@@ -157,6 +209,10 @@ namespace BlackLua::Internal {
             size_t SlotOffset = 0;
         };
         Scope* m_CurrentScope = nullptr;
+
+        OpCode* m_Program = nullptr;
+        size_t m_ProgramSize = 0;
+        size_t m_ProgramCounter = 0;
     };
 
 } // namespace BlackLua::Internal

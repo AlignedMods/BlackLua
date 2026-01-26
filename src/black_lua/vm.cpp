@@ -392,10 +392,98 @@ namespace BlackLua::Internal {
         }
     }
 
-    StackSlot VM::GetStackSlot(int32_t slot) {
-        BLUA_ASSERT(m_StackSlotPointer > m_StackSlotPointer + slot, "Out of range slot!");
+    void VM::RunByteCode(OpCode* data, size_t count) {
+        m_Program = data;
+        m_ProgramSize = count;
 
-        return m_StackSlots[m_StackSlotPointer + slot];
+        #define CASE_MATH(type) case OpCodeType::type: {     \
+            OpCodeMath math = std::get<OpCodeMath>(op.Data); \
+            type(math.LHSSlot, math.RHSSlot);                \
+            break;                                           \
+        }
+
+        for (size_t i = 0; i < m_ProgramSize; i++) {
+            OpCode& op = m_Program[i];
+
+            switch (op.Type) {
+                case OpCodeType::Invalid: { BLUA_ASSERT(false, "Unreachable!"); break; }
+                case OpCodeType::Nop: { continue; }
+
+                case OpCodeType::PushBytes: {
+                    size_t byteCount = static_cast<size_t>(std::get<int32_t>(op.Data));
+
+                    PushBytes(byteCount);
+                    break;
+                }
+
+                case OpCodeType::Pop: {
+                    Pop();
+                    break;
+                }
+
+                case OpCodeType::PushScope: {
+                    PushScope();
+                    break;
+                }
+
+                case OpCodeType::PopScope: {
+                    PopScope();
+                    break;
+                }
+
+                case OpCodeType::Store: {
+                    OpCodeStore store = std::get<OpCodeStore>(op.Data);
+                    StackSlot s = GetStackSlot(store.SlotIndex);
+                    memcpy(&m_Stack[s.Index], store.Data, s.Size);
+
+                    break;
+                }
+
+                case OpCodeType::Get: {
+                    int32_t slot = std::get<int32_t>(op.Data);
+                    StackSlot s = GetStackSlot(slot);
+                    PushBytes(s.Size);
+
+                    memcpy(&m_Stack[GetStackSlot(-1).Index], &m_Stack[s.Index], s.Size);
+
+                    break;
+                }
+
+                case OpCodeType::Copy: {
+                    OpCodeCopy copy = std::get<OpCodeCopy>(op.Data);
+                    StackSlot dst = GetStackSlot(copy.DstSlot);
+                    StackSlot src = GetStackSlot(copy.SrcSlot);
+
+                    memcpy(&m_Stack[dst.Index], &m_Stack[src.Index], src.Size);
+
+                    break;
+                }
+
+                CASE_MATH(AddIntegral);
+                CASE_MATH(SubIntegral);
+                CASE_MATH(MulIntegral);
+                CASE_MATH(DivIntegral);
+                CASE_MATH(AddFloating);
+                CASE_MATH(SubFloating);
+                CASE_MATH(MulFloating);
+                CASE_MATH(DivFloating);
+            }
+        }
+
+        #undef CASE_MATH
+    }
+
+    StackSlot VM::GetStackSlot(int32_t slot) {
+        if (slot < 0) {
+            BLUA_ASSERT(m_StackSlotPointer > m_StackSlotPointer + slot, "Out of range slot!");
+
+             return m_StackSlots[m_StackSlotPointer + slot];
+        } else if (slot > 0) {
+            BLUA_ASSERT(slot < m_StackSlotPointer, "Out of range slot!");
+            return m_StackSlots[slot - 1];
+        } else {
+            BLUA_ASSERT(false, "Slot cannot be 0!");
+        }
     }
 
 } // namespace BlackLua::Internal

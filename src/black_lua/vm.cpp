@@ -17,6 +17,8 @@ namespace BlackLua::Internal {
             m_Stack.resize(m_Stack.size() * 2);
         }
 
+        BLUA_FORMAT_PRINT("Pushing bytes!");
+
         m_StackPointer += alignedAmount;
 
         m_StackSlots.emplace_back(m_StackPointer - alignedAmount, amount);
@@ -308,6 +310,161 @@ namespace BlackLua::Internal {
         }
     }
 
+    void VM::CmpIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid CmpIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                CmpGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                CmpGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                CmpGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                CmpGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::LtIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LtIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                LtGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                LtGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                LtGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                LtGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::LteIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LteIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                LteGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                LteGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                LteGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                LteGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::GtIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GtIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                GtGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                GtGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                GtGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                GtGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::GteIntegral(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GteIntegral() call, sizes of both sides must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 1: {
+                GteGeneric<int8_t>(lhs, rhs);
+                break;
+            }
+
+            case 2: {
+                GteGeneric<int16_t>(lhs, rhs);
+                break;
+            }
+
+            case 4: {
+                GteGeneric<int32_t>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                GteGeneric<int64_t>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
     void VM::AddFloating(int32_t lhs, int32_t rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
@@ -392,9 +549,116 @@ namespace BlackLua::Internal {
         }
     }
 
+    void VM::CmpFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid CmpFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                CmpGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                CmpGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::LtFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LtFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                LtGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                LtGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::LteFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LteFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                LteGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                LteGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::GtFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GtFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                GtGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                GtGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::GteFloating(int32_t lhs, int32_t rhs) {
+        StackSlot lhsSlot = GetStackSlot(lhs);
+        StackSlot rhsSlot = GetStackSlot(rhs);
+
+        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GteFloating() call, sizes of both operands must be the same!");
+
+        switch (lhsSlot.Size) {
+            case 4: {
+                GteGeneric<float>(lhs, rhs);
+                break;
+            }
+
+            case 8: {
+                GteGeneric<double>(lhs, rhs);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
     void VM::RunByteCode(OpCode* data, size_t count) {
         m_Program = data;
         m_ProgramSize = count;
+
+        RegisterLables();
 
         #define CASE_MATH(type) case OpCodeType::type: {     \
             OpCodeMath math = std::get<OpCodeMath>(op.Data); \
@@ -402,8 +666,8 @@ namespace BlackLua::Internal {
             break;                                           \
         }
 
-        for (size_t i = 0; i < m_ProgramSize; i++) {
-            OpCode& op = m_Program[i];
+        for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
+            OpCode& op = m_Program[m_ProgramCounter];
 
             switch (op.Type) {
                 case OpCodeType::Invalid: { BLUA_ASSERT(false, "Unreachable!"); break; }
@@ -459,14 +723,61 @@ namespace BlackLua::Internal {
                     break;
                 }
 
+                // Labels will already be handled by the time we get here
+                case OpCodeType::Label: break;
+
+                case OpCodeType::Jmp: {
+                    int32_t labelIdentifier = std::get<int32_t>(op.Data);
+
+                    BLUA_ASSERT(m_Labels.contains(labelIdentifier), "Trying to jump to an unknown label!");
+                    m_ProgramCounter = m_Labels.at(labelIdentifier);
+
+                    break;
+                }
+
+                case OpCodeType::Jt: {
+                    OpCodeJump jump = std::get<OpCodeJump>(op.Data);
+
+                    if (GetBool(jump.Slot) == true) {
+                        BLUA_ASSERT(m_Labels.contains(jump.Label), "Trying to jump to an unknown label!");
+                        m_ProgramCounter = m_Labels.at(jump.Label);
+                    }
+
+                    break;
+                }
+
+                case OpCodeType::Jf: {
+                    OpCodeJump jump = std::get<OpCodeJump>(op.Data);
+
+                    if (GetBool(jump.Slot) == false) {
+                        BLUA_ASSERT(m_Labels.contains(jump.Label), "Trying to jump to an unknown label!");
+                        m_ProgramCounter = m_Labels.at(jump.Label);
+                    }
+
+                    break;
+                }
+
                 CASE_MATH(AddIntegral);
                 CASE_MATH(SubIntegral);
                 CASE_MATH(MulIntegral);
                 CASE_MATH(DivIntegral);
+
+                CASE_MATH(CmpIntegral);
+                CASE_MATH(LtIntegral);
+                CASE_MATH(LteIntegral);
+                CASE_MATH(GtIntegral);
+                CASE_MATH(GteIntegral);
+
                 CASE_MATH(AddFloating);
                 CASE_MATH(SubFloating);
                 CASE_MATH(MulFloating);
                 CASE_MATH(DivFloating);
+
+                CASE_MATH(CmpFloating);
+                CASE_MATH(LtFloating);
+                CASE_MATH(LteFloating);
+                CASE_MATH(GtFloating);
+                CASE_MATH(GteFloating);
             }
         }
 
@@ -484,6 +795,21 @@ namespace BlackLua::Internal {
         } else {
             BLUA_ASSERT(false, "Slot cannot be 0!");
         }
+    }
+
+    void VM::RegisterLables() {
+        for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
+            OpCode& op = m_Program[m_ProgramCounter];
+
+            if (op.Type == OpCodeType::Label) {
+                int32_t labelIdentifier = std::get<int32_t>(op.Data);
+
+                m_Labels[labelIdentifier] = m_ProgramCounter;
+                m_LabelCount++;
+            }
+        }
+
+        m_ProgramCounter = 0; // Reset the program counter so the normal execution happens from the start
     }
 
 } // namespace BlackLua::Internal

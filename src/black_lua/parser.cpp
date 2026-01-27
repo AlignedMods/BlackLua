@@ -265,14 +265,14 @@ namespace BlackLua::Internal {
             case TokenType::False: {
                 Consume();
 
-                return CreateNode(NodeType::Bool, Allocate<NodeBool>(false));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Bool, VariableType::Bool, Allocate<NodeBool>(false)));
                 break;
             }
 
             case TokenType::True: {
                 Consume();
 
-                return CreateNode(NodeType::Bool, Allocate<NodeBool>(true));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Bool, VariableType::Bool, Allocate<NodeBool>(true)));
                 break;
             }
 
@@ -282,7 +282,7 @@ namespace BlackLua::Internal {
                 int8_t ch = static_cast<int8_t>(value.Data[0]);
                 
                 NodeChar* node = Allocate<NodeChar>(ch);
-                return CreateNode(NodeType::Char, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Char, VariableType::Char, node));
                 break;
             }
 
@@ -298,7 +298,7 @@ namespace BlackLua::Internal {
 
                 NodeInt* node = Allocate<NodeInt>(num, false);
                 
-                return CreateNode(NodeType::Int, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Int, VariableType::Int, node));
                 break;
             }
 
@@ -314,7 +314,7 @@ namespace BlackLua::Internal {
 
                 NodeInt* node = Allocate<NodeInt>(static_cast<int32_t>(num), true);
                 
-                return CreateNode(NodeType::Int, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Int, VariableType::Int, node));
                 break;
             }
 
@@ -324,7 +324,7 @@ namespace BlackLua::Internal {
                 int64_t num = std::stoll(std::string(value.Data));
                 NodeLong* node = Allocate<NodeLong>(num, false);
                 
-                return CreateNode(NodeType::Long, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, VariableType::Long, node));
                 break;
             }
 
@@ -334,7 +334,7 @@ namespace BlackLua::Internal {
                 uint64_t num = std::stoull(std::string(value.Data));
                 NodeLong* node = Allocate<NodeLong>(static_cast<int64_t>(num), true);
                 
-                return CreateNode(NodeType::Long, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, VariableType::Long, node));
                 break;
             }
 
@@ -344,7 +344,7 @@ namespace BlackLua::Internal {
                 float f = std::stof(std::string(value.Data));
                 NodeFloat* node = Allocate<NodeFloat>(f);
                 
-                return CreateNode(NodeType::Float, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Float, VariableType::Float, node));
                 break;
             }
 
@@ -354,7 +354,7 @@ namespace BlackLua::Internal {
                 double d = std::stod(std::string(value.Data));
                 NodeDouble* node = Allocate<NodeDouble>(d);
                 
-                return CreateNode(NodeType::Double, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Double, VariableType::Double, node));
                 break;
             }
 
@@ -364,7 +364,7 @@ namespace BlackLua::Internal {
                 std::string_view str = value.Data;
                 NodeString* node = Allocate<NodeString>(str);
                 
-                return CreateNode(NodeType::String, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::String, VariableType::String, node));
                 break;
             }
 
@@ -420,7 +420,7 @@ namespace BlackLua::Internal {
 
                 Consume(); // Eat '}'
 
-                return CreateNode(NodeType::InitializerList, node);
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::InitializerList, VariableType::Invalid, node));
                 break;
             }
 
@@ -628,76 +628,88 @@ namespace BlackLua::Internal {
             std::cout << "NULL\n";
         } else {
             switch (n->Type) {
-                case NodeType::Bool: {
-                    NodeBool* b = std::get<NodeBool*>(n->Data);
+                case NodeType::Constant: {
+                    NodeConstant* constant = std::get<NodeConstant*>(n->Data);
 
-                    if (b->Value) {
-                        std::cout << "Bool, Value: true\n";
-                    } else {
-                        std::cout << "Bool, Value: false\n";
-                    }
+                    std::cout << "Constant, Value: \n";
+                    ident.append(indentation + 4, ' ');
+                    std::cout << ident;
 
-                    break;
-                }
+                    switch (constant->Type) {
+                        case NodeType::Bool: {
+                            NodeBool* b = std::get<NodeBool*>(constant->Data);
 
-                case NodeType::Int: {
-                    NodeInt* i = std::get<NodeInt*>(n->Data);
+                            if (b->Value) {
+                                std::cout << "Bool, Value: true\n";
+                            } else {
+                                std::cout << "Bool, Value: false\n";
+                            }
 
-                    if (i->Unsigned) {  
-                        std::cout << "Int, Value: " << static_cast<uint32_t>(i->Int) << ", Signed: false \n";
-                    } else {
-                        std::cout << "Int, Value: " << i->Int << ", Signed: true \n";
-                    }
+                            break;
+                        }
 
-                    break;
-                }
+                        case NodeType::Int: {
+                            NodeInt* i = std::get<NodeInt*>(constant->Data);
 
-                case NodeType::Long: {
-                    NodeLong* l = std::get<NodeLong*>(n->Data);
+                            if (i->Unsigned) {  
+                                std::cout << "Int, Value: " << static_cast<uint32_t>(i->Int) << ", Signed: false \n";
+                            } else {
+                                std::cout << "Int, Value: " << i->Int << ", Signed: true \n";
+                            }
 
-                    if (l->Unsigned) {  
-                        std::cout << "Long, Value: " << static_cast<uint64_t>(l->Long) << ", Signed: false \n";
-                    } else {
-                        std::cout << "Long, Value: " << l->Long << ", Signed: true \n";
-                    }
+                            break;
+                        }
 
-                    break;
-                }
+                        case NodeType::Long: {
+                            NodeLong* l = std::get<NodeLong*>(constant->Data);
 
-                case NodeType::Float: {
-                    NodeFloat* f = std::get<NodeFloat*>(n->Data);
+                            if (l->Unsigned) {  
+                                std::cout << "Long, Value: " << static_cast<uint64_t>(l->Long) << ", Signed: false \n";
+                            } else {
+                                std::cout << "Long, Value: " << l->Long << ", Signed: true \n";
+                            }
 
-                    // For floating point numbers we want all the precision which is why we resort to printf
-                    // This is possible do with std::cout, but is rather clunky. std::format could work nicely here but i don't
-                    // want to depend on c++20. fmt::format is better than std::format but i don't want to drag unnecessary dependencies
-                    // Even though fmt is a really nice library so we might end up using it at one point
-                    printf("Float, Value: %.5f\n", f->Float);
+                            break;
+                        }
 
-                    break;
-                }
+                        case NodeType::Float: {
+                            NodeFloat* f = std::get<NodeFloat*>(constant->Data);
 
-                case NodeType::Double: {
-                    NodeDouble* d = std::get<NodeDouble*>(n->Data);
+                            // For floating point numbers we want all the precision which is why we resort to printf
+                            // This is possible do with std::cout, but is rather clunky. std::format could work nicely here but i don't
+                            // want to depend on c++20. fmt::format is better than std::format but i don't want to drag unnecessary dependencies
+                            // Even though fmt is a really nice library so we might end up using it at one point
+                            printf("Float, Value: %.5f\n", f->Float);
 
-                    printf("Double, Value: %.15f\n", d->Double);
+                            break;
+                        }
 
-                    break;
-                }
+                        case NodeType::Double: {
+                            NodeDouble* d = std::get<NodeDouble*>(constant->Data);
 
-                case NodeType::String: {
-                    NodeString* str = std::get<NodeString*>(n->Data);
+                            printf("Double, Value: %.15f\n", d->Double);
 
-                    std::cout << "String, Value: \"" << str->String << "\"\n";
+                            break;
+                        }
 
-                    break;
-                }
+                        case NodeType::String: {
+                            NodeString* str = std::get<NodeString*>(constant->Data);
 
-                case NodeType::InitializerList: {
-                    NodeInitializerList* list = std::get<NodeInitializerList*>(n->Data);
+                            std::cout << "String, Value: \"" << str->String << "\"\n";
 
-                    std::cout << "InitializerList, Values: \n";
-                    for (size_t i = 0; i < list->Nodes.Size; i++) {
-                        PrintNode(list->Nodes.Items[i], indentation + 4);
+                            break;
+                        }
+
+                        case NodeType::InitializerList: {
+                            NodeInitializerList* list = std::get<NodeInitializerList*>(constant->Data);
+
+                            std::cout << "InitializerList, Values: \n";
+                            for (size_t i = 0; i < list->Nodes.Size; i++) {
+                                PrintNode(list->Nodes.Items[i], indentation + 4);
+                            }
+
+                            break;
+                        }
                     }
 
                     break;

@@ -11,15 +11,13 @@ extern "C" {
 
 namespace BlackLua {
 
-    LuaContext LuaContext::Create() {
-        LuaContext ctx{};
-        ctx.m_State = luaL_newstate();
-        luaL_openlibs(reinterpret_cast<lua_State*>(ctx.m_State));
+    Context Context::Create() {
+        Context ctx{};
         
         return ctx;
     }
 
-    CompiledSource LuaContext::CompileFile(const std::string& path) {
+    CompiledSource Context::CompileFile(const std::string& path) {
         std::ifstream file(path);
         if (!file.is_open()) {
             std::cerr << "Failed to open file: " << path << "!\n";
@@ -34,7 +32,7 @@ namespace BlackLua {
         return CompileString(contents);
     }
 
-    CompiledSource LuaContext::CompileString(const std::string& source) {
+    CompiledSource Context::CompileString(const std::string& source) {
         CompiledSource src{};
 
         BlackLua::Internal::Lexer l = BlackLua::Internal::Lexer::Parse(source);
@@ -47,43 +45,29 @@ namespace BlackLua {
             p.PrintAST();
         
             BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
-            // if (c.IsValid()) {
-            //     BlackLua::Internal::Emitter e = BlackLua::Internal::Emitter::Emit(c.GetCheckedNodes());
-            //     src.Compiled = e.GetOutput();
-            // } else {
-            //     valid = false;
-            // }
+            if (c.IsValid()) {
+                BlackLua::Internal::Emitter e = BlackLua::Internal::Emitter::Emit(c.GetCheckedNodes());
+                src.OpCodes = e.GetOpCodes();
+            } else {
+                valid = false;
+            }
         } else {
             valid = false;
         }
 
         if (!valid) {
             std::cerr << "No output generated.";
-            src.Compiled = "";
         }
 
         return src;
     }
 
-    void LuaContext::Run(const CompiledSource& compiled, const std::string& module) {
-        BLUA_ASSERT(m_State, "Context is not valid!");
-
-        // Set the current module to be this
-        lua_pushstring(reinterpret_cast<lua_State*>(m_State), module.c_str());
-
-        if (luaL_dostring(reinterpret_cast<lua_State*>(m_State), compiled.Compiled.c_str()) != LUA_OK) {
-            const char* errorMsg = lua_tostring(reinterpret_cast<lua_State*>(m_State), -1);
-
-            std::cerr << "Lua error occured during LuaContext::Run: " << errorMsg << '\n';
-
-            lua_pop(reinterpret_cast<lua_State*>(m_State), 1);
-        }
-
-        m_Modules[module] = luaL_ref(reinterpret_cast<lua_State*>(m_State), LUA_REGISTRYINDEX); // Save the executed source code
+    void Context::Run(const CompiledSource& compiled, const std::string& module) {
+        m_VM.RunByteCode(compiled.OpCodes.data(), compiled.OpCodes.size());
     }
 
-    void LuaContext::SetActiveModule(const std::string& module) {
-        lua_rawgeti(reinterpret_cast<lua_State*>(m_State), LUA_REGISTRYINDEX, m_Modules.at(module));
+    Internal::VM& Context::GetVM() {
+        return m_VM;
     }
 
 } // namespace BlackLua

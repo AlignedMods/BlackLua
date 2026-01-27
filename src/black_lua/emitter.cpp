@@ -16,6 +16,14 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::EmitImpl() {
+        // Emit the constants first
+        while (Peek()) {
+            EmitConstant(Consume());
+        }
+
+        // Reset the index
+        m_Index = 0;
+
         while (Peek()) {
             EmitNode(Consume());
         }
@@ -35,100 +43,121 @@ namespace BlackLua::Internal {
         return m_Nodes.at(m_Index++);
     }
 
-    void Emitter::EmitNodeVarDecl(Node* node) {
-        NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
+    void Emitter::EmitConstant(Node* node) {
+        switch (node->Type) {
+            case NodeType::Constant: {
+                NodeConstant* constant = std::get<NodeConstant*>(node->Data);
 
-        OpCode op;
-        op.Type = OpCodeType::PushBytes;
-        op.Data = static_cast<int32_t>(GetTypeSize(decl->Type));
-        m_OpCodes.push_back(op);
-        if (decl->Value) {
-            EmitNodeExpression(decl->Value);
+                m_SlotCount++;
+
+                m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(constant->VarType)));
+                switch (constant->Type) {
+                    case NodeType::Bool: {
+                        NodeBool* b = std::get<NodeBool*>(std::get<NodeConstant*>(node->Data)->Data);
+                    
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &b->Value));
+                    
+                        break;
+                    }
+                    
+                    case NodeType::Char: {
+                        NodeChar* c = std::get<NodeChar*>(std::get<NodeConstant*>(node->Data)->Data);
+                    
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &c->Char));
+                    
+                        break;
+                    }
+                    
+                    case NodeType::Int: {
+                        NodeInt* i = std::get<NodeInt*>(std::get<NodeConstant*>(node->Data)->Data);
+                    
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &i->Int));
+                    
+                        break;
+                    }
+                    
+                    case NodeType::Long: {
+                        NodeLong* l = std::get<NodeLong*>(std::get<NodeConstant*>(node->Data)->Data);
+                    
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &l->Long));
+                    
+                        break;
+                    }
+                    
+                    case NodeType::Float: {
+                        NodeFloat* f = std::get<NodeFloat*>(std::get<NodeConstant*>(node->Data)->Data);
+                    
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &f->Float));
+                    
+                        break;
+                    }
+                    
+                    case NodeType::Double: {
+                        NodeDouble* d = std::get<NodeDouble*>(std::get<NodeConstant*>(node->Data)->Data);
+                    
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &d->Double));
+                    
+                        break;
+                    }
+                }
+
+                m_ConstantMap[node] = m_SlotCount;
+
+                break;
+            }
+
+            case NodeType::BinExpr: {
+                NodeBinExpr* expr = std::get<NodeBinExpr*>(node->Data);
+
+                EmitConstant(expr->LHS);
+                EmitConstant(expr->RHS);
+                break;
+            }
+
+            case NodeType::VarDecl: {
+                NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
+
+                if (decl->Value) {
+                    EmitConstant(decl->Value);
+                }
+            }
         }
     }
 
-    void Emitter::EmitNodeExpression(Node* node, bool allocate) {
+    void Emitter::EmitNodeVarDecl(Node* node) {
+        NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
+
+        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(decl->Type)));
+        m_SlotCount++;
+
+        m_VariableMap[std::string(decl->Identifier)] = m_SlotCount - 1;
+
+        if (decl->Value) {
+            EmitNodeExpression(decl->Value, -1);
+        }
+    }
+
+    void Emitter::EmitNodeExpression(Node* node, int32_t slot) {
         switch (node->Type) {
-            // case NodeType::Bool: {
-            //     if (allocate) {
-            //         m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<size_t>(1));
-            //     }
-            //     NodeBool* nbool = std::get<NodeBool*>(node->Data);
-            // 
-            //     m_OpCodes.emplace_back(OpCodeType::StoreLocal)
-            // 
-            //     break;
-            // }
-            //  case NodeType::Int: {
-            //     NodeInt* i = std::get<NodeInt*>(node->Data);
-            // 
-            //     m_Output += std::to_string(i->Int);
-            //     break;
-            // }
-            // case NodeType::Number: {
-            //     NodeNumber* number = std::get<NodeNumber*>(node->Data);
-            // 
-            //     m_Output += std::to_string(number->Number);
-            //     break;
-            // }
-            // case NodeType::String: {
-            //     NodeString* string = std::get<NodeString*>(node->Data);
-            // 
-            //     m_Output += '"';
-            //     m_Output += string->String;
-            //     m_Output += '"';
-            //     break;
-            // }
-            // case NodeType::InitializerList: {
-            //     NodeInitializerList* initList = std::get<NodeInitializerList*>(node->Data);
-            // 
-            //     m_Output += "{ ";
-            // 
-            //     // for (size_t i = 0; i < initList->Nodes.size(); i++) {
-            //     //     EmitNode(initList->Nodes.at(i));
-            //     // 
-            //     //     if (i != initList->Nodes.size() - 1) {
-            //     //         m_Output += ", ";
-            //     //     }
-            //     // }
-            // 
-            //     m_Output += " }";
-            // 
-            //     break;
-            // }
-            // case NodeType::BinExpr: {
-            //     NodeBinExpr* binExpr = std::get<NodeBinExpr*>(node->Data);
-            // 
-            //     EmitNodeExpression(binExpr->LHS);
-            // 
-            //     if (binExpr->Type == BinExprType::Add) {
-            //         m_Output += " + ";
-            //     } else if (binExpr->Type == BinExprType::Sub) {
-            //         m_Output += " - ";
-            //     } else if (binExpr->Type == BinExprType::Mul) {
-            //         m_Output += " * ";
-            //     } else if (binExpr->Type == BinExprType::Div) {
-            //         m_Output += " / ";
-            //     } else if (binExpr->Type == BinExprType::Less) {
-            //         m_Output += " < ";
-            //     } else if (binExpr->Type == BinExprType::LessOrEq) {
-            //         m_Output += " <= ";
-            //     } else if (binExpr->Type == BinExprType::Greater) {
-            //         m_Output += " > ";
-            //     } else if (binExpr->Type == BinExprType::GreaterOrEq) {
-            //         m_Output += " >= ";
-            //     }
-            // 
-            //     EmitNodeExpression(binExpr->RHS);
-            //     break;
-            // }
-            default: BLUA_ASSERT(false, "Unreachable!"); break;
+            case NodeType::Constant: {
+                m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(slot, m_ConstantMap.at(node)));
+                break;
+            }
+
+            case NodeType::VarRef: {
+                NodeVarRef* ref = std::get<NodeVarRef*>(node->Data);
+
+                m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(slot, m_VariableMap.at(std::string(ref->Identifier))));
+            }
         }
     }
 
     size_t Emitter::GetTypeSize(VariableType type) {
         switch (type) {
             case VariableType::Void: return 0;
+            case VariableType::Bool: return 1;
+            case VariableType::Char: return 1;
+            case VariableType::Short: return 2;
             case VariableType::Int: return 4;
             case VariableType::Float: return 4;
             case VariableType::Long: return 8;

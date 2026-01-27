@@ -192,13 +192,24 @@ namespace BlackLua::Internal {
 
     VariableType TypeChecker::GetNodeType(Node* node) {
         switch (node->Type) {
-            case NodeType::Bool: return VariableType::Bool;
-            case NodeType::Char: return VariableType::Char;
-            case NodeType::Int: return VariableType::Int;
-            case NodeType::Long: return VariableType::Long;
-            case NodeType::Float: return VariableType::Float;
-            case NodeType::Double: return VariableType::Double;
-            case NodeType::String: return VariableType::String;
+            case NodeType::Constant: {
+                NodeConstant* constant = std::get<NodeConstant*>(node->Data);
+                VariableType type = VariableType::Invalid;
+
+                switch (constant->Type) {
+                    case NodeType::Bool:   type = VariableType::Bool; break;
+                    case NodeType::Char:   type = VariableType::Char; break;
+                    case NodeType::Int:    type = VariableType::Int; break;
+                    case NodeType::Long:   type = VariableType::Long; break;
+                    case NodeType::Float:  type = VariableType::Float; break;
+                    case NodeType::Double: type = VariableType::Double; break;
+                    case NodeType::String: type = VariableType::String; break;
+                }
+
+                constant->VarType = type;
+
+                return type;
+            }
 
             case NodeType::VarRef: {
                 NodeVarRef* ref = std::get<NodeVarRef*>(node->Data);

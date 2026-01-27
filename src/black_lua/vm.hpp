@@ -25,6 +25,9 @@ namespace BlackLua::Internal {
         Jt, // Perform a jump if the value at the specified slot is true (value must be a boolean)
         Jf, // Perform a jump if the value at the specified slot is false (value must be a boolean)
 
+        Call, // Performs a jump and sets up a scope
+        Ret, // Performs a jump to the current scopes return address, then pops the current scope
+
         AddIntegral,
         SubIntegral,
         MulIntegral,
@@ -135,7 +138,7 @@ namespace BlackLua::Internal {
         void GteFloating(int32_t lhs, int32_t rhs);
 
         // Run an array of op codes in the VM, executing each operations one at a time
-        void RunByteCode(OpCode* data, size_t count);
+        void RunByteCode(const OpCode* data, size_t count);
 
         // NOTE: The "slot" parameter can be either negative or positive
         // If it's negative, it accesses from the top of stack backwards,
@@ -311,10 +314,12 @@ namespace BlackLua::Internal {
             Scope* Previous = nullptr;
             size_t Offset = 0;
             size_t SlotOffset = 0;
+            size_t ReturnAddress = SIZE_MAX;
         };
         Scope* m_CurrentScope = nullptr;
+        size_t m_CurrentReturnAdress = SIZE_MAX;
 
-        OpCode* m_Program = nullptr;
+        const OpCode* m_Program = nullptr;
         size_t m_ProgramSize = 0;
         size_t m_ProgramCounter = 0;
 

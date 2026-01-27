@@ -10,24 +10,26 @@
 namespace BlackLua {
 
     struct CompiledSource {
-        std::string Compiled;
+        std::vector<Internal::OpCode> OpCodes;
     };
 
-    struct LuaContext {
-        static LuaContext Create();
+    struct Context {
+        static Context Create();
 
         CompiledSource CompileFile(const std::string& path);
         CompiledSource CompileString(const std::string& source);
 
-        // Run the compiled string in the lua interpreter (also stores the module)
+        // Run the compiled string in the VM
         void Run(const CompiledSource& compiled, const std::string& module);
+
+        Internal::VM& GetVM();
 
         // Sets the current active module
         void SetActiveModule(const std::string& module);
 
     private:
-        void* m_State = nullptr; // Internal lua_State*
         std::unordered_map<std::string, int> m_Modules;
+        Internal::VM m_VM;
     };
 
     namespace Internal {
@@ -240,6 +242,7 @@ namespace BlackLua {
             Double,
             String,
             InitializerList,
+            Constant,
 
             Scope,
 
@@ -419,6 +422,12 @@ namespace BlackLua {
             NodeList Nodes{};
         };
 
+        struct NodeConstant {
+            NodeType Type = NodeType::Bool;
+            VariableType VarType = VariableType::Bool;
+            std::variant<NodeBool*, NodeChar*, NodeInt*, NodeLong*, NodeFloat*, NodeDouble*, NodeString*, NodeInitializerList*> Data;
+        };
+
         struct NodeScope {
             NodeList Nodes{};
         };
@@ -511,7 +520,7 @@ namespace BlackLua {
 
         struct Node {
             NodeType Type = NodeType::Bool;
-            std::variant<NodeBool*, NodeChar*, NodeInt*, NodeLong*, NodeFloat*, NodeDouble*, NodeString*, NodeInitializerList*, 
+            std::variant<NodeConstant*, 
                          NodeScope*,
                          NodeVarDecl*, NodeVarRef*,
                          NodeFunctionDecl*, NodeFunctionImpl*,
@@ -681,9 +690,11 @@ namespace BlackLua {
             Node* Peek(size_t amount = 0);
             Node* Consume();
 
+            void EmitConstant(Node* node);
+
             void EmitNodeVarDecl(Node* node);
 
-            void EmitNodeExpression(Node* node, bool allocate = false);
+            void EmitNodeExpression(Node* node, int32_t slot);
 
             size_t GetTypeSize(VariableType type);
 
@@ -693,6 +704,11 @@ namespace BlackLua {
             OpCodes m_OpCodes;
             size_t m_Index = 0;
             Parser::Nodes m_Nodes;
+
+            size_t m_SlotCount = 0;
+            std::unordered_map<Node*, int32_t> m_ConstantMap;
+
+            std::unordered_map<std::string, int32_t> m_VariableMap;
         };
 
     } // namespace Internal

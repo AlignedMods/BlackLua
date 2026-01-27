@@ -654,7 +654,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::RunByteCode(OpCode* data, size_t count) {
+    void VM::RunByteCode(const OpCode* data, size_t count) {
         m_Program = data;
         m_ProgramSize = count;
 
@@ -667,7 +667,7 @@ namespace BlackLua::Internal {
         }
 
         for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
-            OpCode& op = m_Program[m_ProgramCounter];
+            const OpCode& op = m_Program[m_ProgramCounter];
 
             switch (op.Type) {
                 case OpCodeType::Invalid: { BLUA_ASSERT(false, "Unreachable!"); break; }
@@ -757,6 +757,37 @@ namespace BlackLua::Internal {
                     break;
                 }
 
+                case OpCodeType::Call: {
+                    // Perform a jump
+                    int32_t labelIdentifier = std::get<int32_t>(op.Data);
+
+                    size_t pc = m_ProgramCounter;
+
+                    BLUA_ASSERT(m_Labels.contains(labelIdentifier), "Trying to jump to an unknown label!");
+                    m_ProgramCounter = m_Labels.at(labelIdentifier);
+
+                    PushScope();
+                    m_CurrentScope->ReturnAddress = pc;
+
+                    break;
+                }
+
+                case OpCodeType::Ret: {
+                    BLUA_ASSERT(m_CurrentScope, "Trying to return out of no scope!");
+
+                    // Keep popping scopes until we find the function scope
+                    while (m_CurrentScope->ReturnAddress == SIZE_MAX) {
+                        BLUA_ASSERT(m_CurrentScope->Previous, "Trying return out of non function scope!");
+
+                        PopScope();
+                    }
+
+                    m_ProgramCounter = m_CurrentScope->ReturnAddress;
+                    PopScope();
+
+                    break;
+                }
+
                 CASE_MATH(AddIntegral);
                 CASE_MATH(SubIntegral);
                 CASE_MATH(MulIntegral);
@@ -790,7 +821,7 @@ namespace BlackLua::Internal {
 
              return m_StackSlots[m_StackSlotPointer + slot];
         } else if (slot > 0) {
-            BLUA_ASSERT(slot < m_StackSlotPointer, "Out of range slot!");
+            BLUA_ASSERT((slot - 1) < m_StackSlotPointer, "Out of range slot!");
             return m_StackSlots[slot - 1];
         } else {
             BLUA_ASSERT(false, "Slot cannot be 0!");
@@ -799,7 +830,7 @@ namespace BlackLua::Internal {
 
     void VM::RegisterLables() {
         for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
-            OpCode& op = m_Program[m_ProgramCounter];
+            const OpCode& op = m_Program[m_ProgramCounter];
 
             if (op.Type == OpCodeType::Label) {
                 int32_t labelIdentifier = std::get<int32_t>(op.Data);

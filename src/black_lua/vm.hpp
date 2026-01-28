@@ -28,6 +28,9 @@ namespace BlackLua::Internal {
         Call, // Performs a jump and sets up a scope
         Ret, // Performs a jump to the current scopes return address, then pops the current scope
 
+        NegateIntegral,
+        NegateFloating,
+
         AddIntegral,
         SubIntegral,
         MulIntegral,
@@ -95,6 +98,8 @@ namespace BlackLua::Internal {
         void PushScope();
         // Removes the current scope and goes back to the previous one (if there is one)
         void PopScope();
+
+        void Call(int32_t label);
         
         void StoreBool(int32_t slot, bool b);
         void StoreChar(int32_t slot, int8_t c);
@@ -114,6 +119,9 @@ namespace BlackLua::Internal {
         int64_t GetLong(int32_t slot);
         float GetFloat(int32_t slot);
         double GetDouble(int32_t slot);
+
+        void NegateIntegral(int32_t val);
+        void NegateFloating(int32_t val);
 
         void AddIntegral(int32_t lhs, int32_t rhs);
         void SubIntegral(int32_t lhs, int32_t rhs);
@@ -139,6 +147,7 @@ namespace BlackLua::Internal {
 
         // Run an array of op codes in the VM, executing each operations one at a time
         void RunByteCode(const OpCode* data, size_t count);
+        void Run();
 
         // NOTE: The "slot" parameter can be either negative or positive
         // If it's negative, it accesses from the top of stack backwards,
@@ -302,6 +311,20 @@ namespace BlackLua::Internal {
             StackSlot newSlot = GetStackSlot(-1);
 
             memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+        }
+
+        template <typename T>
+        void NegateGeneric(int32_t value) {
+            StackSlot __value = GetStackSlot(value);
+            T v{};
+            memcpy(&v, &m_Stack[__value.Index], __value.Size);
+
+            v = -v;
+
+            PushBytes(__value.Size);
+            StackSlot newSlot = GetStackSlot(-1);
+
+            memcpy(&m_Stack[newSlot.Index], &v, newSlot.Size);
         }
 
     private:

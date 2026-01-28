@@ -6,11 +6,13 @@ int main(int argc, char** argv) {
     BlackLua::SetupDefaultAllocator();
 
     BlackLua::Context context = BlackLua::Context::Create();
+    auto& vm = context.GetVM();
 
     BlackLua::CompiledSource compiled = context.CompileFile("test.bl");
     context.Run(compiled, "test");
-
-    BLUA_FORMAT_PRINT("{}, {}", context.GetVM().GetDouble(-1), context.GetVM().GetDouble(-2));
+    vm.Call(0);
+    
+    BLUA_FORMAT_PRINT("{}", context.GetVM().GetInt(-1));
 
     return 0;
 }

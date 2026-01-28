@@ -151,7 +151,7 @@ namespace BlackLua::Internal {
         } else if (t == NodeType::Return) {
             CheckNodeReturn(node);
         } else if (t == NodeType::BinExpr) {
-            CheckNodeExpression(VariableType::Invalid, node);
+            GetNodeType(node);
         }
     }
 
@@ -295,6 +295,8 @@ namespace BlackLua::Internal {
                 NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(node->Data);
                 VariableType type = GetNodeType(expr->Expression);
 
+                expr->VarType = type;
+
                 return type;
             }
 
@@ -306,6 +308,8 @@ namespace BlackLua::Internal {
                 if (typeRHS != typeLHS) {
                     ErrorMismatchedTypes(typeLHS, typeRHS);
                 }
+
+                expr->VarType = typeLHS;
 
                 switch (expr->Type) {
                     case BinExprType::Eq:

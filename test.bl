@@ -1,2 +1,3 @@
-double ok = 4.4;
-double ok2 = ok;
+int func() {
+    return 5 + 5;
+}

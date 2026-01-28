@@ -510,12 +510,14 @@ namespace BlackLua {
         struct NodeUnaryExpr {
             Node* Expression = nullptr;
             UnaryExprType Type = UnaryExprType::Invalid;
+            VariableType VarType = VariableType::Invalid;
         };
 
         struct NodeBinExpr {
             Node* LHS = nullptr;
             Node* RHS = nullptr;
             BinExprType Type = BinExprType::Invalid;
+            VariableType VarType = VariableType::Invalid;
         };
 
         struct Node {
@@ -692,11 +694,18 @@ namespace BlackLua {
 
             void EmitConstant(Node* node);
 
-            void EmitNodeVarDecl(Node* node);
+            void EmitNodeScope(Node* node);
 
-            void EmitNodeExpression(Node* node, int32_t slot);
+            void EmitNodeVarDecl(Node* node);
+            void EmitNodeFunctionImpl(Node* node);
+
+            void EmitNodeReturn(Node* node);
+
+            int32_t EmitNodeExpression(Node* node);
 
             size_t GetTypeSize(VariableType type);
+
+            int32_t CreateLabel();
 
             void EmitNode(Node* node);
 
@@ -706,9 +715,18 @@ namespace BlackLua {
             Parser::Nodes m_Nodes;
 
             size_t m_SlotCount = 0;
+            size_t m_LabelCount = 0;
             std::unordered_map<Node*, int32_t> m_ConstantMap;
 
-            std::unordered_map<std::string, int32_t> m_VariableMap;
+            std::unordered_map<std::string, int32_t> m_DeclaredSymbols;
+
+            struct Scope {
+                Scope* Parent = nullptr;
+                size_t Start = 0;
+                std::unordered_map<std::string, int32_t> DeclaredSymbols;
+            };
+
+            Scope* m_CurrentScope = nullptr;
         };
 
     } // namespace Internal

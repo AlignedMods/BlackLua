@@ -50,6 +50,19 @@ namespace BlackLua::Internal {
         m_CurrentScope = m_CurrentScope->Previous;
     }
 
+    void VM::Call(int32_t label) {
+        // Perform a jump
+        size_t pc = m_ProgramCounter;
+
+        BLUA_ASSERT(m_Labels.contains(label), "Trying to jump to an unknown label!");
+        m_ProgramCounter = m_Labels.at(label) + 1;
+
+        PushScope();
+        m_CurrentScope->ReturnAddress = pc;
+
+        Run();
+    }
+
     void VM::StoreBool(int32_t slot, bool b) {
         StackSlot s = GetStackSlot(slot);
         
@@ -184,6 +197,52 @@ namespace BlackLua::Internal {
         double d = 0;
         memcpy(&d, &m_Stack[s.Index], 8);
         return d;
+    }
+
+    void VM::NegateIntegral(int32_t val) {
+        StackSlot value = GetStackSlot(val);
+
+        switch (value.Size) {
+            case 1: {
+                NegateGeneric<int8_t>(val);
+                break;
+            }
+
+            case 2: {
+                NegateGeneric<int16_t>(val);
+                break;
+            }
+
+            case 4: {
+                NegateGeneric<int32_t>(val);
+                break;
+            }
+
+            case 8: {
+                NegateGeneric<int64_t>(val);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
+    }
+
+    void VM::NegateFloating(int32_t val) {
+        StackSlot value = GetStackSlot(val);
+
+        switch (value.Size) {
+            case 4: {
+                NegateGeneric<float>(val);
+                break;
+            }
+
+            case 8: {
+                NegateGeneric<double>(val);
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
+        }
     }
 
     void VM::AddIntegral(int32_t lhs, int32_t rhs) {
@@ -660,6 +719,12 @@ namespace BlackLua::Internal {
 
         RegisterLables();
 
+        Run();
+    }
+
+    void VM::Run() {
+        BLUA_FORMAT_PRINT("Running code!");
+
         #define CASE_MATH(type) case OpCodeType::type: {     \
             OpCodeMath math = std::get<OpCodeMath>(op.Data); \
             type(math.LHSSlot, math.RHSSlot);                \
@@ -723,8 +788,8 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                // Labels will already be handled by the time we get here
-                case OpCodeType::Label: break;
+                // When we encounter a label, instantly stop execution
+                case OpCodeType::Label: m_ProgramCounter = m_ProgramSize - 1; break;
 
                 case OpCodeType::Jmp: {
                     int32_t labelIdentifier = std::get<int32_t>(op.Data);
@@ -760,14 +825,7 @@ namespace BlackLua::Internal {
                 case OpCodeType::Call: {
                     // Perform a jump
                     int32_t labelIdentifier = std::get<int32_t>(op.Data);
-
-                    size_t pc = m_ProgramCounter;
-
-                    BLUA_ASSERT(m_Labels.contains(labelIdentifier), "Trying to jump to an unknown label!");
-                    m_ProgramCounter = m_Labels.at(labelIdentifier);
-
-                    PushScope();
-                    m_CurrentScope->ReturnAddress = pc;
+                    Call(labelIdentifier);
 
                     break;
                 }
@@ -785,6 +843,20 @@ namespace BlackLua::Internal {
                     m_ProgramCounter = m_CurrentScope->ReturnAddress;
                     PopScope();
 
+                    break;
+                }
+
+                case OpCodeType::NegateIntegral: {
+                    int32_t slot = std::get<int32_t>(op.Data);
+
+                    NegateIntegral(slot);
+                    break;
+                }
+
+                case OpCodeType::NegateFloating: {
+                    int32_t slot = std::get<int32_t>(op.Data);
+
+                    NegateFloating(slot);
                     break;
                 }
 
@@ -817,7 +889,7 @@ namespace BlackLua::Internal {
 
     StackSlot VM::GetStackSlot(int32_t slot) {
         if (slot < 0) {
-            BLUA_ASSERT(m_StackSlotPointer > m_StackSlotPointer + slot, "Out of range slot!");
+             BLUA_ASSERT(m_StackSlotPointer + slot >= 0, "Out of range slot!");
 
              return m_StackSlots[m_StackSlotPointer + slot];
         } else if (slot > 0) {

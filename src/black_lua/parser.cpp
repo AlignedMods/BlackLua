@@ -632,7 +632,7 @@ namespace BlackLua::Internal {
                     NodeConstant* constant = std::get<NodeConstant*>(n->Data);
 
                     std::cout << "Constant, Value: \n";
-                    ident.append(indentation + 4, ' ');
+                    ident.append(4, ' ');
                     std::cout << ident;
 
                     switch (constant->Type) {

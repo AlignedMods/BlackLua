@@ -74,6 +74,8 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN("true", True);
                 BLUA_TOKEN("false", False);
 
+                BLUA_TOKEN("void", Void);
+
                 BLUA_TOKEN("bool", Bool);
 
                 BLUA_TOKEN("char", Char);

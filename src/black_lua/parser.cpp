@@ -491,6 +491,7 @@ namespace BlackLua::Internal {
         Token type = *Peek();
 
         switch (type.Type) {
+            case TokenType::Void: return VariableType::Void;
             case TokenType::Bool: return VariableType::Bool;
             case TokenType::Char: return VariableType::Char;
             case TokenType::Short: return VariableType::Short;

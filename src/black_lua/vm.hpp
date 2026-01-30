@@ -27,6 +27,7 @@ namespace BlackLua::Internal {
 
         Call, // Performs a jump and sets up a scope
         Ret, // Performs a jump to the current scopes return address, then pops the current scope
+        RetValue, // Does the same as ret but also copies a slot into the given return slot
 
         NegateIntegral,
         NegateFloating,
@@ -68,6 +69,11 @@ namespace BlackLua::Internal {
         int32_t Label = -1;
     };
 
+    struct OpCodeCall {
+        int32_t Label = -1;
+        int32_t ReturnSlot = 0;
+    };
+
     struct OpCodeMath {
         int32_t LHSSlot = 0;
         int32_t RHSSlot = 0;
@@ -75,12 +81,15 @@ namespace BlackLua::Internal {
 
     struct OpCode {
         OpCodeType Type = OpCodeType::Invalid;
-        std::variant<int32_t, OpCodeStore, OpCodeCopy, OpCodeJump, OpCodeMath> Data;
+        std::variant<int32_t, OpCodeStore, OpCodeCopy, OpCodeJump, OpCodeCall, OpCodeMath> Data;
+        std::string DebugData; // Optional debug data the compiler can provide
     };
 
     struct StackSlot {
         size_t Index = 0;
         size_t Size = 0;
+        bool ReadOnly = false;
+        bool Written = false; // Used only for the ReadOnly flag
     }; 
 
     class VM {
@@ -99,7 +108,7 @@ namespace BlackLua::Internal {
         // Removes the current scope and goes back to the previous one (if there is one)
         void PopScope();
 
-        void Call(int32_t label);
+        void Call(int32_t label, int32_t returnSlot);
         
         void StoreBool(int32_t slot, bool b);
         void StoreChar(int32_t slot, int8_t c);
@@ -338,6 +347,7 @@ namespace BlackLua::Internal {
             size_t Offset = 0;
             size_t SlotOffset = 0;
             size_t ReturnAddress = SIZE_MAX;
+            int32_t ReturnSlot = 0;
         };
         Scope* m_CurrentScope = nullptr;
         size_t m_CurrentReturnAdress = SIZE_MAX;

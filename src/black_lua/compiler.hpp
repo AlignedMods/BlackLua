@@ -95,6 +95,8 @@ namespace BlackLua {
             DoubleLit,
             StrLit,
 
+            Void,
+
             Bool,
 
             Char,
@@ -176,6 +178,8 @@ namespace BlackLua {
                 case TokenType::FloatLit: return "float-lit";
                 case TokenType::DoubleLit: return "double-lit";
                 case TokenType::StrLit: return "str-lit";
+
+                case TokenType::Void: return "void";
 
                 case TokenType::Bool: return "bool";
 
@@ -706,6 +710,8 @@ namespace BlackLua {
             size_t GetTypeSize(VariableType type);
 
             int32_t CreateLabel();
+            void PushBytes(size_t bytes, const std::string& debugData = {});
+            void IncrementStackSlotCount();
 
             void EmitNode(Node* node);
 
@@ -718,12 +724,17 @@ namespace BlackLua {
             size_t m_LabelCount = 0;
             std::unordered_map<Node*, int32_t> m_ConstantMap;
 
-            std::unordered_map<std::string, int32_t> m_DeclaredSymbols;
+            struct Declaration {
+                int32_t Index = 0;
+                size_t Size = 0;
+            };
+
+            std::unordered_map<std::string, Declaration> m_DeclaredSymbols;
 
             struct Scope {
                 Scope* Parent = nullptr;
-                size_t Start = 0;
-                std::unordered_map<std::string, int32_t> DeclaredSymbols;
+                size_t SlotCount = 0;
+                std::unordered_map<std::string, Declaration> DeclaredSymbols;
             };
 
             Scope* m_CurrentScope = nullptr;

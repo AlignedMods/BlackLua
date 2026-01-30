@@ -48,8 +48,8 @@ namespace BlackLua::Internal {
             case NodeType::Constant: {
                 NodeConstant* constant = std::get<NodeConstant*>(node->Data);
 
-                m_SlotCount++;
                 m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(constant->VarType)));
+                m_SlotCount++;
 
                 switch (constant->Type) {
                     case NodeType::Bool: {
@@ -176,14 +176,13 @@ namespace BlackLua::Internal {
 
         Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
         newScope->Parent = m_CurrentScope;
-        newScope->Start = m_SlotCount;
+        newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
         m_CurrentScope = newScope;
 
         for (size_t i = 0; i < scope->Nodes.Size; i++) {
             EmitNode(scope->Nodes.Items[i]);
         }
 
-        m_SlotCount = m_CurrentScope->Start;
         m_CurrentScope = m_CurrentScope->Parent;
         m_OpCodes.emplace_back(OpCodeType::PopScope);
     }
@@ -191,15 +190,28 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeVarDecl(Node* node) {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
 
-        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(decl->Type)));
-        m_SlotCount++;
+        PushBytes(GetTypeSize(decl->Type), std::format("Declaration of {}", decl->Identifier));
         auto& map = (m_CurrentScope != 0) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
-        map[std::string(decl->Identifier)] = m_SlotCount;
+
+        Declaration d;
+        IncrementStackSlotCount();
+        if (m_CurrentScope) {
+            d.Index = m_CurrentScope->SlotCount;
+        } else {
+            d.Index = m_SlotCount;   
+        }
+        d.Size = GetTypeSize(decl->Type);
+
+        map[std::string(decl->Identifier)] = d;
 
         if (decl->Value) {
            int32_t slot = EmitNodeExpression(decl->Value);
 
-           m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(m_SlotCount, slot));
+           if (m_CurrentScope) {
+               m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(d.Index - m_CurrentScope->SlotCount - 1, slot));
+           } else {
+               m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(d.Index, slot));
+           }
         }
     }
 
@@ -207,13 +219,16 @@ namespace BlackLua::Internal {
         NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(node->Data);
 
         std::string ident(impl->Name);
-        m_DeclaredSymbols[ident] = CreateLabel();
+        Declaration decl;
+        decl.Index = CreateLabel();
+        decl.Size = GetTypeSize(impl->ReturnType);
+        m_DeclaredSymbols[ident] = decl;
 
         // We don't want to create a new scope
         // The VM creates one for us at the call site
         Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
         newScope->Parent = m_CurrentScope;
-        newScope->Start = m_SlotCount;
+        newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
         m_CurrentScope = newScope;
 
         // Inject function arguments into the scope
@@ -227,6 +242,9 @@ namespace BlackLua::Internal {
             EmitNode(body->Nodes.Items[i]);
         }
 
+        // Just in case
+        m_OpCodes.emplace_back(OpCodeType::Ret);
+
         m_CurrentScope = m_CurrentScope->Parent;
     }
 
@@ -235,10 +253,7 @@ namespace BlackLua::Internal {
 
         int32_t slot = EmitNodeExpression(ret->Value);
 
-        // Because the current scope the return statement is in, we need to return the value to a specific spot
-        int32_t returnSlot = -1 - (m_SlotCount - m_CurrentScope->Start);
-        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(returnSlot, slot));
-        m_OpCodes.emplace_back(OpCodeType::Ret);
+        m_OpCodes.emplace_back(OpCodeType::RetValue, slot);
     }
 
     int32_t Emitter::EmitNodeExpression(Node* node) {
@@ -256,7 +271,7 @@ namespace BlackLua::Internal {
                 Scope* currentScope = m_CurrentScope;
                 while (currentScope) {
                     if (currentScope->DeclaredSymbols.contains(ident)) {
-                        return currentScope->DeclaredSymbols.at(ident);
+                        return currentScope->DeclaredSymbols.at(ident).Index - currentScope->SlotCount - 1;
                     }
 
                     currentScope = currentScope->Parent;
@@ -264,11 +279,25 @@ namespace BlackLua::Internal {
 
                 // Check global symbols
                 if (m_DeclaredSymbols.contains(std::string(ref->Identifier))) {
-                    return m_DeclaredSymbols.at(std::string(ref->Identifier));
+                    return m_DeclaredSymbols.at(std::string(ref->Identifier)).Index;
                 }
 
                 BLUA_ASSERT(false, "Unreachable!");
                 return 0;
+                break;
+            }
+
+            case NodeType::FunctionCallExpr: {
+                NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
+                Declaration decl = m_DeclaredSymbols.at(std::string(expr->Name));
+                if (decl.Size != 0) {
+                    PushBytes(decl.Size);
+                    IncrementStackSlotCount();
+                }
+
+                m_OpCodes.emplace_back(OpCodeType::Call, OpCodeCall(decl.Index, -1));
+                
+                return -1;
                 break;
             }
 
@@ -296,17 +325,17 @@ namespace BlackLua::Internal {
                     }
                 }
 
-                m_SlotCount++;
+                IncrementStackSlotCount();
 
-                return m_SlotCount;
+                return -1;
                 break;
             }
 
             case NodeType::BinExpr: {
                 NodeBinExpr* expr = std::get<NodeBinExpr*>(node->Data);
 
-                int32_t lhs = EmitNodeExpression(expr->LHS);
                 int32_t rhs = EmitNodeExpression(expr->RHS);
+                int32_t lhs = EmitNodeExpression(expr->LHS);
 
                 #define MATH_OP(op, vmOp) case BinExprType::op: { \
                     if (expr->VarType == VariableType::Bool || expr->VarType == VariableType::Char || expr->VarType == VariableType::Short || expr->VarType == VariableType::Int || expr->VarType == VariableType::Long) { \
@@ -314,6 +343,7 @@ namespace BlackLua::Internal {
                     } else if (expr->VarType == VariableType::Float || expr->VarType == VariableType::Double) { \
                         m_OpCodes.emplace_back(OpCodeType::vmOp##Floating, OpCodeMath(lhs, rhs)); \
                     } \
+                    IncrementStackSlotCount(); \
                     break; \
                 }
 
@@ -330,14 +360,13 @@ namespace BlackLua::Internal {
                     
                     case BinExprType::Eq: {
                         m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(lhs, rhs));
+                        return lhs;
 
                         break;
                     }
                 }
 
-                m_SlotCount++;
-
-                return m_SlotCount;
+                return -1;
                 break;
             }
         }
@@ -367,6 +396,14 @@ namespace BlackLua::Internal {
         return static_cast<int32_t>(m_LabelCount - 1);
     }
 
+    void Emitter::PushBytes(size_t bytes, const std::string& debugData) {
+        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(bytes), debugData);
+    }
+
+    void Emitter::IncrementStackSlotCount() {
+        (m_CurrentScope) ? m_CurrentScope->SlotCount++ : m_SlotCount++;
+    }
+
     void Emitter::EmitNode(Node* node) {
         NodeType t = node->Type;
 
@@ -374,6 +411,8 @@ namespace BlackLua::Internal {
             EmitNodeVarDecl(node);
         } else if (t == NodeType::FunctionImpl) {
             EmitNodeFunctionImpl(node);
+        } else if (t == NodeType::FunctionCallExpr) {
+            EmitNodeExpression(node);
         } else if (t == NodeType::BinExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::Scope) {

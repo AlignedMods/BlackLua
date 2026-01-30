@@ -1,3 +1,10 @@
-int func() {
-    return 5 + 5;
+int bar = 2;
+
+int foo() {
+    int x = 6;
+    return x;
+}
+
+void main() {
+    bar = foo();
 }

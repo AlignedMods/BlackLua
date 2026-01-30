@@ -50,7 +50,7 @@ namespace BlackLua::Internal {
         m_CurrentScope = m_CurrentScope->Previous;
     }
 
-    void VM::Call(int32_t label) {
+    void VM::Call(int32_t label, int32_t returnSlot) {
         // Perform a jump
         size_t pc = m_ProgramCounter;
 
@@ -59,6 +59,7 @@ namespace BlackLua::Internal {
 
         PushScope();
         m_CurrentScope->ReturnAddress = pc;
+        m_CurrentScope->ReturnSlot = returnSlot;
 
         Run();
     }
@@ -763,6 +764,7 @@ namespace BlackLua::Internal {
                 case OpCodeType::Store: {
                     OpCodeStore store = std::get<OpCodeStore>(op.Data);
                     StackSlot s = GetStackSlot(store.SlotIndex);
+
                     memcpy(&m_Stack[s.Index], store.Data, s.Size);
 
                     break;
@@ -824,14 +826,34 @@ namespace BlackLua::Internal {
 
                 case OpCodeType::Call: {
                     // Perform a jump
-                    int32_t labelIdentifier = std::get<int32_t>(op.Data);
-                    Call(labelIdentifier);
+                    OpCodeCall call = std::get<OpCodeCall>(op.Data);
+                    Call(call.Label, m_StackSlotPointer);
 
                     break;
                 }
 
                 case OpCodeType::Ret: {
                     BLUA_ASSERT(m_CurrentScope, "Trying to return out of no scope!");
+
+                    // Keep popping scopes until we find the function scope
+                    while (m_CurrentScope->ReturnAddress == SIZE_MAX) {
+                        BLUA_ASSERT(m_CurrentScope->Previous, "Trying return out of non function scope!");
+
+                        PopScope();
+                    }
+
+                    m_ProgramCounter = m_CurrentScope->ReturnAddress;
+                    PopScope();
+
+                    break;
+                }
+
+                case OpCodeType::RetValue: {
+                    int32_t slot = std::get<int32_t>(op.Data);
+
+                    BLUA_ASSERT(m_CurrentScope, "Trying to return out of no scope!");
+
+                    Copy(m_CurrentScope->ReturnSlot, slot);
 
                     // Keep popping scopes until we find the function scope
                     while (m_CurrentScope->ReturnAddress == SIZE_MAX) {

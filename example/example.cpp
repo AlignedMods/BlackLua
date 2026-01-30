@@ -10,9 +10,9 @@ int main(int argc, char** argv) {
 
     BlackLua::CompiledSource compiled = context.CompileFile("test.bl");
     context.Run(compiled, "test");
-    vm.Call(0);
+    vm.Call(1, 0);
     
-    BLUA_FORMAT_PRINT("{}", context.GetVM().GetInt(-1));
+    BLUA_FORMAT_PRINT("{}", vm.GetInt(-1));
 
     return 0;
 }

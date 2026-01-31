@@ -57,6 +57,8 @@ namespace BlackLua::Internal {
         int32_t SlotIndex = 0;
         void* Data = nullptr; // NOTE: The VM should not care what this contains, it should just copy it to a slot
                               // Another note: The VM should not free this memory, it should be part of the arena allocator
+
+        bool SetReadOnly = false;
     };
 
     struct OpCodeCopy {
@@ -89,7 +91,6 @@ namespace BlackLua::Internal {
         size_t Index = 0;
         size_t Size = 0;
         bool ReadOnly = false;
-        bool Written = false; // Used only for the ReadOnly flag
     }; 
 
     class VM {
@@ -163,7 +164,10 @@ namespace BlackLua::Internal {
         // AKA: return stack[top of stack + slot]
         // If it's positive though, it accesses from the start of the stack,
         // AKA: return stack[slot]
-        StackSlot GetStackSlot(int32_t slot);
+        StackSlot& GetStackSlot(int32_t slot);
+
+        // Sets a breakpoint up for when the program counter hits a specified value
+        void AddBreakPoint(int32_t pc);
 
     private:
         void RegisterLables();
@@ -358,6 +362,8 @@ namespace BlackLua::Internal {
 
         std::unordered_map<int32_t, size_t> m_Labels;
         size_t m_LabelCount = 0;
+
+        std::unordered_map<int32_t, bool> m_BreakPoints;
     };
 
 } // namespace BlackLua::Internal

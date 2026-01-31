@@ -4,11 +4,13 @@ namespace BlackLua::Internal {
 
     VM::VM() {
         m_Stack.resize(4 * 1024 * 1024); // 4MB stack by default
+        m_StackSlots.resize(1024); // 1024 slots by default
     }
 
     void VM::PushBytes(size_t amount) {
-        size_t alignedAmount = amount + (amount % 8); // We need to handle 8 byte alignment since some CPU's will require it
+        size_t alignedAmount = ((amount + 8 - 1) / 8) * 8; // We need to handle 8 byte alignment since some CPU's will require it
         
+        BLUA_ASSERT(alignedAmount % 8 == 0, "Memory not aligned to 8 bytes correctly!");
         BLUA_ASSERT(m_StackPointer + alignedAmount < m_Stack.max_size(), "Stack overflow, allocating an insane amount of memory!");
 
         // Keep doubling the stack until it's big enough
@@ -17,11 +19,15 @@ namespace BlackLua::Internal {
             m_Stack.resize(m_Stack.size() * 2);
         }
 
-        BLUA_FORMAT_PRINT("Pushing bytes!");
+        BLUA_FORMAT_PRINT("Pushing {} bytes, aligned to {}!", amount, alignedAmount);
 
         m_StackPointer += alignedAmount;
 
-        m_StackSlots.emplace_back(m_StackPointer - alignedAmount, amount);
+        if (m_StackSlotPointer + 1 >= m_StackSlots.size()) {
+            m_StackSlots.resize(m_StackSlots.size() * 2);
+        }
+
+        m_StackSlots[m_StackSlotPointer] = {m_StackPointer - alignedAmount, amount};
         m_StackSlotPointer++;
     }
 
@@ -34,6 +40,8 @@ namespace BlackLua::Internal {
     }
 
     void VM::PushScope() {
+        BLUA_FORMAT_PRINT("PushScope(), stack pointer: {}, slot pointer: {}", m_StackPointer, m_StackSlotPointer);
+
         Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
         newScope->Previous = m_CurrentScope;
         newScope->Offset = m_StackPointer;
@@ -48,6 +56,8 @@ namespace BlackLua::Internal {
         m_StackPointer = m_CurrentScope->Offset;
         m_StackSlotPointer = m_CurrentScope->SlotOffset;
         m_CurrentScope = m_CurrentScope->Previous;
+
+        BLUA_FORMAT_PRINT("PopScope(), stack pointer: {}, slot pointer: {}", m_StackPointer, m_StackSlotPointer);
     }
 
     void VM::Call(int32_t label, int32_t returnSlot) {
@@ -68,6 +78,7 @@ namespace BlackLua::Internal {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 1, "Cannot store a bool in a stack slot with a size that isn't 1!");
+        BLUA_ASSERT(!s.ReadOnly, "Trying to store data into a read only slot!");
 
         int8_t bb = static_cast<int8_t>(b);
         memcpy(&m_Stack[s.Index], &bb, 1);
@@ -77,6 +88,7 @@ namespace BlackLua::Internal {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 1, "Cannot store a char in a stack slot with a size that isn't 1!");
+        BLUA_ASSERT(!s.ReadOnly, "Trying to store data into a read only slot!");
 
         memcpy(&m_Stack[s.Index], &c, 1);
     }
@@ -85,6 +97,7 @@ namespace BlackLua::Internal {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 2, "Cannot store a short in a stack slot with a size that isn't 2!");
+        BLUA_ASSERT(!s.ReadOnly, "Trying to store data into a read only slot!");
 
         memcpy(&m_Stack[s.Index], &sh, 2);
     }
@@ -93,6 +106,7 @@ namespace BlackLua::Internal {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 4, "Cannot store an int in a stack slot with a size that isn't 4!");
+        BLUA_ASSERT(!s.ReadOnly, "Trying to store data into a read only slot!");
 
         memcpy(&m_Stack[s.Index], &i, 4);
     }
@@ -101,6 +115,7 @@ namespace BlackLua::Internal {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 8, "Cannot store a long in a stack slot with a size that isn't 8!");
+        BLUA_ASSERT(!s.ReadOnly, "Trying to store data into a read only slot!");
 
         memcpy(&m_Stack[s.Index], &l, 8);
     }
@@ -109,6 +124,7 @@ namespace BlackLua::Internal {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 4, "Cannot store a float in a stack slot with a size that isn't 4!");
+        BLUA_ASSERT(!s.ReadOnly, "Trying to store data into a read only slot!");
 
         memcpy(&m_Stack[s.Index], &f, 4);
     }
@@ -117,6 +133,7 @@ namespace BlackLua::Internal {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 8, "Cannot store a double in a stack slot with a size that isn't 8!");
+        BLUA_ASSERT(!s.ReadOnly, "Trying to store data into a read only slot!");
 
         memcpy(&m_Stack[s.Index], &d, 8);
     }
@@ -126,6 +143,7 @@ namespace BlackLua::Internal {
         StackSlot src = GetStackSlot(srcSlot);
 
         BLUA_ASSERT(dst.Size == src.Size, "Invalid Copy() call, sizes of both slots must be the same!");
+        BLUA_ASSERT(!dst.ReadOnly, "Trying to copy data into a read only slot!");
 
         memcpy(&m_Stack[dst.Index], &m_Stack[src.Index], src.Size);
     }
@@ -735,6 +753,10 @@ namespace BlackLua::Internal {
         for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
             const OpCode& op = m_Program[m_ProgramCounter];
 
+            if (m_BreakPoints.contains(m_ProgramCounter)) {
+                __debugbreak();
+            }
+
             switch (op.Type) {
                 case OpCodeType::Invalid: { BLUA_ASSERT(false, "Unreachable!"); break; }
                 case OpCodeType::Nop: { continue; }
@@ -763,9 +785,12 @@ namespace BlackLua::Internal {
 
                 case OpCodeType::Store: {
                     OpCodeStore store = std::get<OpCodeStore>(op.Data);
-                    StackSlot s = GetStackSlot(store.SlotIndex);
+                    StackSlot& s = GetStackSlot(store.SlotIndex);
+
+                    BLUA_ASSERT(!s.ReadOnly, "Trying to store data in a read only slot!");
 
                     memcpy(&m_Stack[s.Index], store.Data, s.Size);
+                    s.ReadOnly = store.SetReadOnly;
 
                     break;
                 }
@@ -784,6 +809,9 @@ namespace BlackLua::Internal {
                     OpCodeCopy copy = std::get<OpCodeCopy>(op.Data);
                     StackSlot dst = GetStackSlot(copy.DstSlot);
                     StackSlot src = GetStackSlot(copy.SrcSlot);
+
+                    BLUA_ASSERT(dst.Size == src.Size, "Sizes of both slots must be the same when copying!");
+                    BLUA_ASSERT(!dst.ReadOnly, "Trying to copy data into a read only slot!");
 
                     memcpy(&m_Stack[dst.Index], &m_Stack[src.Index], src.Size);
 
@@ -909,7 +937,7 @@ namespace BlackLua::Internal {
         #undef CASE_MATH
     }
 
-    StackSlot VM::GetStackSlot(int32_t slot) {
+    StackSlot& VM::GetStackSlot(int32_t slot) {
         if (slot < 0) {
              BLUA_ASSERT(m_StackSlotPointer + slot >= 0, "Out of range slot!");
 
@@ -920,6 +948,10 @@ namespace BlackLua::Internal {
         } else {
             BLUA_ASSERT(false, "Slot cannot be 0!");
         }
+    }
+
+    void VM::AddBreakPoint(int32_t pc) {
+        m_BreakPoints[pc] = true;
     }
 
     void VM::RegisterLables() {

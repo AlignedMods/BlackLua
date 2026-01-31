@@ -640,6 +640,8 @@ namespace BlackLua {
             void CheckNodeWhile(Node* node);
             void CheckNodeDoWhile(Node* node);
 
+            void CheckNodeIf(Node* node);
+
             void CheckNodeReturn(Node* node);
 
             void CheckNodeExpression(VariableType type, Node* node);
@@ -703,13 +705,17 @@ namespace BlackLua {
             void EmitNodeVarDecl(Node* node);
             void EmitNodeFunctionImpl(Node* node);
 
+            void EmitNodeWhile(Node* node);
+
+            void EmitNodeIf(Node* node);
+
             void EmitNodeReturn(Node* node);
 
             int32_t EmitNodeExpression(Node* node);
 
             size_t GetTypeSize(VariableType type);
 
-            int32_t CreateLabel();
+            int32_t CreateLabel(const std::string& debugData = {});
             void PushBytes(size_t bytes, const std::string& debugData = {});
             void IncrementStackSlotCount();
 

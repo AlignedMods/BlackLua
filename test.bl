@@ -1,10 +1,16 @@
-int bar = 2;
-
-int foo() {
-    int x = 6;
-    return x;
-}
+int foo = 0;
 
 void main() {
-    bar = foo();
+    int i = 0;
+
+    while (i < 5) {
+        i = i + 1;
+        int j = 0;
+
+        while (j < 5) {
+            j = j + 1;
+
+            foo = foo + 1;
+        }
+    }
 }

@@ -118,6 +118,13 @@ namespace BlackLua::Internal {
         CheckNodeExpression(VariableType::Bool, dowh->Condition);
     }
 
+    void TypeChecker::CheckNodeIf(Node* node) {
+        NodeIf* nif = std::get<NodeIf*>(node->Data);
+
+        CheckNodeExpression(VariableType::Bool, nif->Condition);
+        CheckNodeScope(nif->Body);
+    }
+
     void TypeChecker::CheckNodeReturn(Node* node) {
         NodeReturn* ret = std::get<NodeReturn*>(node->Data);
 
@@ -148,6 +155,8 @@ namespace BlackLua::Internal {
             CheckNodeFunctionImpl(node);
         } else if (t == NodeType::While) {
             CheckNodeWhile(node);
+        } else if (t == NodeType::If) {
+            CheckNodeIf(node);
         } else if (t == NodeType::Return) {
             CheckNodeReturn(node);
         } else if (t == NodeType::BinExpr) {

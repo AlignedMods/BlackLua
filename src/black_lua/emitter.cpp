@@ -55,7 +55,7 @@ namespace BlackLua::Internal {
                     case NodeType::Bool: {
                         NodeBool* b = std::get<NodeBool*>(std::get<NodeConstant*>(node->Data)->Data);
                     
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &b->Value));
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &b->Value, true));
                     
                         break;
                     }
@@ -63,7 +63,7 @@ namespace BlackLua::Internal {
                     case NodeType::Char: {
                         NodeChar* c = std::get<NodeChar*>(std::get<NodeConstant*>(node->Data)->Data);
                     
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &c->Char));
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &c->Char, true));
                     
                         break;
                     }
@@ -71,7 +71,7 @@ namespace BlackLua::Internal {
                     case NodeType::Int: {
                         NodeInt* i = std::get<NodeInt*>(std::get<NodeConstant*>(node->Data)->Data);
                     
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &i->Int));
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &i->Int, true));
                     
                         break;
                     }
@@ -79,7 +79,7 @@ namespace BlackLua::Internal {
                     case NodeType::Long: {
                         NodeLong* l = std::get<NodeLong*>(std::get<NodeConstant*>(node->Data)->Data);
                     
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &l->Long));
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &l->Long, true));
                     
                         break;
                     }
@@ -87,7 +87,7 @@ namespace BlackLua::Internal {
                     case NodeType::Float: {
                         NodeFloat* f = std::get<NodeFloat*>(std::get<NodeConstant*>(node->Data)->Data);
                     
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &f->Float));
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &f->Float, true));
                     
                         break;
                     }
@@ -95,7 +95,7 @@ namespace BlackLua::Internal {
                     case NodeType::Double: {
                         NodeDouble* d = std::get<NodeDouble*>(std::get<NodeConstant*>(node->Data)->Data);
                     
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &d->Double));
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, &d->Double, true));
                     
                         break;
                     }
@@ -133,6 +133,24 @@ namespace BlackLua::Internal {
                     EmitConstant(impl->Arguments.Items[i]);
                 }
                 EmitConstant(impl->Body);
+
+                break;
+            }
+
+            case NodeType::While: {
+                NodeWhile* wh = std::get<NodeWhile*>(node->Data);
+
+                EmitConstant(wh->Condition);
+                EmitConstant(wh->Body);
+
+                break;
+            } 
+
+            case NodeType::If: {
+                NodeIf* nif = std::get<NodeIf*>(node->Data);
+
+                EmitConstant(nif->Condition);
+                EmitConstant(nif->Body);
 
                 break;
             }
@@ -220,7 +238,7 @@ namespace BlackLua::Internal {
 
         std::string ident(impl->Name);
         Declaration decl;
-        decl.Index = CreateLabel();
+        decl.Index = CreateLabel(std::format("function {}", impl->Name));
         decl.Size = GetTypeSize(impl->ReturnType);
         m_DeclaredSymbols[ident] = decl;
 
@@ -248,6 +266,61 @@ namespace BlackLua::Internal {
         m_CurrentScope = m_CurrentScope->Parent;
     }
 
+    void Emitter::EmitNodeWhile(Node* node) {
+        NodeWhile* wh = std::get<NodeWhile*>(node->Data);
+
+        int32_t loop = m_LabelCount;
+        m_LabelCount++;
+        int32_t loopEnd = m_LabelCount;
+        m_LabelCount++;
+        m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "while loop condition");
+        m_OpCodes.emplace_back(OpCodeType::Label, loop, "while loop condition");
+
+        m_OpCodes.emplace_back(OpCodeType::PushScope);
+
+        Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
+        newScope->Parent = m_CurrentScope;
+        newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
+        m_CurrentScope = newScope;
+
+        int32_t slot = EmitNodeExpression(wh->Condition);
+        m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(slot, loopEnd), "while loop end");
+
+        NodeScope* scope = std::get<NodeScope*>(wh->Body->Data);
+
+        for (size_t i = 0; i < scope->Nodes.Size; i++) {
+            EmitNode(scope->Nodes.Items[i]);
+        }
+
+        m_OpCodes.emplace_back(OpCodeType::PopScope);
+
+        m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "while loop condition");
+
+        m_OpCodes.emplace_back(OpCodeType::Label, loopEnd, "while loop end");
+        m_OpCodes.emplace_back(OpCodeType::PopScope);
+        m_CurrentScope = m_CurrentScope->Parent;
+    }
+
+    void Emitter::EmitNodeIf(Node* node) {
+        NodeIf* nif = std::get<NodeIf*>(node->Data);
+
+        int32_t slot = EmitNodeExpression(nif->Condition);
+        int32_t afterIfLabel = m_LabelCount + 1;
+        int32_t ifLabel = m_LabelCount;
+
+        m_OpCodes.emplace_back(OpCodeType::Jt, OpCodeJump(slot, ifLabel));
+        m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
+
+        // If label
+        CreateLabel();
+
+        EmitNode(nif->Body);
+        m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
+
+        // After if label
+        CreateLabel();
+    }
+
     void Emitter::EmitNodeReturn(Node* node) {
         NodeReturn* ret = std::get<NodeReturn*>(node->Data);
 
@@ -271,7 +344,7 @@ namespace BlackLua::Internal {
                 Scope* currentScope = m_CurrentScope;
                 while (currentScope) {
                     if (currentScope->DeclaredSymbols.contains(ident)) {
-                        return currentScope->DeclaredSymbols.at(ident).Index - currentScope->SlotCount - 1;
+                        return currentScope->DeclaredSymbols.at(ident).Index - m_CurrentScope->SlotCount - 1;
                     }
 
                     currentScope = currentScope->Parent;
@@ -319,6 +392,8 @@ namespace BlackLua::Internal {
                             m_OpCodes.emplace_back(OpCodeType::NegateIntegral, slot);
                         } else if (expr->VarType == VariableType::Float || expr->VarType == VariableType::Double) {
                             m_OpCodes.emplace_back(OpCodeType::NegateFloating, slot);
+                        } else {
+                            BLUA_ASSERT(false, "UnaryExpr has no type!, Did you forget to run this through the type checker?");
                         }
 
                         break;
@@ -342,6 +417,8 @@ namespace BlackLua::Internal {
                         m_OpCodes.emplace_back(OpCodeType::vmOp##Integral, OpCodeMath(lhs, rhs)); \
                     } else if (expr->VarType == VariableType::Float || expr->VarType == VariableType::Double) { \
                         m_OpCodes.emplace_back(OpCodeType::vmOp##Floating, OpCodeMath(lhs, rhs)); \
+                    } else { \
+                        BLUA_ASSERT(false, "BinExpr has no type!, Did you forget to run this through the type checker?"); \
                     } \
                     IncrementStackSlotCount(); \
                     break; \
@@ -390,8 +467,8 @@ namespace BlackLua::Internal {
         return 0;
     }
 
-    int32_t Emitter::CreateLabel() {
-        m_OpCodes.emplace_back(OpCodeType::Label, static_cast<int32_t>(m_LabelCount));
+    int32_t Emitter::CreateLabel(const std::string& debugData) {
+        m_OpCodes.emplace_back(OpCodeType::Label, static_cast<int32_t>(m_LabelCount), debugData);
         m_LabelCount++;
         return static_cast<int32_t>(m_LabelCount - 1);
     }
@@ -411,6 +488,10 @@ namespace BlackLua::Internal {
             EmitNodeVarDecl(node);
         } else if (t == NodeType::FunctionImpl) {
             EmitNodeFunctionImpl(node);
+        } else if (t == NodeType::While) {
+            EmitNodeWhile(node);
+        } else if (t == NodeType::If) {
+            EmitNodeIf(node);
         } else if (t == NodeType::FunctionCallExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::BinExpr) {

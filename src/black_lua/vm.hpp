@@ -19,6 +19,7 @@ namespace BlackLua::Internal {
         Store,
         Get, // Automaticaly pushes the value onto the stack
         Copy, // Copies a value into another slot
+        Dup, // Creates a new stack slot and copies a value into it
 
         Label,
         Jmp,
@@ -73,7 +74,8 @@ namespace BlackLua::Internal {
 
     struct OpCodeCall {
         int32_t Label = -1;
-        int32_t ReturnSlot = 0;
+        size_t ParamCount = 0;
+        size_t ReturnCount = 0;
     };
 
     struct OpCodeMath {
@@ -109,7 +111,7 @@ namespace BlackLua::Internal {
         // Removes the current scope and goes back to the previous one (if there is one)
         void PopScope();
 
-        void Call(int32_t label, int32_t returnSlot);
+        void Call(int32_t label, size_t paramCount, size_t returnCount);
         
         void StoreBool(int32_t slot, bool b);
         void StoreChar(int32_t slot, int8_t c);

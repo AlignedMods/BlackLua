@@ -60,7 +60,7 @@ namespace BlackLua::Internal {
         BLUA_FORMAT_PRINT("PopScope(), stack pointer: {}, slot pointer: {}", m_StackPointer, m_StackSlotPointer);
     }
 
-    void VM::Call(int32_t label, int32_t returnSlot) {
+    void VM::Call(int32_t label, size_t paramCount, size_t returnCount) {
         // Perform a jump
         size_t pc = m_ProgramCounter;
 
@@ -68,8 +68,16 @@ namespace BlackLua::Internal {
         m_ProgramCounter = m_Labels.at(label) + 1;
 
         PushScope();
+
+        // for (size_t i = 0; i < paramCount; i++) {
+        //     int32_t dst = -(i + 1);
+        //     int32_t src = -(i + paramCount + returnCount);
+        // 
+        //     Copy(dst, src);
+        // }
+
         m_CurrentScope->ReturnAddress = pc;
-        m_CurrentScope->ReturnSlot = returnSlot;
+        m_CurrentScope->ReturnSlot = m_StackSlotPointer;
 
         Run();
     }
@@ -818,6 +826,18 @@ namespace BlackLua::Internal {
                     break;
                 }
 
+                case OpCodeType::Dup: {
+                    int32_t slot = std::get<int32_t>(op.Data);
+                    StackSlot src = GetStackSlot(slot);
+
+                    PushBytes(src.Size);
+                    StackSlot dst = GetStackSlot(-1);
+                    
+                    memcpy(&m_Stack[dst.Index], &m_Stack[src.Index], src.Size);
+
+                    break;
+                }
+
                 // When we encounter a label, instantly stop execution
                 case OpCodeType::Label: m_ProgramCounter = m_ProgramSize - 1; break;
 
@@ -853,9 +873,8 @@ namespace BlackLua::Internal {
                 }
 
                 case OpCodeType::Call: {
-                    // Perform a jump
                     OpCodeCall call = std::get<OpCodeCall>(op.Data);
-                    Call(call.Label, m_StackSlotPointer);
+                    Call(call.Label, call.ParamCount, call.ReturnCount);
 
                     break;
                 }

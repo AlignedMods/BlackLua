@@ -1,16 +1,9 @@
 int foo = 0;
 
+void test(int arg1, int arg2) {
+    foo = arg1 + arg2;
+}
+
 void main() {
-    int i = 0;
-
-    while (i < 5) {
-        i = i + 1;
-        int j = 0;
-
-        while (j < 5) {
-            j = j + 1;
-
-            foo = foo + 1;
-        }
-    }
+    test(1 + 2 + 3, 1 + 2 + 3);
 }

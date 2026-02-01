@@ -159,6 +159,8 @@ namespace BlackLua::Internal {
             CheckNodeIf(node);
         } else if (t == NodeType::Return) {
             CheckNodeReturn(node);
+        } else if (t == NodeType::FunctionCallExpr) {
+            GetNodeType(node);
         } else if (t == NodeType::BinExpr) {
             GetNodeType(node);
         }

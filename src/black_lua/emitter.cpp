@@ -170,6 +170,15 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case NodeType::FunctionCallExpr: {
+                NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
+
+                for (size_t i = 0; i < expr->Parameters.size(); i++) {
+                    EmitConstant(expr->Parameters[i]);
+                }
+                break;
+            }
+
             case NodeType::UnaryExpr: {
                 NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(node->Data);
 
@@ -222,14 +231,29 @@ namespace BlackLua::Internal {
 
         map[std::string(decl->Identifier)] = d;
 
+        // We convert int var = 5 to
+        // int var;
+        // var = 5;
         if (decl->Value) {
-           int32_t slot = EmitNodeExpression(decl->Value);
+            NodeBinExpr* expr = GetAllocator()->AllocateNamed<NodeBinExpr>();
+            NodeVarRef* ref = GetAllocator()->AllocateNamed<NodeVarRef>();
 
-           if (m_CurrentScope) {
-               m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(d.Index - m_CurrentScope->SlotCount - 1, slot));
-           } else {
-               m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(d.Index, slot));
-           }
+            ref->Identifier = decl->Identifier;
+
+            expr->Type = BinExprType::Eq;
+            expr->VarType = decl->Type;
+            expr->LHS = GetAllocator()->AllocateNamed<Node>(NodeType::VarRef, ref);
+            expr->RHS = decl->Value;
+
+            EmitNodeExpression(GetAllocator()->AllocateNamed<Node>(NodeType::BinExpr, expr));
+
+            // int32_t slot = EmitNodeExpression(decl->Value);
+            // 
+            // if (m_CurrentScope) {
+            //     m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(d.Index - m_CurrentScope->SlotCount - 1, slot));
+            // } else {
+            //     m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(d.Index, slot));
+            // }
         }
     }
 
@@ -249,9 +273,17 @@ namespace BlackLua::Internal {
         newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
         m_CurrentScope = newScope;
 
+        size_t returnSlot = (impl->ReturnType == VariableType::Invalid) ? 0 : 1;
+        size_t varsPushed = 0;
+
         // Inject function arguments into the scope
         for (size_t i = 0; i < impl->Arguments.Size; i++) {
             EmitNodeVarDecl(impl->Arguments.Items[i]);
+
+            // Copy the parameters into the arguments
+            // m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(i + 2 + returnSlot + varsPushed)));
+            m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(impl->Arguments.Size + 1)));
+            varsPushed++;
         }
 
         NodeScope* body = std::get<NodeScope*>(impl->Body->Data);
@@ -363,12 +395,33 @@ namespace BlackLua::Internal {
             case NodeType::FunctionCallExpr: {
                 NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
                 Declaration decl = m_DeclaredSymbols.at(std::string(expr->Name));
-                if (decl.Size != 0) {
-                    PushBytes(decl.Size);
+
+                std::vector<std::pair<int32_t, bool>> m_Parameters; 
+
+                for (size_t i = 0; i < expr->Parameters.size(); i++) {
+                    int32_t slot = EmitNodeExpression(expr->Parameters[i]);
+
+                    if (slot == -1) {
+                        m_Parameters.emplace_back((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, true);
+                    } else {
+                        m_Parameters.emplace_back(slot, false);
+                    }
+                }
+
+                for (const auto& p : m_Parameters) {
+                    // meaty expression
+                    int32_t slot = (p.second) ? ((m_CurrentScope) ? p.first - m_CurrentScope->SlotCount - 1 : p.first - m_SlotCount - 1) : p.first;
+
+                    m_OpCodes.emplace_back(OpCodeType::Dup, slot);
                     IncrementStackSlotCount();
                 }
 
-                m_OpCodes.emplace_back(OpCodeType::Call, OpCodeCall(decl.Index, -1));
+                if (decl.Size != 0) {
+                    PushBytes(decl.Size, "return");
+                    IncrementStackSlotCount();
+                }
+
+                m_OpCodes.emplace_back(OpCodeType::Call, OpCodeCall(decl.Index, expr->Parameters.size(), (decl.Size == 0) ? 0 : 1));
                 
                 return -1;
                 break;

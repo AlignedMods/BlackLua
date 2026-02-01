@@ -10,20 +10,7 @@ int main(int argc, char** argv) {
 
     BlackLua::CompiledSource compiled = context.CompileFile("test.bl");
     context.Run(compiled, "test");
-    // vm.AddBreakPoint(23);
-    vm.Call(0, 0);
-
-    int foo = 0;
-    int i = 0;
-
-    while (i < 5) {
-        i++;
-        int j = 0;
-        while (j < 5) {
-            j++;
-            foo++;
-        }
-    }
+    vm.Call(1, 0, 0);
     
     BLUA_FORMAT_PRINT("{}", vm.GetInt(-1));
 

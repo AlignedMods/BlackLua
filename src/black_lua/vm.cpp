@@ -60,7 +60,11 @@ namespace BlackLua::Internal {
         BLUA_FORMAT_PRINT("PopScope(), stack pointer: {}, slot pointer: {}", m_StackPointer, m_StackSlotPointer);
     }
 
-    void VM::Call(int32_t label, size_t paramCount, size_t returnCount) {
+    void VM::AddExtern(const std::string& signature, ExternFn fn) {
+        m_ExternFuncs[signature] = fn;
+    }
+
+    void VM::Call(int32_t label) {
         // Perform a jump
         size_t pc = m_ProgramCounter;
 
@@ -69,20 +73,20 @@ namespace BlackLua::Internal {
 
         PushScope();
 
-        // for (size_t i = 0; i < paramCount; i++) {
-        //     int32_t dst = -(i + 1);
-        //     int32_t src = -(i + paramCount + returnCount);
-        // 
-        //     Copy(dst, src);
-        // }
-
         m_CurrentScope->ReturnAddress = pc;
         m_CurrentScope->ReturnSlot = m_StackSlotPointer;
 
         Run();
     }
 
-    void VM::StoreBool(int32_t slot, bool b) {
+    void VM::CallExtern(const std::string& signature) {
+        BLUA_ASSERT(m_ExternFuncs.contains(signature), "Calling CallExtern() on a non-existent extern function!");
+
+        // Do the call
+        m_ExternFuncs.at(signature)(this);
+    }
+
+    void VM::StoreBool(StackSlotIndex slot, bool b) {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 1, "Cannot store a bool in a stack slot with a size that isn't 1!");
@@ -92,7 +96,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[s.Index], &bb, 1);
     }
 
-    void VM::StoreChar(int32_t slot, int8_t c) {
+    void VM::StoreChar(StackSlotIndex slot, int8_t c) {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 1, "Cannot store a char in a stack slot with a size that isn't 1!");
@@ -101,7 +105,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[s.Index], &c, 1);
     }
 
-    void VM::StoreShort(int32_t slot, int16_t sh) {
+    void VM::StoreShort(StackSlotIndex slot, int16_t sh) {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 2, "Cannot store a short in a stack slot with a size that isn't 2!");
@@ -110,7 +114,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[s.Index], &sh, 2);
     }
 
-    void VM::StoreInt(int32_t slot, int32_t i) {
+    void VM::StoreInt(StackSlotIndex slot, int32_t i) {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 4, "Cannot store an int in a stack slot with a size that isn't 4!");
@@ -119,7 +123,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[s.Index], &i, 4);
     }
 
-    void VM::StoreLong(int32_t slot, int64_t l) {
+    void VM::StoreLong(StackSlotIndex slot, int64_t l) {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 8, "Cannot store a long in a stack slot with a size that isn't 8!");
@@ -128,7 +132,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[s.Index], &l, 8);
     }
 
-    void VM::StoreFloat(int32_t slot, float f) {
+    void VM::StoreFloat(StackSlotIndex slot, float f) {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 4, "Cannot store a float in a stack slot with a size that isn't 4!");
@@ -137,7 +141,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[s.Index], &f, 4);
     }
 
-    void VM::StoreDouble(int32_t slot, double d) {
+    void VM::StoreDouble(StackSlotIndex slot, double d) {
         StackSlot s = GetStackSlot(slot);
         
         BLUA_ASSERT(s.Size == 8, "Cannot store a double in a stack slot with a size that isn't 8!");
@@ -146,7 +150,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[s.Index], &d, 8);
     }
 
-    void VM::Copy(int32_t dstSlot, int32_t srcSlot) {
+    void VM::Copy(StackSlotIndex dstSlot, StackSlotIndex srcSlot) {
         StackSlot dst = GetStackSlot(dstSlot);
         StackSlot src = GetStackSlot(srcSlot);
 
@@ -156,7 +160,7 @@ namespace BlackLua::Internal {
         memcpy(&m_Stack[dst.Index], &m_Stack[src.Index], src.Size);
     }
 
-    bool VM::GetBool(int32_t slot) {
+    bool VM::GetBool(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 
         BLUA_ASSERT(s.Size == 1, "Invalid GetBool() call!");
@@ -166,7 +170,7 @@ namespace BlackLua::Internal {
         return b;
     }
 
-    int8_t VM::GetChar(int32_t slot) {
+    int8_t VM::GetChar(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 
         BLUA_ASSERT(s.Size == 1, "Invalid GetChar() call!");
@@ -176,7 +180,7 @@ namespace BlackLua::Internal {
         return c;
     }
 
-    int16_t VM::GetShort(int32_t slot) {
+    int16_t VM::GetShort(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 
         BLUA_ASSERT(s.Size == 2, "Invalid GetShort() call!");
@@ -186,7 +190,7 @@ namespace BlackLua::Internal {
         return sh;
     }
 
-    int32_t VM::GetInt(int32_t slot) {
+    int32_t VM::GetInt(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 
         BLUA_ASSERT(s.Size == 4, "Invalid GetInt() call!");
@@ -196,7 +200,7 @@ namespace BlackLua::Internal {
         return i;
     }
 
-    int64_t VM::GetLong(int32_t slot) {
+    int64_t VM::GetLong(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 
         BLUA_ASSERT(s.Size == 8, "Invalid GetLong() call!");
@@ -206,7 +210,7 @@ namespace BlackLua::Internal {
         return l;
     }
 
-    float VM::GetFloat(int32_t slot) {
+    float VM::GetFloat(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 
         BLUA_ASSERT(s.Size == 4, "Invalid GetFloat() call!");
@@ -216,7 +220,7 @@ namespace BlackLua::Internal {
         return f;
     }
 
-    double VM::GetDouble(int32_t slot) {
+    double VM::GetDouble(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 
         BLUA_ASSERT(s.Size == 8, "Invalid GetDouble() call!");
@@ -226,7 +230,7 @@ namespace BlackLua::Internal {
         return d;
     }
 
-    void VM::NegateIntegral(int32_t val) {
+    void VM::NegateIntegral(StackSlotIndex val) {
         StackSlot value = GetStackSlot(val);
 
         switch (value.Size) {
@@ -254,7 +258,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::NegateFloating(int32_t val) {
+    void VM::NegateFloating(StackSlotIndex val) {
         StackSlot value = GetStackSlot(val);
 
         switch (value.Size) {
@@ -272,7 +276,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::AddIntegral(int32_t lhs, int32_t rhs) {
+    void VM::AddIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -303,7 +307,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::SubIntegral(int32_t lhs, int32_t rhs) {
+    void VM::SubIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -334,7 +338,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::MulIntegral(int32_t lhs, int32_t rhs) {
+    void VM::MulIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -365,7 +369,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::DivIntegral(int32_t lhs, int32_t rhs) {
+    void VM::DivIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -396,7 +400,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::CmpIntegral(int32_t lhs, int32_t rhs) {
+    void VM::CmpIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -427,7 +431,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::LtIntegral(int32_t lhs, int32_t rhs) {
+    void VM::LtIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -458,7 +462,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::LteIntegral(int32_t lhs, int32_t rhs) {
+    void VM::LteIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -489,7 +493,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::GtIntegral(int32_t lhs, int32_t rhs) {
+    void VM::GtIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -520,7 +524,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::GteIntegral(int32_t lhs, int32_t rhs) {
+    void VM::GteIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -551,7 +555,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::AddFloating(int32_t lhs, int32_t rhs) {
+    void VM::AddFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -572,7 +576,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::SubFloating(int32_t lhs, int32_t rhs) {
+    void VM::SubFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -593,7 +597,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::MulFloating(int32_t lhs, int32_t rhs) {
+    void VM::MulFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -614,7 +618,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::DivFloating(int32_t lhs, int32_t rhs) {
+    void VM::DivFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -635,7 +639,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::CmpFloating(int32_t lhs, int32_t rhs) {
+    void VM::CmpFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -656,7 +660,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::LtFloating(int32_t lhs, int32_t rhs) {
+    void VM::LtFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -677,7 +681,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::LteFloating(int32_t lhs, int32_t rhs) {
+    void VM::LteFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -698,7 +702,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::GtFloating(int32_t lhs, int32_t rhs) {
+    void VM::GtFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -719,7 +723,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    void VM::GteFloating(int32_t lhs, int32_t rhs) {
+    void VM::GteFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
         StackSlot lhsSlot = GetStackSlot(lhs);
         StackSlot rhsSlot = GetStackSlot(rhs);
 
@@ -750,8 +754,6 @@ namespace BlackLua::Internal {
     }
 
     void VM::Run() {
-        BLUA_FORMAT_PRINT("Running code!");
-
         #define CASE_MATH(type) case OpCodeType::type: {     \
             OpCodeMath math = std::get<OpCodeMath>(op.Data); \
             type(math.LHSSlot, math.RHSSlot);                \
@@ -770,7 +772,7 @@ namespace BlackLua::Internal {
                 case OpCodeType::Nop: { continue; }
 
                 case OpCodeType::PushBytes: {
-                    size_t byteCount = static_cast<size_t>(std::get<int32_t>(op.Data));
+                    size_t byteCount = static_cast<size_t>(std::get<StackSlotIndex>(op.Data).Slot);
 
                     PushBytes(byteCount);
                     break;
@@ -793,18 +795,19 @@ namespace BlackLua::Internal {
 
                 case OpCodeType::Store: {
                     OpCodeStore store = std::get<OpCodeStore>(op.Data);
-                    StackSlot& s = GetStackSlot(store.SlotIndex);
+                    StackSlot s = GetStackSlot(store.SlotIndex);
 
                     BLUA_ASSERT(!s.ReadOnly, "Trying to store data in a read only slot!");
 
                     memcpy(&m_Stack[s.Index], store.Data, s.Size);
-                    s.ReadOnly = store.SetReadOnly;
+
+                    m_StackSlots[GetStackSlotIndex(store.SlotIndex.Slot)].ReadOnly = store.SetReadOnly;
 
                     break;
                 }
 
                 case OpCodeType::Get: {
-                    int32_t slot = std::get<int32_t>(op.Data);
+                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
                     StackSlot s = GetStackSlot(slot);
                     PushBytes(s.Size);
 
@@ -827,7 +830,7 @@ namespace BlackLua::Internal {
                 }
 
                 case OpCodeType::Dup: {
-                    int32_t slot = std::get<int32_t>(op.Data);
+                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
                     StackSlot src = GetStackSlot(slot);
 
                     PushBytes(src.Size);
@@ -838,11 +841,28 @@ namespace BlackLua::Internal {
                     break;
                 }
 
+                case OpCodeType::Offset: {
+                    OpCodeOffset off = std::get<OpCodeOffset>(op.Data);
+                    int32_t offset = GetInt(off.Offset);
+                    StackSlot slot = GetStackSlot(off.Slot);
+
+                    BLUA_ASSERT(offset < slot.Size, "Offset out of bounds!");
+
+                    StackSlot s;
+                    s.Index = slot.Index + offset;
+                    s.ReadOnly = slot.ReadOnly;
+                    s.Size = off.Size;
+                    m_StackSlots[m_StackSlotPointer] = s;
+                    m_StackSlotPointer++;
+
+                    break;
+                }
+
                 // When we encounter a label, instantly stop execution
                 case OpCodeType::Label: m_ProgramCounter = m_ProgramSize - 1; break;
 
                 case OpCodeType::Jmp: {
-                    int32_t labelIdentifier = std::get<int32_t>(op.Data);
+                    int32_t labelIdentifier = std::get<StackSlotIndex>(op.Data).Slot;
 
                     BLUA_ASSERT(m_Labels.contains(labelIdentifier), "Trying to jump to an unknown label!");
                     m_ProgramCounter = m_Labels.at(labelIdentifier);
@@ -873,8 +893,15 @@ namespace BlackLua::Internal {
                 }
 
                 case OpCodeType::Call: {
-                    OpCodeCall call = std::get<OpCodeCall>(op.Data);
-                    Call(call.Label, call.ParamCount, call.ReturnCount);
+                    int32_t label = std::get<StackSlotIndex>(op.Data).Slot;
+                    Call(label);
+
+                    break;
+                }
+
+                case OpCodeType::CallExtern: {
+                    std::string sig = std::get<std::string>(op.Data);
+                    CallExtern(sig);
 
                     break;
                 }
@@ -896,7 +923,7 @@ namespace BlackLua::Internal {
                 }
 
                 case OpCodeType::RetValue: {
-                    int32_t slot = std::get<int32_t>(op.Data);
+                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
 
                     BLUA_ASSERT(m_CurrentScope, "Trying to return out of no scope!");
 
@@ -916,14 +943,14 @@ namespace BlackLua::Internal {
                 }
 
                 case OpCodeType::NegateIntegral: {
-                    int32_t slot = std::get<int32_t>(op.Data);
+                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
 
                     NegateIntegral(slot);
                     break;
                 }
 
                 case OpCodeType::NegateFloating: {
-                    int32_t slot = std::get<int32_t>(op.Data);
+                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
 
                     NegateFloating(slot);
                     break;
@@ -956,17 +983,30 @@ namespace BlackLua::Internal {
         #undef CASE_MATH
     }
 
-    StackSlot& VM::GetStackSlot(int32_t slot) {
+    StackSlot VM::GetStackSlot(StackSlotIndex slot) {
+        StackSlot s = m_StackSlots[GetStackSlotIndex(slot.Slot)];
+        s.Index += slot.Offset;
+        
+        if (slot.Size != 0) {
+            s.Size = slot.Size;
+        }
+
+        return s;
+    }
+
+    size_t VM::GetStackSlotIndex(int32_t slot) {
         if (slot < 0) {
              BLUA_ASSERT(m_StackSlotPointer + slot >= 0, "Out of range slot!");
 
-             return m_StackSlots[m_StackSlotPointer + slot];
+             return m_StackSlotPointer + slot;
         } else if (slot > 0) {
             BLUA_ASSERT((slot - 1) < m_StackSlotPointer, "Out of range slot!");
-            return m_StackSlots[slot - 1];
+            return slot - 1;
         } else {
             BLUA_ASSERT(false, "Slot cannot be 0!");
         }
+
+        return 0;
     }
 
     void VM::AddBreakPoint(int32_t pc) {
@@ -978,7 +1018,7 @@ namespace BlackLua::Internal {
             const OpCode& op = m_Program[m_ProgramCounter];
 
             if (op.Type == OpCodeType::Label) {
-                int32_t labelIdentifier = std::get<int32_t>(op.Data);
+                int32_t labelIdentifier = std::get<StackSlotIndex>(op.Data).Slot;
 
                 m_Labels[labelIdentifier] = m_ProgramCounter;
                 m_LabelCount++;

@@ -76,12 +76,64 @@ namespace BlackLua::Internal {
         }
     }
 
+    void TypeChecker::CheckNodeVarArrayDecl(Node* node) {
+        NodeVarArrayDecl* decl = std::get<NodeVarArrayDecl*>(node->Data);
+
+        std::unordered_map<std::string, Declaration>& symbolMap = (m_CurrentScope) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
+        if (symbolMap.contains(std::string(decl->Identifier))) {
+            ErrorRedeclaration(decl->Identifier);
+        }
+
+        symbolMap[std::string(decl->Identifier)] = { decl->Type, node };
+
+        CheckNodeExpression(CreateVarType(PrimitiveType::Int), decl->Size);
+
+        switch (decl->Size->Type) {
+            case NodeType::Constant: {
+                NodeConstant* c = std::get<NodeConstant*>(decl->Size->Data);
+                switch (c->Type) {
+                    case NodeType::Int: {
+                        NodeInt* i = std::get<NodeInt*>(c->Data);
+            
+                        decl->Type.Data = static_cast<size_t>(i->Int);
+
+                        break;
+                    }
+
+                    default: BLUA_ASSERT(false, "Unreachable!");
+                }
+
+                break;
+            }
+
+            default: BLUA_ASSERT(false, "Unreachable!");
+        }
+
+        if (decl->Value) {
+            CheckNodeExpression(decl->Type, decl->Value);
+        }
+
+        if (decl->Next) {
+            CheckNodeVarDecl(decl->Next);
+        }
+    }
+
+    void TypeChecker::CheckNodeFunctionDecl(Node* node) {
+        NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
+
+        std::string name(decl->Name);
+
+        m_DeclaredSymbols[name] = { decl->ReturnType, node, decl->Extern };
+    }
+
     void TypeChecker::CheckNodeFunctionImpl(Node* node) {
         NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(node->Data);
 
         std::string name(impl->Name);
         if (m_DeclaredSymbols.contains(name)) {
-            ErrorRedeclaration(impl->Name);
+            if (m_DeclaredSymbols.at(name).Extern) {
+                ErrorDefiningExternFunction(name);
+            }
         }
 
         m_DeclaredSymbols[name] = { impl->ReturnType, node };
@@ -107,7 +159,7 @@ namespace BlackLua::Internal {
     void TypeChecker::CheckNodeWhile(Node* node) {
         NodeWhile* wh = std::get<NodeWhile*>(node->Data);
         
-        CheckNodeExpression(VariableType::Bool, wh->Condition);
+        CheckNodeExpression(CreateVarType(PrimitiveType::Bool), wh->Condition);
         CheckNodeScope(wh->Body);
     }
 
@@ -115,13 +167,13 @@ namespace BlackLua::Internal {
         NodeDoWhile* dowh = std::get<NodeDoWhile*>(node->Data);
 
         CheckNodeScope(dowh->Body);
-        CheckNodeExpression(VariableType::Bool, dowh->Condition);
+        CheckNodeExpression(CreateVarType(PrimitiveType::Bool), dowh->Condition);
     }
 
     void TypeChecker::CheckNodeIf(Node* node) {
         NodeIf* nif = std::get<NodeIf*>(node->Data);
 
-        CheckNodeExpression(VariableType::Bool, nif->Condition);
+        CheckNodeExpression(CreateVarType(PrimitiveType::Bool), nif->Condition);
         CheckNodeScope(nif->Body);
     }
 
@@ -129,13 +181,13 @@ namespace BlackLua::Internal {
         NodeReturn* ret = std::get<NodeReturn*>(node->Data);
 
         if (!m_CurrentScope) { ErrorInvalidReturn(); return; }
-        if (m_CurrentScope->ReturnType == VariableType::Invalid) { ErrorInvalidReturn(); return; }
+        if (m_CurrentScope->ReturnType == CreateVarType(PrimitiveType::Invalid)) { ErrorInvalidReturn(); return; }
 
         CheckNodeExpression(m_CurrentScope->ReturnType, ret->Value);
     }
 
     void TypeChecker::CheckNodeExpression(VariableType type, Node* node) {
-        if (GetNodeType(node) != VariableType::Invalid) {
+        if (GetNodeType(node) != CreateVarType(PrimitiveType::Invalid)) {
             size_t cost = GetConversionCost(type, GetNodeType(node));
 
             if (cost > 0) {
@@ -151,6 +203,10 @@ namespace BlackLua::Internal {
             CheckNodeScope(node);
         } else if (t == NodeType::VarDecl) {
             CheckNodeVarDecl(node);
+        } else if (t == NodeType::VarArrayDecl) {
+            CheckNodeVarArrayDecl(node);
+        } else if (t == NodeType::FunctionDecl) {
+            CheckNodeFunctionDecl(node);
         } else if (t == NodeType::FunctionImpl) {
             CheckNodeFunctionImpl(node);
         } else if (t == NodeType::While) {
@@ -172,28 +228,28 @@ namespace BlackLua::Internal {
             return 0;
         }
 
-        if (type1 == VariableType::Bool || type1 == VariableType::Char || type1 == VariableType::Short || type1 == VariableType::Int || type1 == VariableType::Long) {
-            if (type2 == VariableType::Bool || type2 == VariableType::Char || type2 == VariableType::Short || type2 == VariableType::Int || type2 == VariableType::Long) {
+        if (type1 == CreateVarType(PrimitiveType::Bool) || type1 == CreateVarType(PrimitiveType::Char) || type1 == CreateVarType(PrimitiveType::Short) || type1 == CreateVarType(PrimitiveType::Int) || type1 == CreateVarType(PrimitiveType::Long)) {
+            if (type2 == CreateVarType(PrimitiveType::Bool) || type2 == CreateVarType(PrimitiveType::Char) || type2 == CreateVarType(PrimitiveType::Short) || type2 == CreateVarType(PrimitiveType::Int) || type2 == CreateVarType(PrimitiveType::Long)) {
                 return 1;
-            } else if (type2 == VariableType::Float || type2 == VariableType::Double) {
+            } else if (type2 == CreateVarType(PrimitiveType::Float) || type2 == CreateVarType(PrimitiveType::Double)) {
                 return 2;
             } else {
                 return 3;
             }
         }
 
-        if (type1 == VariableType::Float || type1 == VariableType::Double) {
-            if (type2 == VariableType::Float || type2 == VariableType::Double) {
+        if (type1 == CreateVarType(PrimitiveType::Float) || type1 == CreateVarType(PrimitiveType::Double)) {
+            if (type2 == CreateVarType(PrimitiveType::Float) || type2 == CreateVarType(PrimitiveType::Double)) {
                 return 1;
-            } else if (type2 == VariableType::Bool || type2 == VariableType::Char || type2 == VariableType::Short || type2 == VariableType::Int || type2 == VariableType::Long) {
+            } else if (type2 == CreateVarType(PrimitiveType::Bool) || type2 == CreateVarType(PrimitiveType::Char) || type2 == CreateVarType(PrimitiveType::Short) || type2 == CreateVarType(PrimitiveType::Int) || type2 == CreateVarType(PrimitiveType::Long)) {
                 return 2;
             } else {
                 return 3;
             }
         }
 
-        if (type1 == VariableType::String) {
-            if (type2 != VariableType::String) {
+        if (type1 == CreateVarType(PrimitiveType::String)) {
+            if (type2 != CreateVarType(PrimitiveType::String)) {
                 return 3;
             }
         }
@@ -205,16 +261,16 @@ namespace BlackLua::Internal {
         switch (node->Type) {
             case NodeType::Constant: {
                 NodeConstant* constant = std::get<NodeConstant*>(node->Data);
-                VariableType type = VariableType::Invalid;
+                VariableType type = CreateVarType(PrimitiveType::Invalid);
 
                 switch (constant->Type) {
-                    case NodeType::Bool:   type = VariableType::Bool; break;
-                    case NodeType::Char:   type = VariableType::Char; break;
-                    case NodeType::Int:    type = VariableType::Int; break;
-                    case NodeType::Long:   type = VariableType::Long; break;
-                    case NodeType::Float:  type = VariableType::Float; break;
-                    case NodeType::Double: type = VariableType::Double; break;
-                    case NodeType::String: type = VariableType::String; break;
+                    case NodeType::Bool:   type = CreateVarType(PrimitiveType::Bool); break;
+                    case NodeType::Char:   type = CreateVarType(PrimitiveType::Char); break;
+                    case NodeType::Int:    type = CreateVarType(PrimitiveType::Int); break;
+                    case NodeType::Long:   type = CreateVarType(PrimitiveType::Long); break;
+                    case NodeType::Float:  type = CreateVarType(PrimitiveType::Float); break;
+                    case NodeType::Double: type = CreateVarType(PrimitiveType::Double); break;
+                    case NodeType::String: type = CreateVarType(PrimitiveType::String); break;
                 }
 
                 constant->VarType = type;
@@ -244,7 +300,32 @@ namespace BlackLua::Internal {
 
                 // We haven't found a variable
                 ErrorUndeclaredIdentifier(ref->Identifier);
-                return VariableType::Invalid;
+                return CreateVarType(PrimitiveType::Invalid);
+            }
+
+            case NodeType::ArrayAccessExpr: {
+                NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(node->Data);
+                std::string ident(expr->Name);
+
+                GetNodeType(expr->Index);
+
+                // Loop backward through all the scopes
+                Scope* currentScope = m_CurrentScope;
+                while (currentScope) {
+                    if (currentScope->DeclaredSymbols.contains(ident)) {
+                        return CreateVarType(currentScope->DeclaredSymbols.at(ident).Type.Type);
+                    }
+
+                    currentScope = currentScope->Parent;
+                }
+
+                // Check global symbols
+                if (m_DeclaredSymbols.contains(ident)) {
+                    return CreateVarType(m_DeclaredSymbols.at(ident).Type.Type);
+                }
+
+                ErrorUndeclaredIdentifier(expr->Name);
+                return CreateVarType(PrimitiveType::Invalid);
             }
 
             case NodeType::FunctionCallExpr: {
@@ -254,6 +335,13 @@ namespace BlackLua::Internal {
                     NodeList args;
                     
                     switch (m_DeclaredSymbols.at(name).Decl->Type) {
+                        case NodeType::FunctionDecl: {
+                            NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(m_DeclaredSymbols.at(name).Decl->Data);
+                            args = decl->Arguments;
+
+                            break;
+                        }
+
                         case NodeType::FunctionImpl: {
                             NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(m_DeclaredSymbols.at(name).Decl->Data);
                             args = impl->Arguments;
@@ -264,13 +352,13 @@ namespace BlackLua::Internal {
 
                     if (args.Size != expr->Parameters.size()) {
                         ErrorNoMatchingFunction(expr->Name);
-                        return VariableType::Invalid;
+                        return CreateVarType(PrimitiveType::Invalid);
                     }
 
                     for (size_t i = 0; i < args.Size; i++) {
                         if (std::get<NodeVarDecl*>(args.Items[i]->Data)->Type != GetNodeType(expr->Parameters[i])) {
                             ErrorNoMatchingFunction(expr->Name);
-                            return VariableType::Invalid;
+                            return CreateVarType(PrimitiveType::Invalid);
                         }
                     }
 
@@ -278,7 +366,7 @@ namespace BlackLua::Internal {
                 }
 
                 ErrorUndeclaredIdentifier(expr->Name);
-                return VariableType::Invalid;
+                return CreateVarType(PrimitiveType::Invalid);
             }
 
             case NodeType::ParenExpr: {
@@ -342,31 +430,31 @@ namespace BlackLua::Internal {
                      case BinExprType::LessOrEq:
                      case BinExprType::Greater:
                      case BinExprType::GreaterOrEq:
-                        return VariableType::Bool;
+                        return CreateVarType(PrimitiveType::Bool);
 
-                    default: return VariableType::Invalid;
+                    default: return CreateVarType(PrimitiveType::Invalid);
                 }
             }
 
-            default: return VariableType::Invalid;
+            default: return CreateVarType(PrimitiveType::Invalid);
         }
 
         BLUA_ASSERT(false, "Unreachable!");
-        return VariableType::Invalid;
+        return CreateVarType(PrimitiveType::Invalid);
     }
 
     void TypeChecker::WarningMismatchedTypes(VariableType type1, VariableType type2) {
-        std::cerr << "Type warning: Assigning " << VariableTypeToString(type2) << " to " << VariableTypeToString(type1) << "!\n";
+        std::cerr << "Type warning: Assigning " << PrimitiveTypeToString(type2.Type) << " to " << PrimitiveTypeToString(type1.Type) << "!\n";
     }
 
     void TypeChecker::ErrorMismatchedTypes(VariableType type1, VariableType type2) {
-        std::cerr << "Type error: Cannot assign " << VariableTypeToString(type2) << " to " << VariableTypeToString(type1) << "!\n";
+        std::cerr << "Type error: Cannot assign " << PrimitiveTypeToString(type2.Type) << " to " << PrimitiveTypeToString(type1.Type) << "!\n";
 
         m_Error = true;
     }
 
     void TypeChecker::ErrorCannotCast(VariableType type1, VariableType type2) {
-        std::cerr << "Type error: Cannot cast type " << VariableTypeToString(type2) << " to type " << VariableTypeToString(type1) << "!\n";
+        std::cerr << "Type error: Cannot cast type " << PrimitiveTypeToString(type2.Type) << " to type " << PrimitiveTypeToString(type1.Type) << "!\n";
 
         m_Error = true;
     }
@@ -391,6 +479,12 @@ namespace BlackLua::Internal {
 
     void TypeChecker::ErrorNoMatchingFunction(const std::string_view func) {
         std::cerr << "Type error: No matching function to call: \"" << func << "\"!\n";
+
+        m_Error = true;
+    }
+
+    void TypeChecker::ErrorDefiningExternFunction(const std::string_view func) {
+        std::cerr << "Type error: Defining extern function: \"" << func << "\"!\n";
 
         m_Error = true;
     }

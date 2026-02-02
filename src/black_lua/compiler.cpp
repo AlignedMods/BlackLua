@@ -56,7 +56,7 @@ namespace BlackLua {
         }
 
         if (!valid) {
-            std::cerr << "No output generated.";
+            std::cerr << "No output generated.\n";
         }
 
         return src;

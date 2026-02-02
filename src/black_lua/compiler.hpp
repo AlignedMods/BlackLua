@@ -109,6 +109,8 @@ namespace BlackLua {
 
             String,
 
+            Extern,
+
             Identifier
         };
 
@@ -191,6 +193,8 @@ namespace BlackLua {
 
                 case TokenType::String: return "string";
 
+                case TokenType::Extern: return "extern";
+
                 case TokenType::Identifier: return "identifier";
             }
 
@@ -251,6 +255,7 @@ namespace BlackLua {
             Scope,
 
             VarDecl,
+            VarArrayDecl,
             VarRef,
 
             FunctionDecl,
@@ -264,6 +269,7 @@ namespace BlackLua {
 
             Return,
 
+            ArrayAccessExpr,
             FunctionCallExpr,
             ParenExpr,
             CastExpr,
@@ -271,7 +277,7 @@ namespace BlackLua {
             BinExpr
         };
 
-        enum class VariableType {
+        enum class PrimitiveType {
             Invalid = 0,
             Void,
             Bool,
@@ -281,25 +287,49 @@ namespace BlackLua {
             Long,
             Float,
             Double,
-            String
+            String,
         };
 
-        inline const char* VariableTypeToString(VariableType type) {
+        inline const char* PrimitiveTypeToString(PrimitiveType type) {
             switch (type) {
-                case VariableType::Invalid: return "invalid";
-                case VariableType::Void: return "void";
-                case VariableType::Bool: return "bool";
-                case VariableType::Char: return "char";
-                case VariableType::Short: return "short";
-                case VariableType::Int: return "int";
-                case VariableType::Long: return "long";
-                case VariableType::Float: return "float";
-                case VariableType::Double: return "double";
-                case VariableType::String: return "string";
+                case PrimitiveType::Invalid: return "invalid";
+                case PrimitiveType::Void: return "void";
+                case PrimitiveType::Bool: return "bool";
+                case PrimitiveType::Char: return "char";
+                case PrimitiveType::Short: return "short";
+                case PrimitiveType::Int: return "int";
+                case PrimitiveType::Long: return "long";
+                case PrimitiveType::Float: return "float";
+                case PrimitiveType::Double: return "double";
+                case PrimitiveType::String: return "string";
             }
 
             BLUA_ASSERT(false, "Unreachable!");
             return "invalid";
+        }
+
+        struct VariableType {
+            PrimitiveType Type = PrimitiveType::Invalid;
+            bool Array = false;
+
+            std::variant<size_t> Data;
+
+            bool operator==(const VariableType& other) {
+                return Type == other.Type && Array == other.Array;
+            }
+
+            bool operator!=(const VariableType& other) {
+                return !(operator==(other));
+            }
+        };
+
+        inline VariableType CreateVarType(PrimitiveType type, bool array = false, decltype(VariableType::Data) data = {}) {
+            VariableType t;
+            t.Type = type;
+            t.Array = array;
+            t.Data = data;
+
+            return t;
         }
 
         enum class UnaryExprType {
@@ -428,7 +458,7 @@ namespace BlackLua {
 
         struct NodeConstant {
             NodeType Type = NodeType::Bool;
-            VariableType VarType = VariableType::Bool;
+            VariableType VarType;
             std::variant<NodeBool*, NodeChar*, NodeInt*, NodeLong*, NodeFloat*, NodeDouble*, NodeString*, NodeInitializerList*> Data;
         };
 
@@ -438,8 +468,18 @@ namespace BlackLua {
 
         struct NodeVarDecl {
             std::string_view Identifier;
-            VariableType Type = VariableType::Invalid;
+            VariableType Type;
 
+            Node* Value = nullptr;
+
+            Node* Next = nullptr; // The next variable declaration in the list (if there is a list, such as int x, y, z = 3;), this does mean that variable declarations are recursive!
+        };
+
+        struct NodeVarArrayDecl {
+            std::string_view Identifier;
+            VariableType Type;
+
+            Node* Size = nullptr;
             Node* Value = nullptr;
 
             Node* Next = nullptr; // The next variable declaration in the list (if there is a list, such as int x, y, z = 3;), this does mean that variable declarations are recursive!
@@ -454,14 +494,16 @@ namespace BlackLua {
             std::string Signature;
 
             NodeList Arguments;
-            VariableType ReturnType = VariableType::Invalid;
+            VariableType ReturnType;
+
+            bool Extern = false;
         };
 
         struct NodeFunctionImpl {
             std::string_view Name;
 
             NodeList Arguments;
-            VariableType ReturnType = VariableType::Invalid;
+            VariableType ReturnType;
 
             Node* Body = nullptr; // Type is always NodeScope
         };
@@ -496,6 +538,12 @@ namespace BlackLua {
             Node* Value = nullptr;
         };
 
+        struct NodeArrayAccessExpr {
+            std::string_view Name;
+
+            Node* Index = nullptr;
+        };
+
         struct NodeFunctionCallExpr {
             std::string_view Name;
 
@@ -507,33 +555,33 @@ namespace BlackLua {
         };
 
         struct NodeCastExpr {
-            VariableType Type = VariableType::Invalid;
+            VariableType Type;
             Node* Expression = nullptr;
         };
 
         struct NodeUnaryExpr {
             Node* Expression = nullptr;
             UnaryExprType Type = UnaryExprType::Invalid;
-            VariableType VarType = VariableType::Invalid;
+            VariableType VarType;
         };
 
         struct NodeBinExpr {
             Node* LHS = nullptr;
             Node* RHS = nullptr;
             BinExprType Type = BinExprType::Invalid;
-            VariableType VarType = VariableType::Invalid;
+            VariableType VarType;
         };
 
         struct Node {
             NodeType Type = NodeType::Bool;
             std::variant<NodeConstant*, 
                          NodeScope*,
-                         NodeVarDecl*, NodeVarRef*,
+                         NodeVarDecl*, NodeVarArrayDecl*, NodeVarRef*,
                          NodeFunctionDecl*, NodeFunctionImpl*,
                          NodeWhile*, NodeDoWhile*, NodeFor*,
                          NodeIf*,
                          NodeReturn*,
-                         NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
+                         NodeArrayAccessExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
         };
 
         class Parser {
@@ -558,10 +606,11 @@ namespace BlackLua {
             // This function cannot fail
             bool Match(TokenType type);
 
-            Node* ParseType();
+            Node* ParseType(bool external = false);
 
             Node* ParseVariableDecl(VariableType type); // This function expects the first token to be the identifier!
-            Node* ParseFunctionDecl(VariableType returnType);
+            Node* ParseFunctionDecl(VariableType returnType, bool external = false);
+            Node* ParseExtern();
 
             Node* ParseWhile();
             Node* ParseDoWhile();
@@ -634,6 +683,8 @@ namespace BlackLua {
             void CheckNodeScope(Node* node);
 
             void CheckNodeVarDecl(Node* node);
+            void CheckNodeVarArrayDecl(Node* node);
+            void CheckNodeFunctionDecl(Node* node);
 
             void CheckNodeFunctionImpl(Node* node);
 
@@ -663,6 +714,7 @@ namespace BlackLua {
             void ErrorUndeclaredIdentifier(const std::string_view msg);
             void ErrorInvalidReturn();
             void ErrorNoMatchingFunction(const std::string_view func);
+            void ErrorDefiningExternFunction(const std::string_view func);
 
         private:
             Parser::Nodes m_Nodes; // We modify these directly
@@ -670,19 +722,25 @@ namespace BlackLua {
             bool m_Error = false;
 
             struct Declaration {
-                VariableType Type = VariableType::Invalid;
+                VariableType Type;
                 Node* Decl = nullptr;
+                bool Extern = false;
             };
 
             std::unordered_map<std::string, Declaration> m_DeclaredSymbols;
 
             struct Scope {
                 Scope* Parent = nullptr;
-                VariableType ReturnType = VariableType::Invalid; // This is only a valid type in function scopes!
+                VariableType ReturnType; // This is only a valid type in function scopes!
                 std::unordered_map<std::string, Declaration> DeclaredSymbols;
             };
 
             Scope* m_CurrentScope = nullptr;
+        };
+
+        struct CompileStackSlot {
+            StackSlotIndex Slot = 0;
+            bool Relative = false;
         };
 
         class Emitter {
@@ -703,6 +761,9 @@ namespace BlackLua {
             void EmitNodeScope(Node* node);
 
             void EmitNodeVarDecl(Node* node);
+            void EmitNodeVarArrayDecl(Node* node);
+            void EmitNodeFunctionDecl(Node* node);
+
             void EmitNodeFunctionImpl(Node* node);
 
             void EmitNodeWhile(Node* node);
@@ -711,9 +772,12 @@ namespace BlackLua {
 
             void EmitNodeReturn(Node* node);
 
-            int32_t EmitNodeExpression(Node* node);
+            CompileStackSlot EmitNodeExpression(Node* node);
 
             size_t GetTypeSize(VariableType type);
+            size_t GetPrimitiveSize(PrimitiveType type);
+
+            StackSlotIndex CompileToRuntimeStackSlot(CompileStackSlot slot);
 
             int32_t CreateLabel(const std::string& debugData = {});
             void PushBytes(size_t bytes, const std::string& debugData = {});
@@ -728,11 +792,12 @@ namespace BlackLua {
 
             size_t m_SlotCount = 0;
             size_t m_LabelCount = 0;
-            std::unordered_map<Node*, int32_t> m_ConstantMap;
+            std::unordered_map<Node*, CompileStackSlot> m_ConstantMap;
 
             struct Declaration {
                 int32_t Index = 0;
                 size_t Size = 0;
+                bool Extern = false;
             };
 
             std::unordered_map<std::string, Declaration> m_DeclaredSymbols;

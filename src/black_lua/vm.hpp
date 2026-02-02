@@ -8,6 +8,22 @@
 
 namespace BlackLua::Internal {
 
+    class VM;
+    using ExternFn = void(*)(VM* vm);
+
+    struct StackSlotIndex {
+        StackSlotIndex() = default;
+        StackSlotIndex(int32_t slot) : Slot(slot) {}
+        StackSlotIndex(int32_t slot, size_t offset, size_t size) : Slot(slot), Offset(offset), Size(size) {}
+
+        StackSlotIndex operator-(int32_t lhs) { return StackSlotIndex(Slot - lhs, Offset, Size); }
+        bool operator==(int32_t lhs) { return Slot == lhs; }
+
+        int32_t Slot = 0;
+        size_t Offset = 0;
+        size_t Size = 0;
+    };
+
     enum class OpCodeType {
         Invalid,
         Nop,
@@ -20,6 +36,7 @@ namespace BlackLua::Internal {
         Get, // Automaticaly pushes the value onto the stack
         Copy, // Copies a value into another slot
         Dup, // Creates a new stack slot and copies a value into it
+        Offset, // Adds a certain offset (specified as a slot) to a specified slot
 
         Label,
         Jmp,
@@ -27,6 +44,7 @@ namespace BlackLua::Internal {
         Jf, // Perform a jump if the value at the specified slot is false (value must be a boolean)
 
         Call, // Performs a jump and sets up a scope
+        CallExtern, // Calls a native C/C++ function
         Ret, // Performs a jump to the current scopes return address, then pops the current scope
         RetValue, // Does the same as ret but also copies a slot into the given return slot
 
@@ -55,7 +73,7 @@ namespace BlackLua::Internal {
     };
 
     struct OpCodeStore {
-        int32_t SlotIndex = 0;
+        StackSlotIndex SlotIndex{};
         void* Data = nullptr; // NOTE: The VM should not care what this contains, it should just copy it to a slot
                               // Another note: The VM should not free this memory, it should be part of the arena allocator
 
@@ -63,29 +81,29 @@ namespace BlackLua::Internal {
     };
 
     struct OpCodeCopy {
-        int32_t DstSlot = 0;
-        int32_t SrcSlot = 0;
+        StackSlotIndex DstSlot{};
+        StackSlotIndex SrcSlot{};
+    };
+
+    struct OpCodeOffset {
+        StackSlotIndex Offset{};
+        StackSlotIndex Slot{};
+        size_t Size = 0;
     };
 
     struct OpCodeJump {
-        int32_t Slot = 0;
+        StackSlotIndex Slot{};
         int32_t Label = -1;
-    };
-
-    struct OpCodeCall {
-        int32_t Label = -1;
-        size_t ParamCount = 0;
-        size_t ReturnCount = 0;
     };
 
     struct OpCodeMath {
-        int32_t LHSSlot = 0;
-        int32_t RHSSlot = 0;
+        StackSlotIndex LHSSlot{};
+        StackSlotIndex RHSSlot{};
     };
 
     struct OpCode {
         OpCodeType Type = OpCodeType::Invalid;
-        std::variant<int32_t, OpCodeStore, OpCodeCopy, OpCodeJump, OpCodeCall, OpCodeMath> Data;
+        std::variant<StackSlotIndex, std::string, OpCodeStore, OpCodeCopy, OpCodeOffset, OpCodeJump, OpCodeMath> Data;
         std::string DebugData; // Optional debug data the compiler can provide
     };
 
@@ -93,7 +111,7 @@ namespace BlackLua::Internal {
         size_t Index = 0;
         size_t Size = 0;
         bool ReadOnly = false;
-    }; 
+    };
 
     class VM {
     public:
@@ -111,51 +129,54 @@ namespace BlackLua::Internal {
         // Removes the current scope and goes back to the previous one (if there is one)
         void PopScope();
 
-        void Call(int32_t label, size_t paramCount, size_t returnCount);
+        void AddExtern(const std::string& signature, ExternFn fn);
+
+        void Call(int32_t label);
+        void CallExtern(const std::string& signature);
         
-        void StoreBool(int32_t slot, bool b);
-        void StoreChar(int32_t slot, int8_t c);
-        void StoreShort(int32_t slot, int16_t ch);
-        void StoreInt(int32_t slot, int32_t i);
-        void StoreLong(int32_t slot, int64_t l);
-        void StoreFloat(int32_t slot, float f);
-        void StoreDouble(int32_t slot, double d);
+        void StoreBool(StackSlotIndex slot, bool b);
+        void StoreChar(StackSlotIndex slot, int8_t c);
+        void StoreShort(StackSlotIndex slot, int16_t ch);
+        void StoreInt(StackSlotIndex slot, int32_t i);
+        void StoreLong(StackSlotIndex slot, int64_t l);
+        void StoreFloat(StackSlotIndex slot, float f);
+        void StoreDouble(StackSlotIndex slot, double d);
 
         // Copies the memory at one slot (srcSlot) to another slot (dstSlot)
-        void Copy(int32_t dstSlot, int32_t srcSlot);
+        void Copy(StackSlotIndex dstSlot, StackSlotIndex srcSlot);
 
-        bool GetBool(int32_t slot);
-        int8_t GetChar(int32_t slot);
-        int16_t GetShort(int32_t slot);
-        int32_t GetInt(int32_t slot);
-        int64_t GetLong(int32_t slot);
-        float GetFloat(int32_t slot);
-        double GetDouble(int32_t slot);
+        bool GetBool(StackSlotIndex slot);
+        int8_t GetChar(StackSlotIndex slot);
+        int16_t GetShort(StackSlotIndex slot);
+        int32_t GetInt(StackSlotIndex slot);
+        int64_t GetLong(StackSlotIndex slot);
+        float GetFloat(StackSlotIndex slot);
+        double GetDouble(StackSlotIndex slot);
 
-        void NegateIntegral(int32_t val);
-        void NegateFloating(int32_t val);
+        void NegateIntegral(StackSlotIndex val);
+        void NegateFloating(StackSlotIndex val);
 
-        void AddIntegral(int32_t lhs, int32_t rhs);
-        void SubIntegral(int32_t lhs, int32_t rhs);
-        void MulIntegral(int32_t lhs, int32_t rhs);
-        void DivIntegral(int32_t lhs, int32_t rhs);
+        void AddIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
+        void SubIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
+        void MulIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
+        void DivIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
 
-        void CmpIntegral(int32_t lhs, int32_t rhs);
-        void LtIntegral(int32_t lhs, int32_t rhs);
-        void LteIntegral(int32_t lhs, int32_t rhs);
-        void GtIntegral(int32_t lhs, int32_t rhs);
-        void GteIntegral(int32_t lhs, int32_t rhs);
+        void CmpIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
+        void LtIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
+        void LteIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
+        void GtIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
+        void GteIntegral(StackSlotIndex lhs, StackSlotIndex rhs);
 
-        void AddFloating(int32_t lhs, int32_t rhs);
-        void SubFloating(int32_t lhs, int32_t rhs);
-        void MulFloating(int32_t lhs, int32_t rhs);
-        void DivFloating(int32_t lhs, int32_t rhs);
+        void AddFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+        void SubFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+        void MulFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+        void DivFloating(StackSlotIndex lhs, StackSlotIndex rhs);
 
-        void CmpFloating(int32_t lhs, int32_t rhs);
-        void LtFloating(int32_t lhs, int32_t rhs);
-        void LteFloating(int32_t lhs, int32_t rhs);
-        void GtFloating(int32_t lhs, int32_t rhs);
-        void GteFloating(int32_t lhs, int32_t rhs);
+        void CmpFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+        void LtFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+        void LteFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+        void GtFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+        void GteFloating(StackSlotIndex lhs, StackSlotIndex rhs);
 
         // Run an array of op codes in the VM, executing each operations one at a time
         void RunByteCode(const OpCode* data, size_t count);
@@ -166,7 +187,8 @@ namespace BlackLua::Internal {
         // AKA: return stack[top of stack + slot]
         // If it's positive though, it accesses from the start of the stack,
         // AKA: return stack[slot]
-        StackSlot& GetStackSlot(int32_t slot);
+        StackSlot GetStackSlot(StackSlotIndex slot);
+        size_t GetStackSlotIndex(int32_t slot);
 
         // Sets a breakpoint up for when the program counter hits a specified value
         void AddBreakPoint(int32_t pc);
@@ -176,7 +198,7 @@ namespace BlackLua::Internal {
 
         // Helpers to avoid a LOT of repetition (NOTE: They may look quite ugly because they need to handle a lot of possible combinations)
         template <typename T>
-        void AddGeneric(int32_t lhs, int32_t rhs) {
+        void AddGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -193,7 +215,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void SubGeneric(int32_t lhs, int32_t rhs) {
+        void SubGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -210,7 +232,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void MulGeneric(int32_t lhs, int32_t rhs) {
+        void MulGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -227,7 +249,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void DivGeneric(int32_t lhs, int32_t rhs) {
+        void DivGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -244,7 +266,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void CmpGeneric(int32_t lhs, int32_t rhs) {
+        void CmpGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -261,7 +283,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void LtGeneric(int32_t lhs, int32_t rhs) {
+        void LtGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -278,7 +300,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void LteGeneric(int32_t lhs, int32_t rhs) {
+        void LteGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -295,7 +317,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void GtGeneric(int32_t lhs, int32_t rhs) {
+        void GtGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -312,7 +334,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void GteGeneric(int32_t lhs, int32_t rhs) {
+        void GteGeneric(StackSlotIndex lhs, StackSlotIndex rhs) {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
@@ -329,7 +351,7 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        void NegateGeneric(int32_t value) {
+        void NegateGeneric(StackSlotIndex value) {
             StackSlot __value = GetStackSlot(value);
             T v{};
             memcpy(&v, &m_Stack[__value.Index], __value.Size);
@@ -364,6 +386,8 @@ namespace BlackLua::Internal {
 
         std::unordered_map<int32_t, size_t> m_Labels;
         size_t m_LabelCount = 0;
+
+        std::unordered_map<std::string, ExternFn> m_ExternFuncs;
 
         std::unordered_map<int32_t, bool> m_BreakPoints;
     };

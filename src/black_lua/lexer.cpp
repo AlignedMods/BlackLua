@@ -88,6 +88,8 @@ namespace BlackLua::Internal {
 
                 BLUA_TOKEN("string", String);
 
+                BLUA_TOKEN("extern", Extern);
+
                 if (!foundToken) {
                     // BLUA_TOKEN_DATA(buf, Identifier, buf); 
                     AddToken(TokenType::Identifier, buf);

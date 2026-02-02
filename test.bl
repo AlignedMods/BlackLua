@@ -1,9 +1,7 @@
 int foo = 0;
 
-void test(int arg1, int arg2) {
-    foo = arg1 + arg2;
-}
-
 void main() {
-    test(1 + 2 + 3, 1 + 2 + 3);
+    int arr[100];
+    arr[5 + 9] = 9 * 7;
+    foo = arr[14] + 10;
 }

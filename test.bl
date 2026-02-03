@@ -1,6 +1,7 @@
 int foo = 0;
 
 void main() {
-    double var = 5.5 + 4.5;
-    foo = (int)var;
+    double arr[10];
+    arr[5] = 420.69;
+    foo = (int)arr[4 + 5 - 4];
 }

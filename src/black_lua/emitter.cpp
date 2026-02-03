@@ -177,6 +177,13 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case NodeType::CastExpr: {
+                NodeCastExpr* expr = std::get<NodeCastExpr*>(node->Data);
+
+                EmitConstant(expr->Expression);
+                break;
+            }
+
             case NodeType::FunctionCallExpr: {
                 NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
 
@@ -235,6 +242,7 @@ namespace BlackLua::Internal {
             d.Index = m_SlotCount;   
         }
         d.Size = GetTypeSize(decl->Type);
+        d.Type = decl->Type;
 
         map[std::string(decl->Identifier)] = d;
 
@@ -270,6 +278,7 @@ namespace BlackLua::Internal {
             d.Index = m_SlotCount;   
         }
         d.Size = GetTypeSize(decl->Type);
+        d.Type = decl->Type;
 
         map[std::string(decl->Identifier)] = d;
 
@@ -299,6 +308,7 @@ namespace BlackLua::Internal {
             Declaration d;
             d.Size = GetTypeSize(decl->ReturnType);
             d.Extern = true;
+            d.Type = decl->ReturnType;
             m_DeclaredSymbols[ident] = d;
         }
     }
@@ -310,6 +320,7 @@ namespace BlackLua::Internal {
         Declaration decl;
         decl.Index = CreateLabel(std::format("function {}", impl->Name));
         decl.Size = GetTypeSize(impl->ReturnType);
+        decl.Type = impl->ReturnType;
         m_DeclaredSymbols[ident] = decl;
 
         // We don't want to create a new scope
@@ -443,6 +454,7 @@ namespace BlackLua::Internal {
 
                 std::string ident(expr->Name);
 
+                Declaration decl;
                 CompileStackSlot index = EmitNodeExpression(expr->Index);
                 CompileStackSlot slot;
                 size_t size = 0;
@@ -453,6 +465,7 @@ namespace BlackLua::Internal {
                     if (currentScope->DeclaredSymbols.contains(ident)) {
                         slot = CompileStackSlot(currentScope->DeclaredSymbols.at(ident).Index, true);
                         size = currentScope->DeclaredSymbols.at(ident).Size;
+                        decl = currentScope->DeclaredSymbols.at(ident);
                     }
 
                     currentScope = currentScope->Parent;
@@ -462,13 +475,14 @@ namespace BlackLua::Internal {
                 if (m_DeclaredSymbols.contains(ident)) {
                     slot = CompileStackSlot(m_DeclaredSymbols.at(ident).Index, false);
                     size = m_DeclaredSymbols.at(ident).Size;
+                    decl = m_DeclaredSymbols.at(ident);
                 }
 
                 // m_OpCodes.emplace_back(OpCodeType::Dup, slot);
-                m_OpCodes.emplace_back(OpCodeType::Offset, OpCodeOffset(CompileToRuntimeStackSlot(index), CompileToRuntimeStackSlot(slot), 4));
+                m_OpCodes.emplace_back(OpCodeType::Offset, OpCodeOffset(CompileToRuntimeStackSlot(index), CompileToRuntimeStackSlot(slot), GetTypeSize(CreateVarType(decl.Type.Type, false))));
                 IncrementStackSlotCount();
 
-                return CompileStackSlot(StackSlotIndex((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, slot.Slot.Offset, 4), slot.Relative);
+                return CompileStackSlot(StackSlotIndex((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, slot.Slot.Offset, GetTypeSize(CreateVarType(decl.Type.Type, false))), slot.Relative);
                 break;
             }
 
@@ -609,7 +623,8 @@ namespace BlackLua::Internal {
         if (type.Array) {
             size_t s = std::get<size_t>(type.Data);
 
-            return GetPrimitiveSize(type.Type) * s;
+            size_t elemSize = GetTypeSize(CreateVarType(type.Type, false));
+            return elemSize * s;
         }
         
         return GetPrimitiveSize(type.Type);

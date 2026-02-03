@@ -798,6 +798,7 @@ namespace BlackLua {
             struct Declaration {
                 int32_t Index = 0;
                 size_t Size = 0;
+                VariableType Type{};
                 bool Extern = false;
             };
 

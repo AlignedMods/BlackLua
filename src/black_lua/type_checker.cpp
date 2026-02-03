@@ -381,6 +381,8 @@ namespace BlackLua::Internal {
                 VariableType typeToCast = GetNodeType(expr->Expression);
                 VariableType casted = expr->Type;
 
+                expr->SourceType = typeToCast;
+
                 size_t cost = GetConversionCost(casted, typeToCast);
 
                 if (cost > 2) {

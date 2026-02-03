@@ -556,6 +556,7 @@ namespace BlackLua {
 
         struct NodeCastExpr {
             VariableType Type;
+            VariableType SourceType;
             Node* Expression = nullptr;
         };
 

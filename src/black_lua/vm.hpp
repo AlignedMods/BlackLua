@@ -69,7 +69,12 @@ namespace BlackLua::Internal {
         LtFloating,
         LteFloating,
         GtFloating,
-        GteFloating
+        GteFloating,
+
+        CastIntegralToIntegral,
+        CastIntegralToFloating,
+        CastFloatingToIntegral,
+        CastFloatingToFloating,
     };
 
     struct OpCodeStore {
@@ -101,9 +106,14 @@ namespace BlackLua::Internal {
         StackSlotIndex RHSSlot{};
     };
 
+    struct OpCodeCast {
+        StackSlotIndex Value{};
+        size_t Size = 0;
+    };
+
     struct OpCode {
         OpCodeType Type = OpCodeType::Invalid;
-        std::variant<StackSlotIndex, std::string, OpCodeStore, OpCodeCopy, OpCodeOffset, OpCodeJump, OpCodeMath> Data;
+        std::variant<StackSlotIndex, std::string, OpCodeStore, OpCodeCopy, OpCodeOffset, OpCodeJump, OpCodeMath, OpCodeCast> Data;
         std::string DebugData; // Optional debug data the compiler can provide
     };
 
@@ -177,6 +187,11 @@ namespace BlackLua::Internal {
         void LteFloating(StackSlotIndex lhs, StackSlotIndex rhs);
         void GtFloating(StackSlotIndex lhs, StackSlotIndex rhs);
         void GteFloating(StackSlotIndex lhs, StackSlotIndex rhs);
+
+        void CastIntegralToIntegral(StackSlotIndex val, size_t size);
+        void CastIntegralToFloating(StackSlotIndex val, size_t size);
+        void CastFloatingToIntegral(StackSlotIndex val, size_t size);
+        void CastFloatingToFloating(StackSlotIndex val, size_t size);
 
         // Run an array of op codes in the VM, executing each operations one at a time
         void RunByteCode(const OpCode* data, size_t count);
@@ -362,6 +377,20 @@ namespace BlackLua::Internal {
             StackSlot newSlot = GetStackSlot(-1);
 
             memcpy(&m_Stack[newSlot.Index], &v, newSlot.Size);
+        }
+
+        template <typename T, typename Y>
+        void CastGeneric(StackSlotIndex value) {
+            StackSlot __value = GetStackSlot(value);
+            T v{};
+            memcpy(&v, &m_Stack[__value.Index], __value.Size);
+
+            Y t1 = static_cast<Y>(v);
+
+            PushBytes(sizeof(Y));
+            StackSlot __newSlot = GetStackSlot(-1);
+
+            memcpy(&m_Stack[__newSlot.Index], &t1, __newSlot.Size);
         }
 
     private:

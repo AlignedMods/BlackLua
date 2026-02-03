@@ -744,6 +744,134 @@ namespace BlackLua::Internal {
         }
     }
 
+    void VM::CastIntegralToIntegral(StackSlotIndex val, size_t size) {
+        StackSlot value = GetStackSlot(val);
+
+        #define CAST_CASE(x, t) case x: { \
+            switch (size) { \
+                case 1: { \
+                    CastGeneric<t, int8_t>(val); \
+                    break; \
+                } \
+                case 2: { \
+                    CastGeneric<t, int16_t>(val); \
+                    break; \
+                } \
+                case 4: { \
+                    CastGeneric<t, int32_t>(val); \
+                    break; \
+                } \
+                case 8: { \
+                    CastGeneric<t, int64_t>(val); \
+                    break; \
+                } \
+                default: BLUA_ASSERT(false, "Invalid size!"); break; \
+            } \
+            break; \
+        }
+
+        switch (value.Size) {
+            CAST_CASE(1, int8_t);
+            CAST_CASE(2, int16_t);
+            CAST_CASE(4, int32_t);
+            CAST_CASE(8, int64_t);
+            default: BLUA_ASSERT(false, "Invalid size!"); break;
+        }
+
+        #undef CAST_CASE
+    }
+
+    void VM::CastIntegralToFloating(StackSlotIndex val, size_t size) {
+        StackSlot value = GetStackSlot(val);
+
+        #define CAST_CASE(x, t) case x: { \
+            switch (size) { \
+                case 4: { \
+                    CastGeneric<t, float>(val); \
+                    break; \
+                } \
+                case 8: { \
+                    CastGeneric<t, double>(val); \
+                    break; \
+                } \
+                default: BLUA_ASSERT(false, "Invalid size!"); break; \
+            } \
+            break; \
+        }
+
+        switch (value.Size) {
+            CAST_CASE(1, int8_t);
+            CAST_CASE(2, int16_t);
+            CAST_CASE(4, int32_t);
+            CAST_CASE(8, int64_t);
+            default: BLUA_ASSERT(false, "Invalid size!"); break;
+        }
+
+        #undef CAST_CASE
+    }
+
+    void VM::CastFloatingToIntegral(StackSlotIndex val, size_t size) {
+        StackSlot value = GetStackSlot(val);
+
+        #define CAST_CASE(x, t) case x: { \
+            switch (size) { \
+                case 1: { \
+                    CastGeneric<t, int8_t>(val); \
+                    break; \
+                } \
+                case 2: { \
+                    CastGeneric<t, int16_t>(val); \
+                    break; \
+                } \
+                case 4: { \
+                    CastGeneric<t, int32_t>(val); \
+                    break; \
+                } \
+                case 8: { \
+                    CastGeneric<t, int64_t>(val); \
+                    break; \
+                } \
+                default: BLUA_ASSERT(false, "Invalid size!"); break; \
+            } \
+            break; \
+        }
+
+        switch (value.Size) {
+            CAST_CASE(4, float);
+            CAST_CASE(8, double);
+            default: BLUA_ASSERT(false, "Invalid size!"); break;
+        }
+
+        #undef CAST_CASE
+    }
+
+    void VM::CastFloatingToFloating(StackSlotIndex val, size_t size) {
+        StackSlot value = GetStackSlot(val);
+
+        #define CAST_CASE(x, t) case x: { \
+            switch (size) { \
+                case 4: { \
+                    CastGeneric<t, float>(val); \
+                    break; \
+                } \
+                case 8: { \
+                    CastGeneric<t, double>(val); \
+                    break; \
+                } \
+                default: BLUA_ASSERT(false, "Invalid size!"); break; \
+            } \
+            break; \
+        }
+
+        switch (value.Size) {
+            CAST_CASE(4, float);
+            CAST_CASE(8, double);
+            default: BLUA_ASSERT(false, "Invalid size!"); break;
+        }
+
+        #undef CAST_CASE
+    }
+
     void VM::RunByteCode(const OpCode* data, size_t count) {
         m_Program = data;
         m_ProgramSize = count;
@@ -757,6 +885,12 @@ namespace BlackLua::Internal {
         #define CASE_MATH(type) case OpCodeType::type: {     \
             OpCodeMath math = std::get<OpCodeMath>(op.Data); \
             type(math.LHSSlot, math.RHSSlot);                \
+            break;                                           \
+        }
+
+        #define CASE_CAST(type) case OpCodeType::type: {     \
+            OpCodeCast cast = std::get<OpCodeCast>(op.Data); \
+            type(cast.Value, cast.Size);                     \
             break;                                           \
         }
 
@@ -977,10 +1111,16 @@ namespace BlackLua::Internal {
                 CASE_MATH(LteFloating);
                 CASE_MATH(GtFloating);
                 CASE_MATH(GteFloating);
+
+                CASE_CAST(CastIntegralToIntegral);
+                CASE_CAST(CastIntegralToFloating);
+                CASE_CAST(CastFloatingToIntegral);
+                CASE_CAST(CastFloatingToFloating);
             }
         }
 
         #undef CASE_MATH
+        #undef CASE_CAST
     }
 
     StackSlot VM::GetStackSlot(StackSlotIndex slot) {

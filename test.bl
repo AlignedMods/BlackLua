@@ -1,7 +1,9 @@
-int foo = 0;
+int foo = 4;
+
+int add(int lhs, int rhs) {
+    return lhs + rhs;
+}
 
 void main() {
-    double arr[10];
-    arr[5] = 420.69;
-    foo = (int)arr[4 + 5 - 4];
+    foo = add(foo, 1000);
 }

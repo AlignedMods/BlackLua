@@ -57,7 +57,6 @@ namespace BlackLua::Internal {
 
                 BLUA_TOKEN("if", If);
                 BLUA_TOKEN("else", Else);
-                BLUA_TOKEN("elseif", ElseIf);
                 BLUA_TOKEN("then", Then);
                 BLUA_TOKEN("end", End);
 
@@ -70,6 +69,8 @@ namespace BlackLua::Internal {
 
                 BLUA_TOKEN("break", Break);
                 BLUA_TOKEN("return", Return);
+
+                BLUA_TOKEN("struct", Struct);
 
                 BLUA_TOKEN("true", True);
                 BLUA_TOKEN("false", False);

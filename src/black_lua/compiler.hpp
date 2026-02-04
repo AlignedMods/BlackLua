@@ -69,7 +69,6 @@ namespace BlackLua {
 
             If,
             Else,
-            ElseIf,
             Then,
             End,
 
@@ -85,6 +84,8 @@ namespace BlackLua {
 
             True,
             False,
+
+            Struct,
 
             CharLit,
             IntLit,
@@ -156,7 +157,6 @@ namespace BlackLua {
 
                 case TokenType::If: return "if";
                 case TokenType::Else: return "else";
-                case TokenType::ElseIf: return "elseif";
                 case TokenType::Then: return "then";
                 case TokenType::End: return "end";
 
@@ -169,6 +169,8 @@ namespace BlackLua {
 
                 case TokenType::Break: return "break";
                 case TokenType::Return: return "return";
+
+                case TokenType::Struct: return "struct";
 
                 case TokenType::True: return "true";
                 case TokenType::False: return "false";
@@ -257,6 +259,10 @@ namespace BlackLua {
             VarDecl,
             VarArrayDecl,
             VarRef,
+            MemberRef,
+
+            StructDecl,
+            FieldDecl,
 
             FunctionDecl,
             FunctionImpl,
@@ -270,6 +276,7 @@ namespace BlackLua {
             Return,
 
             ArrayAccessExpr,
+            StructAccessExpr,
             FunctionCallExpr,
             ParenExpr,
             CastExpr,
@@ -288,6 +295,9 @@ namespace BlackLua {
             Float,
             Double,
             String,
+
+            Array,
+            Structure
         };
 
         inline const char* PrimitiveTypeToString(PrimitiveType type) {
@@ -302,20 +312,37 @@ namespace BlackLua {
                 case PrimitiveType::Float: return "float";
                 case PrimitiveType::Double: return "double";
                 case PrimitiveType::String: return "string";
+
+                case PrimitiveType::Array: return "array";
+                case PrimitiveType::Structure: return "struct";
             }
 
             BLUA_ASSERT(false, "Unreachable!");
             return "invalid";
         }
 
+        struct VariableType;
+
+        struct StructFieldDeclaration {
+            std::string_view Identifier;
+            size_t Offset = 0;
+
+            VariableType* ResolvedType = nullptr;
+        };
+
+        struct StructDeclaration {
+            std::string_view Identifier;
+            std::vector<StructFieldDeclaration> Fields;
+
+            size_t Size = 0;
+        };
+
         struct VariableType {
             PrimitiveType Type = PrimitiveType::Invalid;
-            bool Array = false;
-
-            std::variant<size_t> Data;
+            std::variant<VariableType*, StructDeclaration> Data;
 
             bool operator==(const VariableType& other) {
-                return Type == other.Type && Array == other.Array;
+                return Type == other.Type;
             }
 
             bool operator!=(const VariableType& other) {
@@ -323,13 +350,38 @@ namespace BlackLua {
             }
         };
 
-        inline VariableType CreateVarType(PrimitiveType type, bool array = false, decltype(VariableType::Data) data = {}) {
-            VariableType t;
-            t.Type = type;
-            t.Array = array;
-            t.Data = data;
+        inline VariableType* CreateVarType(PrimitiveType type, decltype(VariableType::Data) data = {}) {
+            VariableType* t = GetAllocator()->AllocateNamed<VariableType>();
+            t->Type = type;
+            t->Data = data;
 
             return t;
+        }
+
+        inline size_t GetTypeSize(VariableType* type) {
+            switch (type->Type) {
+                case PrimitiveType::Void: return 0;
+                case PrimitiveType::Bool: return 1;
+                case PrimitiveType::Char: return 1;
+                case PrimitiveType::Short: return 2;
+                case PrimitiveType::Int: return 4;
+                case PrimitiveType::Float: return 4;
+                case PrimitiveType::Long: return 8;
+                case PrimitiveType::Double: return 8;
+
+                case PrimitiveType::Structure: {
+                    StructDeclaration decl = std::get<StructDeclaration>(type->Data);
+                    return decl.Size;
+                }
+
+                case PrimitiveType::Array: {
+                    return sizeof(void*) + 4;
+                }
+
+                default: BLUA_ASSERT(false, "Unreachable!");
+            }
+
+            return 0;
         }
 
         enum class UnaryExprType {
@@ -365,7 +417,7 @@ namespace BlackLua {
 
             Eq,
             IsEq,
-            IsNotEq
+            IsNotEq,
         };
 
         inline const char* BinExprTypeToString(BinExprType type) {
@@ -458,8 +510,9 @@ namespace BlackLua {
 
         struct NodeConstant {
             NodeType Type = NodeType::Bool;
-            VariableType VarType;
             std::variant<NodeBool*, NodeChar*, NodeInt*, NodeLong*, NodeFloat*, NodeDouble*, NodeString*, NodeInitializerList*> Data;
+
+            VariableType* ResolvedType = nullptr;
         };
 
         struct NodeScope {
@@ -468,16 +521,18 @@ namespace BlackLua {
 
         struct NodeVarDecl {
             std::string_view Identifier;
-            VariableType Type;
+            std::string Type;
 
             Node* Value = nullptr;
 
             Node* Next = nullptr; // The next variable declaration in the list (if there is a list, such as int x, y, z = 3;), this does mean that variable declarations are recursive!
+
+            VariableType* ResolvedType = nullptr;
         };
 
         struct NodeVarArrayDecl {
             std::string_view Identifier;
-            VariableType Type;
+            std::string Type;
 
             Node* Size = nullptr;
             Node* Value = nullptr;
@@ -487,6 +542,25 @@ namespace BlackLua {
 
         struct NodeVarRef {
             std::string_view Identifier;
+
+            VariableType* ResolvedType = nullptr;
+        };
+
+        struct NodeMemberRef {
+            std::string_view Identifier;
+
+            VariableType* ResolvedType = nullptr;
+        };
+
+        struct NodeStructDecl {
+            std::string_view Identifier;
+
+            NodeList Fields;
+        };
+
+        struct NodeFieldDecl {
+            std::string_view Identifier;
+            std::string Type;
         };
 
         struct NodeFunctionDecl {
@@ -494,29 +568,31 @@ namespace BlackLua {
             std::string Signature;
 
             NodeList Arguments;
-            VariableType ReturnType;
+            std::string ReturnType;
 
             bool Extern = false;
+
+            VariableType* ResolvedType = nullptr;
         };
 
         struct NodeFunctionImpl {
             std::string_view Name;
 
             NodeList Arguments;
-            VariableType ReturnType;
+            std::string ReturnType;
 
             Node* Body = nullptr; // Type is always NodeScope
+
+            VariableType* ResolvedType = nullptr;
         };
 
         struct NodeWhile {
             Node* Condition = nullptr;
-
             Node* Body = nullptr; // Type is always NodeScope
         };
 
         struct NodeDoWhile {
             Node* Body = nullptr; // Type is always NodeScope
-
             Node* Condition = nullptr;
         };
 
@@ -524,14 +600,13 @@ namespace BlackLua {
             Node* Prologue = nullptr; // int i = 0;
             Node* Condition = nullptr; // i < 5;
             Node* Epilogue = nullptr; // i += 1;
-
             Node* Body = nullptr;
         };
 
         struct NodeIf {
             Node* Condition = nullptr;
-
             Node* Body = nullptr;
+            Node* ElseBody = nullptr;
         };
 
         struct NodeReturn {
@@ -540,13 +615,18 @@ namespace BlackLua {
 
         struct NodeArrayAccessExpr {
             std::string_view Name;
-
             Node* Index = nullptr;
+        };
+
+        struct NodeStructAccessExpr {
+            Node* Name = nullptr;
+            Node* Member = nullptr;
+
+            VariableType* ResolvedType = nullptr;
         };
 
         struct NodeFunctionCallExpr {
             std::string_view Name;
-
             std::vector<Node*> Parameters;
         };
 
@@ -555,34 +635,39 @@ namespace BlackLua {
         };
 
         struct NodeCastExpr {
-            VariableType Type;
-            VariableType SourceType;
+            std::string Type;
             Node* Expression = nullptr;
+
+            VariableType* ResolvedSrcType = nullptr;
+            VariableType* ResolvedDstType = nullptr;
         };
 
         struct NodeUnaryExpr {
             Node* Expression = nullptr;
             UnaryExprType Type = UnaryExprType::Invalid;
-            VariableType VarType;
+
+            VariableType* ResolvedType = nullptr;
         };
 
         struct NodeBinExpr {
             Node* LHS = nullptr;
             Node* RHS = nullptr;
             BinExprType Type = BinExprType::Invalid;
-            VariableType VarType;
+
+            VariableType* ResolvedType = nullptr;
         };
 
         struct Node {
             NodeType Type = NodeType::Bool;
             std::variant<NodeConstant*, 
                          NodeScope*,
-                         NodeVarDecl*, NodeVarArrayDecl*, NodeVarRef*,
+                         NodeVarDecl*, NodeVarArrayDecl*, NodeVarRef*, NodeMemberRef*,
+                         NodeStructDecl*, NodeFieldDecl*,
                          NodeFunctionDecl*, NodeFunctionImpl*,
                          NodeWhile*, NodeDoWhile*, NodeFor*,
                          NodeIf*,
                          NodeReturn*,
-                         NodeArrayAccessExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
+                         NodeArrayAccessExpr*, NodeStructAccessExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
         };
 
         class Parser {
@@ -609,9 +694,11 @@ namespace BlackLua {
 
             Node* ParseType(bool external = false);
 
-            Node* ParseVariableDecl(VariableType type); // This function expects the first token to be the identifier!
-            Node* ParseFunctionDecl(VariableType returnType, bool external = false);
+            Node* ParseVariableDecl(const std::string& type); // This function expects the first token to be the identifier!
+            Node* ParseFunctionDecl(const std::string& returnType, bool external = false);
             Node* ParseExtern();
+
+            Node* ParseStructDecl();
 
             Node* ParseWhile();
             Node* ParseDoWhile();
@@ -624,7 +711,9 @@ namespace BlackLua {
             // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables)
             Node* ParseValue();
             BinExprType ParseOperator();
-            VariableType ParseVariableType();
+            std::string ParseVariableType();
+            bool IsPrimitiveType();
+            bool IsVariableType();
             size_t GetBinaryPrecedence(BinExprType type);
 
             Node* ParseScope();
@@ -663,6 +752,7 @@ namespace BlackLua {
             Nodes m_Nodes;
             size_t m_Index = 0;
             Lexer::Tokens m_Tokens;
+            bool m_NeedsSemi = true; // A flag to see if the current statement needs to finish with a semicolon
             bool m_Error = false;
         };
 
@@ -687,6 +777,8 @@ namespace BlackLua {
             void CheckNodeVarArrayDecl(Node* node);
             void CheckNodeFunctionDecl(Node* node);
 
+            void CheckNodeStructDecl(Node* node);
+
             void CheckNodeFunctionImpl(Node* node);
 
             void CheckNodeWhile(Node* node);
@@ -696,7 +788,7 @@ namespace BlackLua {
 
             void CheckNodeReturn(Node* node);
 
-            void CheckNodeExpression(VariableType type, Node* node);
+            void CheckNodeExpression(VariableType* type, Node* node);
 
             void CheckNode(Node* node);
 
@@ -705,8 +797,9 @@ namespace BlackLua {
             // type1 var = type2;
             // The bigger the return value is, the more expensive it is to do a conversion
             // 0 is the best conversion rate (no cast needed), and 3 is the worst conversion rate (impossible conversion)
-            size_t GetConversionCost(VariableType type1, VariableType type2);
-            VariableType GetNodeType(Node* node);
+            size_t GetConversionCost(VariableType* type1, VariableType* type2);
+            VariableType* GetNodeType(Node* node);
+            VariableType* GetVarTypeFromString(const std::string& str);
 
             void WarningMismatchedTypes(VariableType type1, VariableType type2);
             void ErrorMismatchedTypes(VariableType type1, VariableType type2);
@@ -723,16 +816,17 @@ namespace BlackLua {
             bool m_Error = false;
 
             struct Declaration {
-                VariableType Type;
+                VariableType* Type;
                 Node* Decl = nullptr;
                 bool Extern = false;
             };
 
             std::unordered_map<std::string, Declaration> m_DeclaredSymbols;
+            std::unordered_map<std::string, StructDeclaration> m_DeclaredStructs;
 
             struct Scope {
                 Scope* Parent = nullptr;
-                VariableType ReturnType; // This is only a valid type in function scopes!
+                VariableType* ReturnType; // This is only a valid type in function scopes!
                 std::unordered_map<std::string, Declaration> DeclaredSymbols;
             };
 
@@ -775,9 +869,6 @@ namespace BlackLua {
 
             CompileStackSlot EmitNodeExpression(Node* node);
 
-            size_t GetTypeSize(VariableType type);
-            size_t GetPrimitiveSize(PrimitiveType type);
-
             StackSlotIndex CompileToRuntimeStackSlot(CompileStackSlot slot);
 
             int32_t CreateLabel(const std::string& debugData = {});
@@ -798,7 +889,7 @@ namespace BlackLua {
             struct Declaration {
                 int32_t Index = 0;
                 size_t Size = 0;
-                VariableType Type{};
+                VariableType* Type = nullptr;
                 bool Extern = false;
             };
 

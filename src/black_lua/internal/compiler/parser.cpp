@@ -1,4 +1,4 @@
-#include "compiler.hpp"
+#include "internal/compiler/parser.hpp"
 
 #include <string>
 #include <charconv>
@@ -14,8 +14,8 @@ namespace BlackLua::Internal {
         return p;
     }
 
-    const Parser::Nodes& Parser::GetNodes() const {
-        return m_Nodes;
+    ASTNodes* Parser::GetNodes() {
+        return &m_Nodes;
     }
 
     bool Parser::IsValid() const {
@@ -527,29 +527,36 @@ namespace BlackLua::Internal {
                     TryConsume(TokenType::RightParen, "')'");
     
                     return CreateNode(NodeType::FunctionCallExpr, node);
-                } else if (Match(TokenType::LeftBracket)) {
-                    Consume();
-    
-                    NodeArrayAccessExpr* node = Allocate<NodeArrayAccessExpr>();
-                    node->Name = value.Data;
-                    node->Index = ParseExpression();
-    
-                    TryConsume(TokenType::RightBracket, "']'");
-    
-                    return CreateNode(NodeType::ArrayAccessExpr, node);
-                } else if (Match(TokenType::Dot)) {
-                    Consume();
-
-                    NodeStructAccessExpr* node = Allocate<NodeStructAccessExpr>();
-                    node->Name = CreateNode(NodeType::VarRef, Allocate<NodeVarRef>(value.Data));
-                    node->Member = ParseValue();
-
-                    return CreateNode(NodeType::StructAccessExpr, node);
                 } else {
-                    NodeVarRef* node = Allocate<NodeVarRef>();
-                    node->Identifier = value.Data;
+                    NodeVarRef* varRef = Allocate<NodeVarRef>();
+                    varRef->Identifier = value.Data;
+
+                    Node* final = CreateNode(NodeType::VarRef, varRef);
+
+                    // Handle member access (foo.bar) and array access (foo[5])
+                    while (Match(TokenType::Dot) || Match(TokenType::LeftBracket)) {
+                        Token op = Consume();
+
+                        if (op.Type == TokenType::Dot) {
+                            NodeMemberExpr* memExpr = Allocate<NodeMemberExpr>();
+                            Token* member = TryConsume(TokenType::Identifier, "identifier");
+                            if (!member) { return nullptr; }
+
+                            memExpr->Member = member->Data;
+                            memExpr->Parent = final;
+                            final = CreateNode(NodeType::MemberExpr, memExpr);
+                        } else if (op.Type == TokenType::LeftBracket) {
+                            NodeArrayAccessExpr* arrExpr = Allocate<NodeArrayAccessExpr>();
+
+                            arrExpr->Index = ParseExpression();
+                            arrExpr->Parent = final;
+                            final = CreateNode(NodeType::ArrayAccessExpr, arrExpr);
+
+                            TryConsume(TokenType::RightBracket, "']'");
+                        }
+                    }
     
-                    return CreateNode(NodeType::VarRef, node);
+                    return final;
                 }
                 
                 break;
@@ -938,14 +945,6 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                case NodeType::MemberRef: {
-                    NodeMemberRef* ref = std::get<NodeMemberRef*>(n->Data);
-
-                    std::cout << "MemberRef, Name: " << ref->Identifier << '\n';
-
-                    break;
-                }
-
                 case NodeType::StructDecl: {
                     NodeStructDecl* decl = std::get<NodeStructDecl*>(n->Data);
 
@@ -1044,18 +1043,18 @@ namespace BlackLua::Internal {
                 case NodeType::ArrayAccessExpr: {
                     NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(n->Data);
 
-                    std::cout << "ArrayAccessExpr, Name: " << expr->Name << ", Index: \n";
+                    std::cout << "ArrayAccessExpr: \n";
+                    PrintNode(expr->Parent, indentation + 4);
                     PrintNode(expr->Index, indentation + 4);
 
                     break;
                 }
 
-                case NodeType::StructAccessExpr: {
-                    NodeStructAccessExpr* expr = std::get<NodeStructAccessExpr*>(n->Data);
+                case NodeType::MemberExpr: {
+                    NodeMemberExpr* expr = std::get<NodeMemberExpr*>(n->Data);
 
-                    std::cout << "StructAccessExpr: \n";
-                    PrintNode(expr->Name, indentation + 4);
-                    PrintNode(expr->Member, indentation + 4);
+                    std::cout << "MemberExpr: " << expr->Member << '\n';
+                    PrintNode(expr->Parent, indentation + 4);
 
                     break;
                 }

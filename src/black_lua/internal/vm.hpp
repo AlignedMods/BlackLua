@@ -1,6 +1,6 @@
 #pragma once
 
-#include "black_lua.hpp"
+#include "core.hpp"
 
 #include <vector>
 #include <variant>
@@ -79,6 +79,7 @@ namespace BlackLua::Internal {
 
     struct OpCodeStore {
         StackSlotIndex SlotIndex{};
+        size_t DataSize = 0;
         void* Data = nullptr; // NOTE: The VM should not care what this contains, it should just copy it to a slot
                               // Another note: The VM should not free this memory, it should be part of the arena allocator
 

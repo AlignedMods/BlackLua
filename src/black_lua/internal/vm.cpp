@@ -1,4 +1,5 @@
-#include "vm.hpp"
+#include "internal/vm.hpp"
+#include "allocator.hpp"
 
 namespace BlackLua::Internal {
 
@@ -1136,9 +1137,9 @@ namespace BlackLua::Internal {
 
     size_t VM::GetStackSlotIndex(int32_t slot) {
         if (slot < 0) {
-             BLUA_ASSERT(m_StackSlotPointer + slot >= 0, "Out of range slot!");
+            BLUA_ASSERT(m_StackSlotPointer + slot >= 0, "Out of range slot!");
 
-             return m_StackSlotPointer + slot;
+            return m_StackSlotPointer + slot;
         } else if (slot > 0) {
             BLUA_ASSERT((slot - 1) < m_StackSlotPointer, "Out of range slot!");
             return slot - 1;

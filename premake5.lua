@@ -11,7 +11,7 @@ workspace "BlackLua"
 
         files {"src/**.cpp", "src/**.hpp"}
 
-        includedirs { "src/vendor/lua/src/" }
+        includedirs { "src/black_lua" }
 
         filter "configurations:Debug"
             symbols "On"
@@ -29,7 +29,7 @@ workspace "BlackLua"
 
         files { "example/example.cpp" }
 
-        includedirs { "src/" }
+        includedirs { "src/black_lua" }
 
         links { "BlackLua", "lua" }
 

@@ -1,9 +1,21 @@
-int foo = 4;
+int foo = 16;
+
+struct Foo {
+    int foo;
+    int bar;
+};
+
+struct Bar {
+    Foo foo;
+};
 
 int add(int lhs, int rhs) {
     return lhs + rhs;
 }
 
 void main() {
-    foo = add(foo, 1000);
+    Bar bar;
+    bar.foo.foo = 4;
+    bar.foo.bar = add(bar.foo.foo, 6);
+    foo = bar.foo.bar;
 }

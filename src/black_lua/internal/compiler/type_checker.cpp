@@ -1,19 +1,15 @@
-#include "compiler.hpp"
+#include "internal/compiler/type_checker.hpp"
 
 #include <string>
 
 namespace BlackLua::Internal {
 
-    TypeChecker TypeChecker::Check(const Parser::Nodes& nodes) {
+    TypeChecker TypeChecker::Check(ASTNodes* nodes) {
         TypeChecker checker;
         checker.m_Nodes = nodes;
         checker.CheckImpl();
 
         return checker;
-    }
-
-    const Parser::Nodes& TypeChecker::GetCheckedNodes() const {
-        return m_Nodes;
     }
 
     bool TypeChecker::IsValid() const {
@@ -27,17 +23,17 @@ namespace BlackLua::Internal {
     }
 
     Node* TypeChecker::Peek(size_t count) {
-        if (m_Index + count < m_Nodes.size()) {
-            return m_Nodes.at(m_Index + count);
+        if (m_Index + count < m_Nodes->size()) {
+            return m_Nodes->at(m_Index + count);
         } else {
             return nullptr;
         }
     }
 
     Node* TypeChecker::Consume() {
-        BLUA_ASSERT(m_Index < m_Nodes.size(), "Consume() of out bounds!");
+        BLUA_ASSERT(m_Index < m_Nodes->size(), "Consume() of out bounds!");
 
-        return m_Nodes.at(m_Index++);
+        return m_Nodes->at(m_Index++);
     }
 
     void TypeChecker::CheckNodeScope(Node* node) {
@@ -344,35 +340,50 @@ namespace BlackLua::Internal {
 
             case NodeType::ArrayAccessExpr: {
                 NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(node->Data);
-                std::string ident(expr->Name);
+                // std::string ident(expr->Name);
 
-                GetNodeType(expr->Index);
-
-                // Loop backward through all the scopes
-                Scope* currentScope = m_CurrentScope;
-                while (currentScope) {
-                    if (currentScope->DeclaredSymbols.contains(ident)) {
-                        return std::get<VariableType*>(currentScope->DeclaredSymbols.at(ident).Type->Data);
-                    }
-
-                    currentScope = currentScope->Parent;
-                }
-
-                // Check global symbols
-                if (m_DeclaredSymbols.contains(ident)) {
-                    return std::get<VariableType*>(m_DeclaredSymbols.at(ident).Type->Data);
-                }
-
-                ErrorUndeclaredIdentifier(expr->Name);
+                // GetNodeType(expr->Index);
+                // 
+                // // Loop backward through all the scopes
+                // Scope* currentScope = m_CurrentScope;
+                // while (currentScope) {
+                //     if (currentScope->DeclaredSymbols.contains(ident)) {
+                //         return std::get<VariableType*>(currentScope->DeclaredSymbols.at(ident).Type->Data);
+                //     }
+                // 
+                //     currentScope = currentScope->Parent;
+                // }
+                // 
+                // // Check global symbols
+                // if (m_DeclaredSymbols.contains(ident)) {
+                //     return std::get<VariableType*>(m_DeclaredSymbols.at(ident).Type->Data);
+                // }
+                // 
+                // ErrorUndeclaredIdentifier(expr->Name);
                 return nullptr;
             }
 
-            case NodeType::StructAccessExpr: {
-                NodeStructAccessExpr* expr = std::get<NodeStructAccessExpr*>(node->Data);
+            case NodeType::MemberExpr: {
+                NodeMemberExpr* expr = std::get<NodeMemberExpr*>(node->Data);
 
+                VariableType* structType = GetNodeType(expr->Parent);
+                if (structType->Type != PrimitiveType::Structure) {
+                    std::cerr << "Error!\n";
+                }
 
+                expr->ResolvedParentType = structType;
 
-                return nullptr;
+                StructDeclaration decl = std::get<StructDeclaration>(structType->Data);
+                for (const auto& field : decl.Fields) {
+                    if (field.Identifier == expr->Member) {
+                        expr->ResolvedMemberType = field.ResolvedType;
+                        return expr->ResolvedMemberType;
+                    }
+                }
+
+                std::cerr << "Unknown field!\n";
+
+                break;
             }
 
             case NodeType::FunctionCallExpr: {

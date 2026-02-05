@@ -1,4 +1,4 @@
-#include "compiler.hpp"
+#include "internal/compiler/lexer.hpp"
 
 #define BLUA_TOKEN(str, type)        \
     if (buf == str) {                \

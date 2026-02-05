@@ -474,7 +474,7 @@ namespace BlackLua::Internal {
                 for (const auto& field : std::get<StructDeclaration>(structType->Data).Fields) {
                     if (field.Identifier == expr->Member) {
                         CompileStackSlot s = slot;
-                        s.Slot.Offset = field.Offset;
+                        s.Slot.Offset += field.Offset;
                         s.Slot.Size = GetTypeSize(field.ResolvedType);
                         return s;
                     }

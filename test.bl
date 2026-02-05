@@ -7,6 +7,7 @@ struct Foo {
 
 struct Bar {
     Foo foo;
+    Foo bar;
 };
 
 int add(int lhs, int rhs) {
@@ -16,6 +17,7 @@ int add(int lhs, int rhs) {
 void main() {
     Bar bar;
     bar.foo.foo = 4;
-    bar.foo.bar = add(bar.foo.foo, 6);
+    bar.bar.foo = 8 + 8;
+    bar.foo.bar = add(bar.foo.foo, bar.bar.foo);
     foo = bar.foo.bar;
 }

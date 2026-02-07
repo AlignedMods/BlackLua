@@ -23,7 +23,7 @@ namespace BlackLua::Internal {
         void CheckNodeScope(Node* node);
 
         void CheckNodeVarDecl(Node* node);
-        void CheckNodeVarArrayDecl(Node* node);
+        void CheckNodeParamDecl(Node* node);
         void CheckNodeFunctionDecl(Node* node);
 
         void CheckNodeStructDecl(Node* node);

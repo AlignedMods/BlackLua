@@ -30,6 +30,7 @@ namespace BlackLua::Internal {
         Less,
         Greater,
 
+        Squigly,
         Comma,
         Colon,
         Dot,
@@ -118,6 +119,7 @@ namespace BlackLua::Internal {
             case TokenType::Less: return "<";
             case TokenType::Greater: return ">";
 
+            case TokenType::Squigly: return "~";
             case TokenType::Comma: return ",";
             case TokenType::Colon: return ":";
             case TokenType::Dot: return ".";

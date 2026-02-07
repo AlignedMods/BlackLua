@@ -21,11 +21,12 @@ namespace BlackLua::Internal {
         Scope,
     
         VarDecl,
-        VarArrayDecl,
+        ParamDecl,
         VarRef,
     
         StructDecl,
         FieldDecl,
+        MethodDecl,
     
         FunctionDecl,
         FunctionImpl,
@@ -40,6 +41,7 @@ namespace BlackLua::Internal {
     
         ArrayAccessExpr,
         MemberExpr,
+        MethodCallExpr,
         FunctionCallExpr,
         ParenExpr,
         CastExpr,
@@ -188,19 +190,14 @@ namespace BlackLua::Internal {
     
         Node* Value = nullptr;
     
-        Node* Next = nullptr; // The next variable declaration in the list (if there is a list, such as int x, y, z = 3;), this does mean that variable declarations are recursive!
-    
         VariableType* ResolvedType = nullptr;
     };
-    
-    struct NodeVarArrayDecl {
+
+    struct NodeParamDecl {
         std::string_view Identifier;
         std::string Type;
-    
-        Node* Size = nullptr;
-        Node* Value = nullptr;
-    
-        Node* Next = nullptr; // The next variable declaration in the list (if there is a list, such as int x, y, z = 3;), this does mean that variable declarations are recursive!
+
+        VariableType* ResolvedType = nullptr;
     };
     
     struct NodeVarRef {
@@ -219,12 +216,24 @@ namespace BlackLua::Internal {
         std::string_view Identifier;
         std::string Type;
     };
+
+    struct NodeMethodDecl {
+        std::string_view Name;
+        std::string Signature;
     
+        NodeList Parameters;
+        std::string ReturnType;
+
+        Node* Body = nullptr;
+    
+        VariableType* ResolvedType = nullptr;
+    };
+
     struct NodeFunctionDecl {
         std::string_view Name;
         std::string Signature;
     
-        NodeList Arguments;
+        NodeList Parameters;
         std::string ReturnType;
     
         bool Extern = false;
@@ -235,7 +244,7 @@ namespace BlackLua::Internal {
     struct NodeFunctionImpl {
         std::string_view Name;
     
-        NodeList Arguments;
+        NodeList Parameters;
         std::string ReturnType;
     
         Node* Body = nullptr; // Type is always NodeScope
@@ -284,10 +293,20 @@ namespace BlackLua::Internal {
         VariableType* ResolvedParentType = nullptr;
         VariableType* ResolvedMemberType = nullptr;
     };
+
+    struct NodeMethodCallExpr {
+        Node* Parent = nullptr;
+        std::string_view Member;
+
+        NodeList Arguments;
+
+        VariableType* ResolvedParentType = nullptr;
+        VariableType* ResolvedMemberType = nullptr;
+    };
     
     struct NodeFunctionCallExpr {
         std::string_view Name;
-        std::vector<Node*> Parameters;
+        NodeList Arguments;
     };
     
     struct NodeParenExpr {
@@ -321,15 +340,20 @@ namespace BlackLua::Internal {
         NodeType Type = NodeType::Bool;
         std::variant<NodeConstant*, 
                      NodeScope*,
-                     NodeVarDecl*, NodeVarArrayDecl*, NodeVarRef*,
-                     NodeStructDecl*, NodeFieldDecl*,
+                     NodeVarDecl*, NodeParamDecl*, NodeVarRef*,
+                     NodeStructDecl*, NodeFieldDecl*, NodeMethodDecl*,
                      NodeFunctionDecl*, NodeFunctionImpl*,
                      NodeWhile*, NodeDoWhile*, NodeFor*,
                      NodeIf*,
                      NodeReturn*,
-                     NodeArrayAccessExpr*, NodeMemberExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
+                     NodeArrayAccessExpr*, NodeMemberExpr*, NodeMethodCallExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
     };
 
     using ASTNodes = std::vector<Node*>;
+
+    template <typename T>
+    inline T* GetNode(Node* n) {
+        return std::get<T*>(n->Data);
+    }
 
 } // namespace BlackLua::Internal

@@ -64,7 +64,7 @@ namespace BlackLua::Internal {
                 DisassembleStackSlotIndex(s.SlotIndex);
 
                 m_Output += " <0x";
-                uint8_t* bytes = reinterpret_cast<uint8_t*>(s.Data);
+                const uint8_t* bytes = reinterpret_cast<const uint8_t*>(s.Data);
 
                 for (size_t i = 0; i < s.DataSize; i++) {
                     m_Output += std::format("{:02x}", bytes[i]);

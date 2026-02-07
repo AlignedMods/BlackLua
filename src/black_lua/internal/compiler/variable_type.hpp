@@ -93,13 +93,17 @@ namespace BlackLua::Internal {
             case PrimitiveType::Long: return 8;
             case PrimitiveType::Double: return 8;
 
+            case PrimitiveType::String: {
+                return sizeof(void*);
+            }
+
             case PrimitiveType::Structure: {
                 StructDeclaration decl = std::get<StructDeclaration>(type->Data);
                 return decl.Size;
             }
 
             case PrimitiveType::Array: {
-                return sizeof(void*) + 4;
+                return sizeof(void*);
             }
 
             default: BLUA_ASSERT(false, "Unreachable!");

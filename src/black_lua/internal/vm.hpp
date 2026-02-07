@@ -6,10 +6,12 @@
 #include <variant>
 #include <unordered_map>
 
-namespace BlackLua::Internal {
+namespace BlackLua {
+    struct Context;
+    using ExternFn = void(*)(Context* ctx);
+}
 
-    class VM;
-    using ExternFn = void(*)(VM* vm);
+namespace BlackLua::Internal {
 
     struct StackSlotIndex {
         StackSlotIndex() = default;
@@ -80,8 +82,8 @@ namespace BlackLua::Internal {
     struct OpCodeStore {
         StackSlotIndex SlotIndex{};
         size_t DataSize = 0;
-        void* Data = nullptr; // NOTE: The VM should not care what this contains, it should just copy it to a slot
-                              // Another note: The VM should not free this memory, it should be part of the arena allocator
+        const void* Data = nullptr; // NOTE: The VM should not care what this contains, it should just copy it to a slot
+                                    // Another note: The VM should not free this memory, it should be part of the arena allocator
 
         bool SetReadOnly = false;
     };
@@ -119,14 +121,14 @@ namespace BlackLua::Internal {
     };
 
     struct StackSlot {
-        size_t Index = 0;
+        void* Memory = nullptr;
         size_t Size = 0;
         bool ReadOnly = false;
     };
 
     class VM {
     public:
-        VM();
+        explicit VM(Context* ctx);
 
         // Increments the stack pointer by specified amount of bytes
         // Also creates a new stack slot, which gets set as the current stack slot
@@ -152,6 +154,10 @@ namespace BlackLua::Internal {
         void StoreLong(StackSlotIndex slot, int64_t l);
         void StoreFloat(StackSlotIndex slot, float f);
         void StoreDouble(StackSlotIndex slot, double d);
+        void StorePointer(StackSlotIndex slot, void* p);
+
+        void SetMemory(StackSlotIndex slot, void* data);
+        void* GetMemory(StackSlotIndex slot);
 
         // Copies the memory at one slot (srcSlot) to another slot (dstSlot)
         void Copy(StackSlotIndex dstSlot, StackSlotIndex srcSlot);
@@ -163,6 +169,7 @@ namespace BlackLua::Internal {
         int64_t GetLong(StackSlotIndex slot);
         float GetFloat(StackSlotIndex slot);
         double GetDouble(StackSlotIndex slot);
+        void* GetPointer(StackSlotIndex slot);
 
         void NegateIntegral(StackSlotIndex val);
         void NegateFloating(StackSlotIndex val);
@@ -209,6 +216,8 @@ namespace BlackLua::Internal {
         // Sets a breakpoint up for when the program counter hits a specified value
         void AddBreakPoint(int32_t pc);
 
+        void StopExecution();
+
     private:
         void RegisterLables();
 
@@ -218,16 +227,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             T result = l + r;
 
             PushBytes(__LHS.Size);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -235,16 +244,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             T result = l - r;
 
             PushBytes(__LHS.Size);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -252,16 +261,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             T result = l * r;
 
             PushBytes(__LHS.Size);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -269,16 +278,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             T result = l / r;
 
             PushBytes(__LHS.Size);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -286,16 +295,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             bool result = (l == r);
 
             PushBytes(1);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -303,16 +312,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             bool result = (l < r);
 
             PushBytes(1);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -320,16 +329,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             bool result = (l <= r);
 
             PushBytes(1);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -337,16 +346,16 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             bool result = (l > r);
 
             PushBytes(1);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
@@ -354,44 +363,44 @@ namespace BlackLua::Internal {
             StackSlot __LHS = GetStackSlot(lhs);
             StackSlot __RHS = GetStackSlot(rhs);
             T l{};
-            memcpy(&l, &m_Stack[__LHS.Index], __LHS.Size);
+            memcpy(&l, __LHS.Memory, __LHS.Size);
             T r{};
-            memcpy(&r, &m_Stack[__RHS.Index], __RHS.Size);
+            memcpy(&r, __RHS.Memory, __RHS.Size);
 
             bool result = (l >= r);
 
             PushBytes(1);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &result, newSlot.Size);
+            memcpy(newSlot.Memory, &result, newSlot.Size);
         }
 
         template <typename T>
         void NegateGeneric(StackSlotIndex value) {
             StackSlot __value = GetStackSlot(value);
             T v{};
-            memcpy(&v, &m_Stack[__value.Index], __value.Size);
+            memcpy(&v, __value.Memory, __value.Size);
 
             v = -v;
 
             PushBytes(__value.Size);
             StackSlot newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[newSlot.Index], &v, newSlot.Size);
+            memcpy(newSlot.Memory, &v, newSlot.Size);
         }
 
         template <typename T, typename Y>
         void CastGeneric(StackSlotIndex value) {
             StackSlot __value = GetStackSlot(value);
             T v{};
-            memcpy(&v, &m_Stack[__value.Index], __value.Size);
+            memcpy(&v, __value.Memory, __value.Size);
 
             Y t1 = static_cast<Y>(v);
 
             PushBytes(sizeof(Y));
             StackSlot __newSlot = GetStackSlot(-1);
 
-            memcpy(&m_Stack[__newSlot.Index], &t1, __newSlot.Size);
+            memcpy(__newSlot.Memory, &t1, __newSlot.Size);
         }
 
     private:
@@ -420,6 +429,8 @@ namespace BlackLua::Internal {
         std::unordered_map<std::string, ExternFn> m_ExternFuncs;
 
         std::unordered_map<int32_t, bool> m_BreakPoints;
+
+        Context* m_Context = nullptr;
     };
 
 } // namespace BlackLua::Internal

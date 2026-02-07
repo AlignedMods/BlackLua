@@ -48,8 +48,10 @@ namespace BlackLua::Internal {
             case NodeType::Constant: {
                 NodeConstant* constant = std::get<NodeConstant*>(node->Data);
 
-                m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(constant->ResolvedType)));
-                m_SlotCount++;
+                if (constant->Type != NodeType::String) {
+                    m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(constant->ResolvedType)));
+                    m_SlotCount++;
+                }
 
                 switch (constant->Type) {
                     case NodeType::Bool: {
@@ -99,6 +101,16 @@ namespace BlackLua::Internal {
                     
                         break;
                     }
+
+                    case NodeType::String: {
+                        NodeString* s = std::get<NodeString*>(std::get<NodeConstant*>(node->Data)->Data);
+
+                        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(s->String.size()));
+                        m_SlotCount++;
+                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, s->String.size(), s->String.data(), true));
+
+                        break;
+                    }
                 }
 
                 m_ConstantMap[node] = CompileStackSlot(m_SlotCount, false);
@@ -126,11 +138,25 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case NodeType::StructDecl: {
+                auto decl = GetNode<NodeStructDecl>(node);
+
+                for (size_t i = 0; i < decl->Fields.Size; i++) {
+                    if (decl->Fields.Items[i]->Type == NodeType::MethodDecl) {
+                        auto mdecl = GetNode<NodeMethodDecl>(decl->Fields.Items[i]);
+
+                        EmitConstant(mdecl->Body);
+                    }
+                }
+
+                break;
+            }
+
             case NodeType::FunctionImpl: {
                 NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(node->Data);
 
-                for (size_t i = 0; i < impl->Arguments.Size; i++) {
-                    EmitConstant(impl->Arguments.Items[i]);
+                for (size_t i = 0; i < impl->Parameters.Size; i++) {
+                    EmitConstant(impl->Parameters.Items[i]);
                 }
                 EmitConstant(impl->Body);
 
@@ -188,11 +214,21 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case NodeType::MethodCallExpr: {
+                auto expr = GetNode<NodeMethodCallExpr>(node);
+
+                for (size_t i = 0; i < expr->Arguments.Size; i++) {
+                    EmitConstant(expr->Arguments.Items[i]);
+                }
+
+                break;
+            }
+
             case NodeType::FunctionCallExpr: {
                 NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
 
-                for (size_t i = 0; i < expr->Parameters.size(); i++) {
-                    EmitConstant(expr->Parameters[i]);
+                for (size_t i = 0; i < expr->Arguments.Size; i++) {
+                    EmitConstant(expr->Arguments.Items[i]);
                 }
                 break;
             }
@@ -236,6 +272,7 @@ namespace BlackLua::Internal {
         NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
         
         PushBytes(GetTypeSize(decl->ResolvedType), std::format("Declaration of {}", decl->Identifier));
+
         auto& map = (m_CurrentScope != 0) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
         
         Declaration d;
@@ -249,6 +286,8 @@ namespace BlackLua::Internal {
         d.Type = decl->ResolvedType;
         
         map[std::string(decl->Identifier)] = d;
+
+        CallConstructor(decl->ResolvedType);
         
         // We convert int var = 5 to
         // int var;
@@ -268,40 +307,25 @@ namespace BlackLua::Internal {
         }
     }
 
-    void Emitter::EmitNodeVarArrayDecl(Node* node) {
-        // NodeVarArrayDecl* decl = std::get<NodeVarArrayDecl*>(node->Data);
-        // 
-        // PushBytes(GetTypeSize(decl->Type), std::format("Declaration of {}", decl->Identifier));
-        // auto& map = (m_CurrentScope != 0) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
-        // 
-        // Declaration d;
-        // IncrementStackSlotCount();
-        // if (m_CurrentScope) {
-        //     d.Index = m_CurrentScope->SlotCount;
-        // } else {
-        //     d.Index = m_SlotCount;   
-        // }
-        // d.Size = GetTypeSize(decl->Type);
-        // d.Type = decl->Type;
-        // 
-        // map[std::string(decl->Identifier)] = d;
-        // 
-        // // We convert int var = 5 to
-        // // int var;
-        // // var = 5;
-        // if (decl->Value) {
-        //     NodeBinExpr* expr = GetAllocator()->AllocateNamed<NodeBinExpr>();
-        //     NodeVarRef* ref = GetAllocator()->AllocateNamed<NodeVarRef>();
-        // 
-        //     ref->Identifier = decl->Identifier;
-        // 
-        //     expr->Type = BinExprType::Eq;
-        //     expr->VarType = decl->Type;
-        //     expr->LHS = GetAllocator()->AllocateNamed<Node>(NodeType::VarRef, ref);
-        //     expr->RHS = decl->Value;
-        // 
-        //     EmitNodeExpression(GetAllocator()->AllocateNamed<Node>(NodeType::BinExpr, expr));
-        // }
+    void Emitter::EmitNodeParamDecl(Node* node) {
+        NodeParamDecl* decl = std::get<NodeParamDecl*>(node->Data);
+        
+        PushBytes(GetTypeSize(decl->ResolvedType), std::format("Declaration of {}", decl->Identifier));
+        auto& map = (m_CurrentScope != 0) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
+        
+        Declaration d;
+        IncrementStackSlotCount();
+        if (m_CurrentScope) {
+            d.Index = m_CurrentScope->SlotCount;
+        } else {
+            d.Index = m_SlotCount;   
+        }
+        d.Size = GetTypeSize(decl->ResolvedType);
+        d.Type = decl->ResolvedType;
+        
+        map[std::string(decl->Identifier)] = d;
+
+        CallConstructor(decl->ResolvedType);
     }
 
     void Emitter::EmitNodeFunctionDecl(Node* node) {
@@ -334,15 +358,15 @@ namespace BlackLua::Internal {
         newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
         m_CurrentScope = newScope;
         
-        size_t returnSlot = (impl->ResolvedType->Type == PrimitiveType::Invalid) ? 0 : 1;
+        size_t returnSlot = (impl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
         size_t varsPushed = 0;
         
-        // Inject function arguments into the scope
-        for (size_t i = 0; i < impl->Arguments.Size; i++) {
-            EmitNodeVarDecl(impl->Arguments.Items[i]);
+        // Inject function parameters into the scope
+        for (size_t i = 0; i < impl->Parameters.Size; i++) {
+            EmitNodeParamDecl(impl->Parameters.Items[i]);
         
-            // Copy the parameters into the arguments
-            m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(impl->Arguments.Size + 1 + returnSlot)));
+            // Copy the arguments into the parameters
+            m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(impl->Parameters.Size + 1 + returnSlot)));
             varsPushed++;
         }
         
@@ -356,6 +380,53 @@ namespace BlackLua::Internal {
         m_OpCodes.emplace_back(OpCodeType::Ret);
         
         m_CurrentScope = m_CurrentScope->Parent;
+    }
+
+    void Emitter::EmitNodeStructDecl(Node* node) {
+        NodeStructDecl* decl = std::get<NodeStructDecl*>(node->Data);
+
+        for (size_t i = 0; i < decl->Fields.Size; i++) {
+            if (decl->Fields.Items[i]->Type == NodeType::MethodDecl) {
+                NodeMethodDecl* mdecl = std::get<NodeMethodDecl*>(decl->Fields.Items[i]->Data);
+        
+                std::string ident = std::format("{}__{}", decl->Identifier, mdecl->Name);
+                Declaration decl;
+                decl.Index = CreateLabel(std::format("method {}", mdecl->Name));
+                decl.Size = GetTypeSize(mdecl->ResolvedType);
+                decl.Type = mdecl->ResolvedType;
+                m_DeclaredSymbols[ident] = decl;
+                
+                // We don't want to create a new scope
+                // The VM creates one for us at the call site
+                Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
+                newScope->Parent = m_CurrentScope;
+                newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
+                m_CurrentScope = newScope;
+                
+                size_t returnSlot = (mdecl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
+                size_t varsPushed = 0;
+                
+                // Inject function parameters into the scope
+                for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
+                    EmitNodeParamDecl(mdecl->Parameters.Items[i]);
+                
+                    // Copy the arguments into the parameters
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(mdecl->Parameters.Size + 1 + returnSlot)));
+                    varsPushed++;
+                }
+                
+                NodeScope* body = std::get<NodeScope*>(mdecl->Body->Data);
+                
+                for (size_t i = 0; i < body->Nodes.Size; i++) {
+                    EmitNode(body->Nodes.Items[i]);
+                }
+                
+                // Just in case
+                m_OpCodes.emplace_back(OpCodeType::Ret);
+                
+                m_CurrentScope = m_CurrentScope->Parent;
+            }
+        }
     }
 
     void Emitter::EmitNodeWhile(Node* node) {
@@ -463,6 +534,18 @@ namespace BlackLua::Internal {
             case NodeType::ArrayAccessExpr: {
                 NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(node->Data);
 
+                CompileStackSlot slot = EmitNodeExpression(expr->Parent);
+                CompileStackSlot index = EmitNodeExpression(expr->Index);
+
+                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(slot));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(index));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::PushBytes, GetTypeSize(expr->ResolvedType));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
+
+                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
                 break;
             }
 
@@ -486,20 +569,49 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case NodeType::MethodCallExpr: {
+                NodeMethodCallExpr* expr = std::get<NodeMethodCallExpr*>(node->Data);
+                VariableType* structType = expr->ResolvedParentType;
+
+                Declaration decl = m_DeclaredSymbols.at(std::format("{}__{}", std::get<StructDeclaration>(structType->Data).Identifier, expr->Member));
+
+                std::vector<CompileStackSlot> parameters; 
+
+                for (size_t i = 0; i < expr->Arguments.Size; i++) {
+                    CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
+
+                    parameters.push_back(slot);
+                }
+
+                for (const auto& p : parameters) {
+                    m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
+                    IncrementStackSlotCount();
+                }
+
+                if (decl.Size != 0) {
+                    PushBytes(decl.Size, "return slot");
+                    IncrementStackSlotCount();
+                }
+
+                m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
+                
+                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+                break;
+            }
+
             case NodeType::FunctionCallExpr: {
                 NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
                 Declaration decl = m_DeclaredSymbols.at(std::string(expr->Name));
 
-                std::vector<CompileStackSlot> m_Parameters; 
+                std::vector<CompileStackSlot> parameters; 
 
-                for (size_t i = 0; i < expr->Parameters.size(); i++) {
-                    CompileStackSlot slot = EmitNodeExpression(expr->Parameters[i]);
+                for (size_t i = 0; i < expr->Arguments.Size; i++) {
+                    CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
 
-                    m_Parameters.push_back(slot);
+                    parameters.push_back(slot);
                 }
 
-                for (const auto& p : m_Parameters) {
-                    // meaty expression
+                for (const auto& p : parameters) {
                     m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
                     IncrementStackSlotCount();
                 }
@@ -649,19 +761,27 @@ namespace BlackLua::Internal {
         (m_CurrentScope) ? m_CurrentScope->SlotCount++ : m_SlotCount++;
     }
 
+    void Emitter::CallConstructor(VariableType* type) {
+        if (type->Type == PrimitiveType::Structure) {
+            StructDeclaration& decl = std::get<StructDeclaration>(type->Data);
+
+            // if (!decl.Constructor.empty()) {
+            //     // m_OpCodes.emplace_back(OpCodeType::Call, m_DeclaredSymbols.at(decl.Constructor));
+            // }
+        }
+    }
+
     void Emitter::EmitNode(Node* node) {
         NodeType t = node->Type;
 
         if (t == NodeType::VarDecl) {
             EmitNodeVarDecl(node);
-        } else if (t == NodeType::VarArrayDecl) {
-            EmitNodeVarArrayDecl(node);
         } else if (t == NodeType::FunctionDecl) {
             EmitNodeFunctionDecl(node);
         } else if (t == NodeType::FunctionImpl) {
             EmitNodeFunctionImpl(node);
         } else if (t == NodeType::StructDecl) {
-            // continue
+            EmitNodeStructDecl(node);
         } else if (t == NodeType::While) {
             EmitNodeWhile(node);
         } else if (t == NodeType::If) {
@@ -669,6 +789,8 @@ namespace BlackLua::Internal {
         } else if (t == NodeType::ArrayAccessExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::MemberExpr) {
+            EmitNodeExpression(node);
+        } else if (t == NodeType::MethodCallExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::FunctionCallExpr) {
             EmitNodeExpression(node);

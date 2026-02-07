@@ -4,6 +4,7 @@
 #include "internal/compiler/type_checker.hpp"
 #include "internal/compiler/emitter.hpp"
 #include "internal/compiler/disassembler.hpp"
+#include "internal/stdlib/array.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -14,8 +15,15 @@ namespace BlackLua {
         std::vector<Internal::OpCode> OpCodes;
     };
 
+    Context::Context()
+        : m_VM(this) {}
+
     Context Context::Create() {
         Context ctx{};
+        ctx.m_VM.AddExtern("bl__array__init__", BlackLua::Internal::bl__array__init__);
+        ctx.m_VM.AddExtern("bl__array__destruct__", BlackLua::Internal::bl__array__destruct__);
+        ctx.m_VM.AddExtern("bl__array__copy__", BlackLua::Internal::bl__array__copy__);
+        ctx.m_VM.AddExtern("bl__array__index__", BlackLua::Internal::bl__array__index__);
         
         return ctx;
     }
@@ -42,7 +50,8 @@ namespace BlackLua {
 
         BlackLua::Internal::Parser p = BlackLua::Internal::Parser::Parse(l.GetTokens());
         valid = p.IsValid();
-        if (!valid) { return nullptr; }
+        if (!valid) { return nullptr; } 
+        p.PrintAST();
 
         BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
         valid = c.IsValid();
@@ -67,6 +76,20 @@ namespace BlackLua {
     std::string Context::Disassemble(CompiledSource* compiled) {
         BlackLua::Internal::Disassembler d = BlackLua::Internal::Disassembler::Disassemble(&compiled->OpCodes);
         return d.GetDisassembly();
+    }
+
+    void Context::SetErrorHandler(ErrorHandlerFn fn) {
+        m_ErrorHandler = fn;
+    }
+
+    void Context::ReportRuntimeError(const std::string& error) {
+        if (m_ErrorHandler) {
+            m_ErrorHandler(error);
+        } else {
+            BLUA_FORMAT_ERROR("A runtime error occurred!\nError message: {}", error);
+        }
+
+        m_VM.StopExecution();
     }
 
     Internal::VM& Context::GetVM() {

@@ -1,23 +1,11 @@
 int foo = 16;
 
-struct Foo {
-    int foo;
-    int bar;
+struct Test {
+    void Foo(int arg) { foo = arg; }
+    void Bar(int arg) { foo = arg + arg; }
 };
-
-struct Bar {
-    Foo foo;
-    Foo bar;
-};
-
-int add(int lhs, int rhs) {
-    return lhs + rhs;
-}
 
 void main() {
-    Bar bar;
-    bar.foo.foo = 4;
-    bar.bar.foo = 8 + 8;
-    bar.foo.bar = add(bar.foo.foo, bar.bar.foo);
-    foo = bar.foo.bar;
+    Test t;
+    t.Bar(5);
 }

@@ -169,6 +169,7 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN_C('{', LeftCurly);
                 BLUA_TOKEN_C('}', RightCurly);
 
+                BLUA_TOKEN_C('~', Squigly);
                 BLUA_TOKEN_C(',', Comma);
                 BLUA_TOKEN_C(':', Colon);
                 BLUA_TOKEN_C('.', Dot);

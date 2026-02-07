@@ -9,8 +9,10 @@
 namespace BlackLua {
 
     struct CompiledSource;
+    using ErrorHandlerFn = void(*)(const std::string& error);
 
     struct Context {
+        Context();
         static Context Create();
 
         CompiledSource* CompileFile(const std::string& path);
@@ -25,11 +27,18 @@ namespace BlackLua {
         // Returns a string containing the disassembled byte code
         std::string Disassemble(CompiledSource* compiled);
 
+        void SetErrorHandler(ErrorHandlerFn fn);
+        // Calls the currently set error handler with the given error message
+        // If the current error handler is NULL, it will use the default handler
+        void ReportRuntimeError(const std::string& error);
+
         Internal::VM& GetVM();
 
     private:
         std::unordered_map<std::string, int> m_Modules;
         Internal::VM m_VM;
+
+        ErrorHandlerFn m_ErrorHandler = nullptr;
     };
 
 } // namespace BlackLua

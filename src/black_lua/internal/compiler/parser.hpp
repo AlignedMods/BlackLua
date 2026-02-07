@@ -47,6 +47,7 @@ namespace BlackLua::Internal {
         Node* ParseValue();
         BinExprType ParseOperator();
         std::string ParseVariableType();
+        NodeList ParseFunctionParameters();
         bool IsPrimitiveType();
         bool IsVariableType();
         size_t GetBinaryPrecedence(BinExprType type);

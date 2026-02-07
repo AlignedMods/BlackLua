@@ -28,10 +28,12 @@ namespace BlackLua::Internal {
             void EmitNodeScope(Node* node);
     
             void EmitNodeVarDecl(Node* node);
-            void EmitNodeVarArrayDecl(Node* node);
+            void EmitNodeParamDecl(Node* node);
             void EmitNodeFunctionDecl(Node* node);
     
             void EmitNodeFunctionImpl(Node* node);
+
+            void EmitNodeStructDecl(Node* node);
     
             void EmitNodeWhile(Node* node);
     
@@ -46,6 +48,9 @@ namespace BlackLua::Internal {
             int32_t CreateLabel(const std::string& debugData = {});
             void PushBytes(size_t bytes, const std::string& debugData = {});
             void IncrementStackSlotCount();
+
+            // This function expects the object is already pushed on the stack!
+            void CallConstructor(VariableType* type);
     
             void EmitNode(Node* node);
     

@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
     context.Run(compiled, "test");
     vm.Call(2);
     
-    BLUA_FORMAT_PRINT("{}", vm.GetInt(-1));
+    fmt::print("{}", vm.GetInt(-1));
     
     context.FreeSource(compiled);
 

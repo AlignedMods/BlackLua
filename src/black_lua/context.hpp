@@ -9,7 +9,8 @@
 namespace BlackLua {
 
     struct CompiledSource;
-    using ErrorHandlerFn = void(*)(const std::string& error);
+    using RuntimeErrorHandlerFn = void(*)(const std::string& error);
+    using CompilerErrorHandlerFn = void(*)(size_t line, size_t column, const std::string& file, const std::string& error);
 
     struct Context {
         Context();
@@ -22,12 +23,15 @@ namespace BlackLua {
         void FreeSource(CompiledSource* source);
 
         // Run the compiled string in the VM
-        void Run(CompiledSource* compiled, const std::string& module);
         // Dissasemble the byte emitted byte code
+        void Run(CompiledSource* compiled, const std::string& module);
         // Returns a string containing the disassembled byte code
         std::string Disassemble(CompiledSource* compiled);
 
-        void SetErrorHandler(ErrorHandlerFn fn);
+        void SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn);
+        void SetCompilerErrorHandler(CompilerErrorHandlerFn fn);
+
+        void ReportCompilerError(size_t line, size_t column, const std::string& error);
         // Calls the currently set error handler with the given error message
         // If the current error handler is NULL, it will use the default handler
         void ReportRuntimeError(const std::string& error);
@@ -37,8 +41,10 @@ namespace BlackLua {
     private:
         std::unordered_map<std::string, int> m_Modules;
         Internal::VM m_VM;
+        std::string m_CurrentFile; // Current file being compiled
 
-        ErrorHandlerFn m_ErrorHandler = nullptr;
+        RuntimeErrorHandlerFn m_RuntimeErrorHandler = nullptr;
+        CompilerErrorHandlerFn m_CompilerErrorHandler = nullptr;
     };
 
 } // namespace BlackLua

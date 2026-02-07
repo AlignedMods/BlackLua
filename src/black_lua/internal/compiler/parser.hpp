@@ -5,11 +5,17 @@
 #include "internal/compiler/ast.hpp"
 #include "internal/compiler/lexer.hpp"
 
+namespace BlackLua {
+
+    struct Context;
+
+}
+
 namespace BlackLua::Internal {
 
     class Parser {
     public:
-        static Parser Parse(const Lexer::Tokens& tokens);
+        static Parser Parse(const Lexer::Tokens& tokens, Context* ctx);
 
         ASTNodes* GetNodes();
         bool IsValid() const;
@@ -90,6 +96,8 @@ namespace BlackLua::Internal {
         Lexer::Tokens m_Tokens;
         bool m_NeedsSemi = true; // A flag to see if the current statement needs to finish with a semicolon
         bool m_Error = false;
+
+        Context* m_Context = nullptr;
     };
 
 } // namespace BlackLua::Internal

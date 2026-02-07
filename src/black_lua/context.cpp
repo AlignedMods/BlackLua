@@ -40,7 +40,10 @@ namespace BlackLua {
         std::string contents = ss.str();
         ss.flush();
 
-        return CompileString(contents);
+        m_CurrentFile = path;
+        CompiledSource* c = CompileString(contents);
+        m_CurrentFile.clear();
+        return c;
     }
 
     CompiledSource* Context::CompileString(const std::string& source) {
@@ -48,7 +51,7 @@ namespace BlackLua {
 
         BlackLua::Internal::Lexer l = BlackLua::Internal::Lexer::Parse(source);
 
-        BlackLua::Internal::Parser p = BlackLua::Internal::Parser::Parse(l.GetTokens());
+        BlackLua::Internal::Parser p = BlackLua::Internal::Parser::Parse(l.GetTokens(), this);
         valid = p.IsValid();
         if (!valid) { return nullptr; } 
         p.PrintAST();
@@ -70,23 +73,43 @@ namespace BlackLua {
     }
 
     void Context::Run(CompiledSource* compiled, const std::string& module) {
-        m_VM.RunByteCode(compiled->OpCodes.data(), compiled->OpCodes.size());
+        if (compiled) {
+            m_VM.RunByteCode(compiled->OpCodes.data(), compiled->OpCodes.size());
+        }
     }
 
     std::string Context::Disassemble(CompiledSource* compiled) {
-        BlackLua::Internal::Disassembler d = BlackLua::Internal::Disassembler::Disassemble(&compiled->OpCodes);
-        return d.GetDisassembly();
+        if (compiled) {
+            BlackLua::Internal::Disassembler d = BlackLua::Internal::Disassembler::Disassemble(&compiled->OpCodes);
+            return d.GetDisassembly();
+        }
+        
+        return {};
     }
 
-    void Context::SetErrorHandler(ErrorHandlerFn fn) {
-        m_ErrorHandler = fn;
+    void Context::SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn) {
+        m_RuntimeErrorHandler = fn;
+    }
+
+    void Context::SetCompilerErrorHandler(CompilerErrorHandlerFn fn) {
+        m_CompilerErrorHandler = fn;
+    }
+
+    void Context::ReportCompilerError(size_t line, size_t column, const std::string& error) {
+        if (m_CompilerErrorHandler) {
+            m_CompilerErrorHandler(line, column, m_CurrentFile, error);
+        } else {
+            fmt::print(fg(fmt::color::gray), "{}:{}:{}, ", m_CurrentFile, line, column);
+            fmt::print(fg(fmt::color::pale_violet_red), "fatal error: ");
+            fmt::print("{}\n", error);
+        }
     }
 
     void Context::ReportRuntimeError(const std::string& error) {
-        if (m_ErrorHandler) {
-            m_ErrorHandler(error);
+        if (m_RuntimeErrorHandler) {
+            m_RuntimeErrorHandler(error);
         } else {
-            BLUA_FORMAT_ERROR("A runtime error occurred!\nError message: {}", error);
+            fmt::print(stderr, "A runtime error occurred!\nError message: {}", error);
         }
 
         m_VM.StopExecution();

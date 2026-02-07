@@ -1,11 +1,14 @@
 int foo = 16;
 
 struct Test {
+    int Field;
+
     void Foo(int arg) { foo = arg; }
-    void Bar(int arg) { foo = arg + arg; }
+    void Bar(int arg) { foo = arg + Field; }
 };
 
 void main() {
     Test t;
-    t.Bar(5);
+    t.Field = 478789789789789897;
+    t.Bar(4)
 }

@@ -67,7 +67,7 @@ namespace BlackLua::Internal {
                 const uint8_t* bytes = reinterpret_cast<const uint8_t*>(s.Data);
 
                 for (size_t i = 0; i < s.DataSize; i++) {
-                    m_Output += std::format("{:02x}", bytes[i]);
+                    m_Output += fmt::format("{:02x}", bytes[i]);
                 }
 
                 m_Output += ">\n";

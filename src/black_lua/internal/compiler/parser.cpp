@@ -1,4 +1,7 @@
 #include "internal/compiler/parser.hpp"
+#include "context.hpp"
+
+#include "fmt/format.h"
 
 #include <string>
 #include <charconv>
@@ -6,9 +9,10 @@
 
 namespace BlackLua::Internal {
 
-    Parser Parser::Parse(const Lexer::Tokens& tokens) {
+    Parser Parser::Parse(const Lexer::Tokens& tokens, Context* ctx) {
         Parser p;
         p.m_Tokens = tokens;
+        p.m_Context = ctx;
         p.ParseImpl();
         
         return p;
@@ -806,15 +810,13 @@ namespace BlackLua::Internal {
     }
 
     void Parser::ErrorExpected(const std::string& msg) {
-        BLUA_FORMAT_ERROR("Error {}:{}: Expected {} after token \"{}\"", Peek(-1)->Line, Peek(-1)->Column, msg, TokenTypeToString(Peek(-1)->Type));
-        // std::cerr << "Error " << Peek(-1)->Line << ":0: Expected " << msg << " after token \"" << TokenTypeToString(Peek(-1)->Type) << "\"!\n";
+        m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Expected {} after token \"{}\"", msg, TokenTypeToString(Peek(-1)->Type)));
 
         m_Error = true;
     }
 
     void Parser::ErrorTooLarge(const std::string_view value) {
-        BLUA_FORMAT_ERROR("Error {}:{}: Constant {} is too large", Peek(-1)->Line, Peek(-1)->Column, value);
-        // std::cerr << "Error " << Peek(-1)->Line << ":0: Constant " << value << " is too large!\n";
+        m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Constant {} is too large", value));
 
         m_Error = true;
     }
@@ -825,7 +827,7 @@ namespace BlackLua::Internal {
         std::cout << ident;
 
         if (n == nullptr) {
-            std::cout << "NULL\n";
+            fmt::print("NULL");
         } else {
             switch (n->Type) {
                 case NodeType::Constant: {

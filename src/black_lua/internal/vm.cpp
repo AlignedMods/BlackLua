@@ -18,11 +18,8 @@ namespace BlackLua::Internal {
 
         // Keep doubling the stack until it's big enough
         while (m_StackPointer + alignedAmount > m_Stack.size()) {
-            BLUA_FORMAT_PRINT("Doubling stack size!");
             m_Stack.resize(m_Stack.size() * 2);
         }
-
-        BLUA_FORMAT_PRINT("Pushing {} bytes, aligned to {}!", amount, alignedAmount);
 
         m_StackPointer += alignedAmount;
 
@@ -43,8 +40,6 @@ namespace BlackLua::Internal {
     }
 
     void VM::PushScope() {
-        BLUA_FORMAT_PRINT("PushScope(), stack pointer: {}, slot pointer: {}", m_StackPointer, m_StackSlotPointer);
-
         Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
         newScope->Previous = m_CurrentScope;
         newScope->Offset = m_StackPointer;
@@ -59,8 +54,6 @@ namespace BlackLua::Internal {
         m_StackPointer = m_CurrentScope->Offset;
         m_StackSlotPointer = m_CurrentScope->SlotOffset;
         m_CurrentScope = m_CurrentScope->Previous;
-
-        BLUA_FORMAT_PRINT("PopScope(), stack pointer: {}, slot pointer: {}", m_StackPointer, m_StackSlotPointer);
     }
 
     void VM::AddExtern(const std::string& signature, ExternFn fn) {

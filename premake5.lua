@@ -11,7 +11,7 @@ workspace "BlackLua"
 
         files {"src/**.cpp", "src/**.hpp"}
 
-        includedirs { "src/black_lua" }
+        includedirs { "src/black_lua", "src/vendor/fmt/include/" }
 
         filter "configurations:Debug"
             symbols "On"
@@ -29,9 +29,9 @@ workspace "BlackLua"
 
         files { "example/example.cpp" }
 
-        includedirs { "src/black_lua" }
+        includedirs { "src/black_lua", "src/vendor/fmt/include/" }
 
-        links { "BlackLua", "lua" }
+        links { "BlackLua", "fmt" }
 
         filter "configurations:Debug"
             symbols "On"
@@ -39,16 +39,22 @@ workspace "BlackLua"
         filter "configurations:Release"
             optimize "On"
 
-    project "lua"
-        language "C"
-        cdialect "C89"
+    project "fmt"
+        language "C++"
+        cppdialect "C++20"
         kind "StaticLib"
-        staticruntime "On"
-        
+
         targetdir("build/bin/%{cfg.buildcfg}/")
         objdir("build/obj/%{cfg.buildcfg}/")
-        
-        files { "src/vendor/lua/src/**.c", "src/vendor/lua/src/**.h" }
-        removefiles { "src/vendor/lua/src/lua.c" }
-        
-        includedirs { "src/vendor/lua/src/" }
+
+        files { "src/vendor/fmt/src/format.cc", "src/vendor/fmt/src/os.cc" }
+
+        includedirs { "src/vendor/fmt/include/" }
+
+        defines { "FMT_UNICODE=0" }
+
+        filter "configurations:Debug"
+            symbols "On"
+
+        filter "configurations:Release"
+            optimize "On"

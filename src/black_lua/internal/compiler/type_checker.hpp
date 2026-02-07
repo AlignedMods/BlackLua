@@ -5,13 +5,17 @@
 
 #include <unordered_map>
 
+namespace BlackLua {
+    struct Context;
+}
+
 namespace BlackLua::Internal {
 
     // A quick note about the type checker,
     // It doesn't "generate" anything, it only modifies the AST,
     class TypeChecker {
     public:
-        static TypeChecker Check(ASTNodes* nodes);
+        static TypeChecker Check(ASTNodes* nodes, Context* ctx);
         bool IsValid() const;
 
     private:
@@ -50,14 +54,10 @@ namespace BlackLua::Internal {
         VariableType* GetNodeType(Node* node);
         VariableType* GetVarTypeFromString(const std::string& str);
 
-        void WarningMismatchedTypes(VariableType type1, VariableType type2);
-        void ErrorMismatchedTypes(VariableType type1, VariableType type2);
-        void ErrorCannotCast(VariableType type1, VariableType type2);
-        void ErrorRedeclaration(const std::string_view msg);
-        void ErrorUndeclaredIdentifier(const std::string_view msg);
-        void ErrorInvalidReturn();
-        void ErrorNoMatchingFunction(const std::string_view func);
-        void ErrorDefiningExternFunction(const std::string_view func);
+        bool IsLValue(Node* node);
+
+        void ErrorUndeclaredIdentifier(const std::string_view ident, Node* node);
+        void ErrorNoMatchingFunction(const std::string_view func, Node* node);
 
     private:
         ASTNodes* m_Nodes = nullptr; // We modify these directly
@@ -80,6 +80,8 @@ namespace BlackLua::Internal {
         };
 
         Scope* m_CurrentScope = nullptr;
+
+        Context* m_Context = nullptr;
     };
 
 } // namespace BlackLua::Internal

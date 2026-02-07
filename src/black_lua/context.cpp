@@ -56,7 +56,7 @@ namespace BlackLua {
         if (!valid) { return nullptr; } 
         p.PrintAST();
 
-        BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes());
+        BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes(), this);
         valid = c.IsValid();
         if (!valid) { return nullptr; }
 

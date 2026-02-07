@@ -6,9 +6,7 @@
 #include "internal/compiler/lexer.hpp"
 
 namespace BlackLua {
-
     struct Context;
-
 }
 
 namespace BlackLua::Internal {
@@ -81,10 +79,12 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        Node* CreateNode(NodeType type, T* node) {
+        Node* CreateNode(NodeType type, T* node, size_t line, size_t column) {
             Node* newNode = new Node();
             newNode->Type = type;
             newNode->Data = node;
+            newNode->Line = line;
+            newNode->Column = line;
             return newNode;
         }
 

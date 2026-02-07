@@ -1,12 +1,14 @@
 #include "internal/compiler/type_checker.hpp"
+#include "context.hpp"
 
 #include <string>
 
 namespace BlackLua::Internal {
 
-    TypeChecker TypeChecker::Check(ASTNodes* nodes) {
+    TypeChecker TypeChecker::Check(ASTNodes* nodes, Context* ctx) {
         TypeChecker checker;
         checker.m_Nodes = nodes;
+        checker.m_Context = ctx;
         checker.CheckImpl();
 
         return checker;
@@ -58,7 +60,8 @@ namespace BlackLua::Internal {
         
         std::unordered_map<std::string, Declaration>& symbolMap = (m_CurrentScope) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
         if (symbolMap.contains(std::string(decl->Identifier))) {
-            ErrorRedeclaration(decl->Identifier);
+            m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Redeclaring identifier {}", decl->Identifier));
+            m_Error = true;
         }
         
         VariableType* type = GetVarTypeFromString(decl->Type);
@@ -152,7 +155,8 @@ namespace BlackLua::Internal {
         std::string name(impl->Name);
         if (m_DeclaredSymbols.contains(name)) {
             if (m_DeclaredSymbols.at(name).Extern) {
-                ErrorDefiningExternFunction(name);
+                m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Defining function marked extern: {}", impl->Name));
+                m_Error = true;
             }
         }
         
@@ -205,8 +209,18 @@ namespace BlackLua::Internal {
     void TypeChecker::CheckNodeReturn(Node* node) {
         NodeReturn* ret = std::get<NodeReturn*>(node->Data);
 
-        if (!m_CurrentScope) { ErrorInvalidReturn(); return; }
-        if (m_CurrentScope->ReturnType == CreateVarType(PrimitiveType::Invalid)) { ErrorInvalidReturn(); return; }
+        bool canReturn = true;
+        if (!m_CurrentScope) {
+            canReturn = false;
+        } else if (m_CurrentScope->ReturnType == CreateVarType(PrimitiveType::Invalid)) {
+            canReturn = false;
+        }
+
+        if (!canReturn) {
+            m_Context->ReportCompilerError(node->Line, node->Column, "Cannot return from a non-function scope");
+            m_Error = true;
+            return;
+        }
 
         CheckNodeExpression(m_CurrentScope->ReturnType, ret->Value);
     }
@@ -257,7 +271,7 @@ namespace BlackLua::Internal {
         if (!type1 || !type2) { return -1; }
 
         // Equal types, best possible scenario
-        if (type1 == type2) {
+        if (type1->Type == type2->Type) {
             return 0;
         }
 
@@ -332,7 +346,7 @@ namespace BlackLua::Internal {
                 }
 
                 // We haven't found a variable
-                ErrorUndeclaredIdentifier(ref->Identifier);
+                ErrorUndeclaredIdentifier(ref->Identifier, node);
                 return CreateVarType(PrimitiveType::Invalid);
             }
 
@@ -390,13 +404,13 @@ namespace BlackLua::Internal {
                     auto mdecl = GetNode<NodeMethodDecl>(decl.Decl);
 
                     if (mdecl->Parameters.Size != expr->Arguments.Size) {
-                        ErrorNoMatchingFunction(expr->Member);
+                        ErrorNoMatchingFunction(expr->Member, node);
                         return CreateVarType(PrimitiveType::Invalid);
                     }
                 
                     for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
                         if (GetNode<NodeParamDecl>(mdecl->Parameters.Items[i])->ResolvedType->Type != GetNodeType(expr->Arguments.Items[i])->Type) {
-                            ErrorNoMatchingFunction(expr->Member);
+                            ErrorNoMatchingFunction(expr->Member, node);
                             return CreateVarType(PrimitiveType::Invalid);
                         }
                     }
@@ -432,13 +446,13 @@ namespace BlackLua::Internal {
                     }
                 
                     if (params.Size != expr->Arguments.Size) {
-                        ErrorNoMatchingFunction(expr->Name);
+                        ErrorNoMatchingFunction(expr->Name, node);
                         return CreateVarType(PrimitiveType::Invalid);
                     }
                 
                     for (size_t i = 0; i < params.Size; i++) {
                         if (std::get<NodeParamDecl*>(params.Items[i]->Data)->ResolvedType->Type != GetNodeType(expr->Arguments.Items[i])->Type) {
-                            ErrorNoMatchingFunction(expr->Name);
+                            ErrorNoMatchingFunction(expr->Name, node);
                             return CreateVarType(PrimitiveType::Invalid);
                         }
                     }
@@ -446,7 +460,7 @@ namespace BlackLua::Internal {
                     return m_DeclaredSymbols.at(name).Type;
                 }
                 
-                ErrorUndeclaredIdentifier(expr->Name);
+                ErrorUndeclaredIdentifier(expr->Name, node);
                 return CreateVarType(PrimitiveType::Invalid);
             }
 
@@ -459,19 +473,22 @@ namespace BlackLua::Internal {
 
             case NodeType::CastExpr: {
                 auto expr = GetNode<NodeCastExpr>(node);
-                VariableType* srcType = GetNodeType(expr->Expression);
-                VariableType* dstType = GetVarTypeFromString(expr->Type);
-                
-                expr->ResolvedSrcType = srcType;
-                expr->ResolvedDstType = dstType;
-                
-                size_t cost = GetConversionCost(dstType, srcType);
-                
-                if (cost > 2) {
-                    // ErrorCannotCast(casted, typeToCast);
+                if (!expr->ResolvedSrcType) {
+                    expr->ResolvedSrcType = GetNodeType(expr->Expression);
+                }
+
+                if (!expr->ResolvedDstType) {
+                    expr->ResolvedDstType = GetVarTypeFromString(expr->Type);
                 }
                 
-                return dstType;
+                size_t cost = GetConversionCost(expr->ResolvedDstType, expr->ResolvedDstType);
+                
+                if (cost > 2) {
+                    m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Cannot cast from {} to {}", PrimitiveTypeToString(expr->ResolvedSrcType->Type), PrimitiveTypeToString(expr->ResolvedDstType->Type)));
+                    m_Error = true;
+                }
+                
+                return expr->ResolvedDstType;
             }
 
             case NodeType::UnaryExpr: {
@@ -488,14 +505,50 @@ namespace BlackLua::Internal {
                 VariableType* typeLHS = GetNodeType(expr->LHS);
                 VariableType* typeRHS = GetNodeType(expr->RHS);
 
-                if (typeRHS != typeLHS) {
-                    // ErrorMismatchedTypes(typeLHS, typeRHS);
+                size_t cost = GetConversionCost(typeLHS, typeRHS);
+                if (cost != 0) {
+                    // Perform an implicit cast (if possible)
+                    if (cost == 1) {
+                        // We always want to cast to a wider type
+                        // This will check which side of the binary expression we should cast
+                        // One thing to note though, if we have an assignment we cannot cast the left side
+                        if (GetTypeSize(typeLHS) > GetTypeSize(typeRHS) || expr->Type == BinExprType::Eq) {
+                            NodeCastExpr* cast = GetAllocator()->AllocateNamed<NodeCastExpr>();
+                            Node* newNode = GetAllocator()->AllocateNamed<Node>();
+                            memcpy(newNode, expr->RHS, sizeof(Node));
+                            cast->Expression = newNode;
+                            cast->ResolvedSrcType = typeRHS;
+                            cast->ResolvedDstType = typeLHS;
+
+                            expr->RHS->Data = cast;
+                            expr->RHS->Type = NodeType::CastExpr;
+                        } else {
+                            NodeCastExpr* cast = GetAllocator()->AllocateNamed<NodeCastExpr>();
+                            Node* newNode = GetAllocator()->AllocateNamed<Node>();
+                            memcpy(newNode, expr->LHS, sizeof(Node));
+                            cast->Expression = newNode;
+                            cast->ResolvedSrcType = typeLHS;
+                            cast->ResolvedDstType = typeRHS;
+
+                            expr->LHS->Data = cast;
+                            expr->LHS->Type = NodeType::CastExpr;
+                        }
+                    } else {
+                        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Mismatched types, have {} and {}", PrimitiveTypeToString(typeLHS->Type), PrimitiveTypeToString(typeRHS->Type)));
+                        m_Error = true;
+                    }
                 }
 
                 VariableType* resolved = nullptr;
 
                 switch (expr->Type) {
-                    case BinExprType::Eq:
+                    case BinExprType::Eq: {
+                        if (!IsLValue(expr->LHS)) {
+                            m_Context->ReportCompilerError(expr->LHS->Line, expr->LHS->Column, "Expression must be a modifiable lvalue");
+                            m_Error = true;
+                        }
+                        resolved = typeLHS; break;
+                    }
                     case BinExprType::Add:
                     case BinExprType::AddInPlace:
                     case BinExprType::AddOne:
@@ -564,7 +617,7 @@ namespace BlackLua::Internal {
                 type->Type = PrimitiveType::Structure;
                 type->Data = m_DeclaredStructs.at(isolatedType);
             } else {
-                ErrorUndeclaredIdentifier(isolatedType);
+                ErrorUndeclaredIdentifier(isolatedType, nullptr);
             }
         }
 
@@ -577,49 +630,21 @@ namespace BlackLua::Internal {
         return type;
     }
 
-    void TypeChecker::WarningMismatchedTypes(VariableType type1, VariableType type2) {
-        std::cerr << "Type warning: Assigning " << PrimitiveTypeToString(type2.Type) << " to " << PrimitiveTypeToString(type1.Type) << "!\n";
+    bool TypeChecker::IsLValue(Node* node) {
+        if (node->Type == NodeType::VarRef || node->Type == NodeType::MemberExpr || node->Type == NodeType::ArrayAccessExpr) {
+            return true;
+        }
+
+        return false;
     }
 
-    void TypeChecker::ErrorMismatchedTypes(VariableType type1, VariableType type2) {
-        std::cerr << "Type error: Cannot assign " << PrimitiveTypeToString(type2.Type) << " to " << PrimitiveTypeToString(type1.Type) << "!\n";
-
+    void TypeChecker::ErrorUndeclaredIdentifier(const std::string_view ident, Node* node) {
+        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Undeclared identifier {}", ident));
         m_Error = true;
     }
 
-    void TypeChecker::ErrorCannotCast(VariableType type1, VariableType type2) {
-        std::cerr << "Type error: Cannot cast type " << PrimitiveTypeToString(type2.Type) << " to type " << PrimitiveTypeToString(type1.Type) << "!\n";
-
-        m_Error = true;
-    }
-
-    void TypeChecker::ErrorRedeclaration(const std::string_view msg) {
-        std::cerr << "Type error: Redeclaration of \"" << msg << "\"!\n";
-
-        m_Error = true;
-    }
-
-    void TypeChecker::ErrorUndeclaredIdentifier(const std::string_view msg) {
-        std::cerr << "Type error: Undeclared identifier \"" << msg << "\"!\n";
-
-        m_Error = true;
-    }
-
-    void TypeChecker::ErrorInvalidReturn() {
-        std::cerr << "Type error: Invalid return statement!\n";
-
-        m_Error = true;
-    }
-
-    void TypeChecker::ErrorNoMatchingFunction(const std::string_view func) {
-        std::cerr << "Type error: No matching function to call: \"" << func << "\"!\n";
-
-        m_Error = true;
-    }
-
-    void TypeChecker::ErrorDefiningExternFunction(const std::string_view func) {
-        std::cerr << "Type error: Defining extern function: \"" << func << "\"!\n";
-
+    void TypeChecker::ErrorNoMatchingFunction(const std::string_view func, Node* node) {
+        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("No matching function to call: {}", func));
         m_Error = true;
     }
 

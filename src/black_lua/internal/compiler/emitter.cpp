@@ -639,25 +639,33 @@ namespace BlackLua::Internal {
             }
 
             case NodeType::CastExpr: {
-                // NodeCastExpr* expr = std::get<NodeCastExpr*>(node->Data);
-                // 
-                // CompileStackSlot slot = EmitNodeExpression(expr->Expression);
-                // 
-                // if (expr->SourceType == CreateVarType(PrimitiveType::Bool) || expr->SourceType == CreateVarType(PrimitiveType::Char) || expr->SourceType == CreateVarType(PrimitiveType::Short) || expr->SourceType == CreateVarType(PrimitiveType::Int) || expr->SourceType == CreateVarType(PrimitiveType::Long)) {
-                //     if (expr->Type == CreateVarType(PrimitiveType::Bool) || expr->Type == CreateVarType(PrimitiveType::Char) || expr->Type == CreateVarType(PrimitiveType::Short) || expr->Type == CreateVarType(PrimitiveType::Int) || expr->Type == CreateVarType(PrimitiveType::Long)) {
-                //         m_OpCodes.emplace_back(OpCodeType::CastIntegralToIntegral, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->Type)));
-                //     } else if (expr->Type == CreateVarType(PrimitiveType::Float) || expr->Type == CreateVarType(PrimitiveType::Double)) {
-                //         m_OpCodes.emplace_back(OpCodeType::CastIntegralToFloating, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->Type)));
-                //     }
-                // } else if (expr->SourceType == CreateVarType(PrimitiveType::Float) || expr->SourceType == CreateVarType(PrimitiveType::Double)) {
-                //     if (expr->Type == CreateVarType(PrimitiveType::Float) || expr->Type == CreateVarType(PrimitiveType::Double)) {
-                //         m_OpCodes.emplace_back(OpCodeType::CastFloatingToFloating, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->Type)));
-                //     } else if (expr->Type == CreateVarType(PrimitiveType::Bool) || expr->Type == CreateVarType(PrimitiveType::Char) || expr->Type == CreateVarType(PrimitiveType::Short) || expr->Type == CreateVarType(PrimitiveType::Int) || expr->Type == CreateVarType(PrimitiveType::Long)) {
-                //         m_OpCodes.emplace_back(OpCodeType::CastFloatingToIntegral, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->Type)));
-                //     }
-                // }
-                // 
-                // return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+                NodeCastExpr* expr = std::get<NodeCastExpr*>(node->Data);
+                
+                CompileStackSlot slot = EmitNodeExpression(expr->Expression);
+
+                #define IS_INTEGRAL(__type) __type->Type == PrimitiveType::Bool || __type->Type == PrimitiveType::Char || __type->Type == PrimitiveType::Short || __type->Type == PrimitiveType::Int || __type->Type == PrimitiveType::Long
+                #define IS_FLOATING(__type) __type->Type == PrimitiveType::Float || __type->Type == PrimitiveType::Double
+                
+                if (IS_INTEGRAL(expr->ResolvedSrcType)) {
+                    if (IS_INTEGRAL(expr->ResolvedDstType)) {
+                        m_OpCodes.emplace_back(OpCodeType::CastIntegralToIntegral, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
+                    } else if (IS_FLOATING(expr->ResolvedDstType)) {
+                        m_OpCodes.emplace_back(OpCodeType::CastIntegralToFloating, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
+                    }
+                } else if (IS_FLOATING(expr->ResolvedSrcType)) {
+                    if (IS_FLOATING(expr->ResolvedDstType)) {
+                        m_OpCodes.emplace_back(OpCodeType::CastFloatingToFloating, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
+                    } else if (IS_INTEGRAL(expr->ResolvedDstType)) {
+                        m_OpCodes.emplace_back(OpCodeType::CastFloatingToIntegral, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
+                    }
+                } else {
+                    BLUA_ASSERT(false, "Unreachable!");
+                }
+
+                #undef IS_INTEGRAL
+                #undef IS_FLOATING
+                
+                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
                 break;
             }
 
@@ -793,6 +801,8 @@ namespace BlackLua::Internal {
         } else if (t == NodeType::MethodCallExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::FunctionCallExpr) {
+            EmitNodeExpression(node);
+        } else if (t == NodeType::CastExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::BinExpr) {
             EmitNodeExpression(node);

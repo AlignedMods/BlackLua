@@ -347,6 +347,9 @@ namespace BlackLua::Internal {
                      NodeIf*,
                      NodeReturn*,
                      NodeArrayAccessExpr*, NodeMemberExpr*, NodeMethodCallExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
+
+        size_t Line = 0;
+        size_t Column = 0;
     };
 
     using ASTNodes = std::vector<Node*>;

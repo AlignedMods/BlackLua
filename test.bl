@@ -1,14 +1,6 @@
 int foo = 16;
 
-struct Test {
-    int Field;
-
-    void Foo(int arg) { foo = arg; }
-    void Bar(int arg) { foo = arg + Field; }
-};
-
 void main() {
-    Test t;
-    t.Field = 478789789789789897;
-    t.Bar(4)
+    // foo = (int)(4.0f + 9.0f);
+    foo = (long)((float)(9l + 9) - 9.9f);
 }

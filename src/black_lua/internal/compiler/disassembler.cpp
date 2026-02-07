@@ -32,6 +32,14 @@ namespace BlackLua::Internal {
             break; \
         }
 
+        #define CASE_CAST(__op__, __str__) case OpCodeType::__op__: { \
+            OpCodeCast c = std::get<OpCodeCast>(op.Data); \
+            m_Output += fmt::format("{}{}", m_Indentation, __str__); \
+            DisassembleStackSlotIndex(c.Value); \
+            m_Output += fmt::format(" {}\n", c.Size); \
+            break; \
+        }
+
         switch (op.Type) {
             case OpCodeType::Nop: m_Output += "nop\n"; break;
 
@@ -227,9 +235,15 @@ namespace BlackLua::Internal {
             CASE_MATH(LteFloating, "lte float ");
             CASE_MATH(GtFloating, "gt float ");
             CASE_MATH(GteFloating, "gte float ");
+
+            CASE_CAST(CastIntegralToIntegral, "cast itoi ");
+            CASE_CAST(CastIntegralToFloating, "cast itof ");
+            CASE_CAST(CastFloatingToIntegral, "cast ftoi ");
+            CASE_CAST(CastFloatingToFloating, "cast ftof ");
         }
 
         #undef CASE_MATH
+        #undef CASE_CAST
     }
 
     void Disassembler::DisassembleStackSlotIndex(const StackSlotIndex& i) {

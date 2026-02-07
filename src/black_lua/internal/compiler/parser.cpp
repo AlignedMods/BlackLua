@@ -113,7 +113,7 @@ namespace BlackLua::Internal {
                 node->Value = ParseExpression();
             }
 
-            return CreateNode(NodeType::VarDecl, node);
+            return CreateNode(NodeType::VarDecl, node, ident->Line, ident->Column);
         } else {
             return nullptr;
         }
@@ -139,7 +139,7 @@ namespace BlackLua::Internal {
 
                     node->Body = ParseScope();
 
-                    finalNode = CreateNode(NodeType::FunctionImpl, node);
+                    finalNode = CreateNode(NodeType::FunctionImpl, node, ident->Line, ident->Column);
                     m_NeedsSemi = false;
                 } else {
                     NodeFunctionDecl* node = Allocate<NodeFunctionDecl>();
@@ -148,7 +148,7 @@ namespace BlackLua::Internal {
                     node->Parameters = params;
                     node->Extern = external;
 
-                    finalNode = CreateNode(NodeType::FunctionDecl, node);
+                    finalNode = CreateNode(NodeType::FunctionDecl, node, ident->Line, ident->Column);
                 }
             } else {
                 ErrorExpected("'('");
@@ -167,7 +167,7 @@ namespace BlackLua::Internal {
     }
 
     Node* Parser::ParseStructDecl() {
-        Consume(); // Consume "struct"
+        Token s = Consume(); // Consume "struct"
 
         Token* ident = TryConsume(TokenType::Identifier, "indentifier");
 
@@ -199,7 +199,7 @@ namespace BlackLua::Internal {
                     decl->Parameters = params;
                     decl->Body = ParseScope();
 
-                    node->Fields.Append(CreateNode(NodeType::MethodDecl, decl));
+                    node->Fields.Append(CreateNode(NodeType::MethodDecl, decl, fieldName->Line, fieldName->Column));
                 } else {
                     NodeFieldDecl* decl = Allocate<NodeFieldDecl>();
                     decl->Identifier = fieldName->Data;
@@ -207,18 +207,18 @@ namespace BlackLua::Internal {
 
                     TryConsume(TokenType::Semi, "';'");
 
-                    node->Fields.Append(CreateNode(NodeType::FieldDecl, decl));
+                    node->Fields.Append(CreateNode(NodeType::FieldDecl, decl, fieldName->Line, fieldName->Column));
                 }
             }
         }
 
         TryConsume(TokenType::RightCurly, "'}'");
 
-        return CreateNode(NodeType::StructDecl, node);
+        return CreateNode(NodeType::StructDecl, node, s.Line, s.Column);
     }
 
     Node* Parser::ParseWhile() {
-        Consume(); // Consume "while"
+        Token w = Consume(); // Consume "while"
 
         NodeWhile* node = Allocate<NodeWhile>();
 
@@ -229,11 +229,11 @@ namespace BlackLua::Internal {
 
         m_NeedsSemi = false;
 
-        return CreateNode(NodeType::While, node);
+        return CreateNode(NodeType::While, node, w.Line, w.Column);
     }
 
     Node* Parser::ParseDoWhile() {
-        Consume(); // Consume "do"
+        Token d = Consume(); // Consume "do"
 
         NodeDoWhile* node = Allocate<NodeDoWhile>();
         node->Body = ParseScope();
@@ -245,11 +245,11 @@ namespace BlackLua::Internal {
 
         m_NeedsSemi = false;
 
-        return CreateNode(NodeType::DoWhile, node);
+        return CreateNode(NodeType::DoWhile, node, d.Line, d.Column);
     }
 
     Node* Parser::ParseFor() {
-        Consume(); // Consume "for"
+        Token f = Consume(); // Consume "for"
 
         NodeFor* node = Allocate<NodeFor>();
         TryConsume(TokenType::LeftParen, "'('");
@@ -270,11 +270,11 @@ namespace BlackLua::Internal {
 
         m_NeedsSemi = false;
 
-        return CreateNode(NodeType::For, node);
+        return CreateNode(NodeType::For, node, f.Line, f.Column);
     }
 
     Node* Parser::ParseIf() {
-        Consume(); // Consume "if"
+        Token i = Consume(); // Consume "if"
 
         NodeIf* node = Allocate<NodeIf>();
         TryConsume(TokenType::LeftParen, "'('");
@@ -300,18 +300,18 @@ namespace BlackLua::Internal {
 
         m_NeedsSemi = false;
 
-        return CreateNode(NodeType::If, node);
+        return CreateNode(NodeType::If, node, i.Line, i.Column);
     }
 
     Node* Parser::ParseReturn() {
-        Consume(); // Consume "return"
+        Token r = Consume(); // Consume "return"
 
         NodeReturn* node = Allocate<NodeReturn>();
 
         Node* value = ParseExpression();
         node->Value = value;
 
-        return CreateNode(NodeType::Return, node);
+        return CreateNode(NodeType::Return, node, r.Line, r.Column);
     }
 
     Node* Parser::ParseValue() {
@@ -322,14 +322,14 @@ namespace BlackLua::Internal {
             case TokenType::False: {
                 Consume();
     
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Bool, Allocate<NodeBool>(false)));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Bool, Allocate<NodeBool>(false)), value.Line, value.Column);
                 break;
             }
     
             case TokenType::True: {
                 Consume();
     
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Bool, Allocate<NodeBool>(true)));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Bool, Allocate<NodeBool>(true)), value.Line, value.Column);
                 break;
             }
     
@@ -339,7 +339,7 @@ namespace BlackLua::Internal {
                 int8_t ch = static_cast<int8_t>(value.Data[0]);
                 
                 NodeChar* node = Allocate<NodeChar>(ch);
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Char, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Char, node), value.Line, value.Column);
                 break;
             }
     
@@ -355,7 +355,7 @@ namespace BlackLua::Internal {
     
                 NodeInt* node = Allocate<NodeInt>(num, false);
                 
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Int, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Int, node), value.Line, value.Column);
                 break;
             }
     
@@ -371,7 +371,7 @@ namespace BlackLua::Internal {
     
                 NodeInt* node = Allocate<NodeInt>(static_cast<int32_t>(num), true);
                 
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Int, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Int, node), value.Line, value.Column);
                 break;
             }
     
@@ -381,7 +381,7 @@ namespace BlackLua::Internal {
                 int64_t num = std::stoll(std::string(value.Data));
                 NodeLong* node = Allocate<NodeLong>(num, false);
                 
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, node), value.Line, value.Column);
                 break;
             }
     
@@ -391,7 +391,7 @@ namespace BlackLua::Internal {
                 uint64_t num = std::stoull(std::string(value.Data));
                 NodeLong* node = Allocate<NodeLong>(static_cast<int64_t>(num), true);
                 
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, node), value.Line, value.Column);
                 break;
             }
     
@@ -401,7 +401,7 @@ namespace BlackLua::Internal {
                 float f = std::stof(std::string(value.Data));
                 NodeFloat* node = Allocate<NodeFloat>(f);
                 
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Float, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Float, node), value.Line, value.Column);
                 break;
             }
     
@@ -411,7 +411,7 @@ namespace BlackLua::Internal {
                 double d = std::stod(std::string(value.Data));
                 NodeDouble* node = Allocate<NodeDouble>(d);
                 
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Double, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Double, node), value.Line, value.Column);
                 break;
             }
     
@@ -421,22 +421,22 @@ namespace BlackLua::Internal {
                 std::string_view str = value.Data;
                 NodeString* node = Allocate<NodeString>(str);
                 
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::String, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::String, node), value.Line, value.Column);
                 break;
             }
     
             case TokenType::Minus: {
-                Consume();
+                Token m = Consume();
     
                 Node* expr = ParseValue();
                 NodeUnaryExpr* node = Allocate<NodeUnaryExpr>(expr, UnaryExprType::Negate);
     
-                return CreateNode(NodeType::UnaryExpr, node);
+                return CreateNode(NodeType::UnaryExpr, node, m.Line, m.Column);
                 break;
             }
     
             case TokenType::LeftParen: {
-                Consume();
+                Token p = Consume();
     
                 if (IsVariableType()) {
                     std::string type = ParseVariableType();
@@ -447,21 +447,21 @@ namespace BlackLua::Internal {
                     node->Type = type;
                     node->Expression = ParseValue();
                 
-                    return CreateNode(NodeType::CastExpr, node);
+                    return CreateNode(NodeType::CastExpr, node, p.Line, p.Column);
                 } else {
                     Node* expr = ParseExpression();
                     NodeParenExpr* node = Allocate<NodeParenExpr>(expr);
                     
                     TryConsume(TokenType::RightParen, "')'");
                     
-                    return CreateNode(NodeType::ParenExpr, node);
+                    return CreateNode(NodeType::ParenExpr, node, p.Line, p.Column);
                 }
                 
                 break;
             }
     
             case TokenType::LeftCurly: {
-                Consume();
+                Token c = Consume();
     
                 NodeInitializerList* node = Allocate<NodeInitializerList>();
     
@@ -476,12 +476,12 @@ namespace BlackLua::Internal {
     
                 Consume(); // Eat '}'
     
-                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::InitializerList, node));
+                return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::InitializerList, node), c.Line, c.Column);
                 break;
             }
     
             case TokenType::Identifier: {
-                Consume();
+                Token i = Consume();
 
                 Node* final = nullptr;
     
@@ -504,12 +504,12 @@ namespace BlackLua::Internal {
     
                     TryConsume(TokenType::RightParen, "')'");
     
-                    final = CreateNode(NodeType::FunctionCallExpr, node);
+                    final = CreateNode(NodeType::FunctionCallExpr, node, i.Line, i.Column);
                 } else {
                     NodeVarRef* varRef = Allocate<NodeVarRef>();
                     varRef->Identifier = value.Data;
 
-                    final = CreateNode(NodeType::VarRef, varRef);
+                    final = CreateNode(NodeType::VarRef, varRef, i.Line, i.Column);
                 }
 
                 // Handle member access (foo.bar) and array access (foo[5])
@@ -539,20 +539,20 @@ namespace BlackLua::Internal {
     
                             TryConsume(TokenType::RightParen, "')'");
     
-                            final = CreateNode(NodeType::MethodCallExpr, methodExpr);
+                            final = CreateNode(NodeType::MethodCallExpr, methodExpr, i.Line, i.Column);
                         } else {
                             NodeMemberExpr* memExpr = Allocate<NodeMemberExpr>();
 
                             memExpr->Member = member->Data;
                             memExpr->Parent = final;
-                            final = CreateNode(NodeType::MemberExpr, memExpr);
+                            final = CreateNode(NodeType::MemberExpr, memExpr, i.Line, i.Column);
                         }
                     } else if (op.Type == TokenType::LeftBracket) {
                         NodeArrayAccessExpr* arrExpr = Allocate<NodeArrayAccessExpr>();
 
                         arrExpr->Index = ParseExpression();
                         arrExpr->Parent = final;
-                        final = CreateNode(NodeType::ArrayAccessExpr, arrExpr);
+                        final = CreateNode(NodeType::ArrayAccessExpr, arrExpr, i.Line, i.Column);
 
                         TryConsume(TokenType::RightBracket, "']'");
                     }
@@ -635,7 +635,7 @@ namespace BlackLua::Internal {
             param->Identifier = ident.Data;
             param->Type = type;
             
-            Node* n = CreateNode(NodeType::ParamDecl, param);
+            Node* n = CreateNode(NodeType::ParamDecl, param, ident.Line, ident.Column);
 
             if (Match(TokenType::Comma)) {
                 Consume();
@@ -734,7 +734,7 @@ namespace BlackLua::Internal {
     Node* Parser::ParseScope() {
         NodeScope* node = Allocate<NodeScope>();
 
-        TryConsume(TokenType::LeftCurly, "'{'");
+        Token* l = TryConsume(TokenType::LeftCurly, "'{'");
 
         while (!Match(TokenType::RightCurly)) {
             Node* n = ParseStatement();
@@ -743,7 +743,7 @@ namespace BlackLua::Internal {
 
         TryConsume(TokenType::RightCurly, "'}'");
 
-        return CreateNode(NodeType::Scope, node);
+        return CreateNode(NodeType::Scope, node, l->Line, l->Column);
     }
 
     Node* Parser::ParseExpression(size_t minbp) {
@@ -758,7 +758,7 @@ namespace BlackLua::Internal {
         while ((Peek() && ParseOperator() != BinExprType::Invalid) && 
                (GetBinaryPrecedence(ParseOperator()) >= minbp)) {
             BinExprType op = ParseOperator();
-            Consume();
+            Token o = Consume();
 
             Node* rhsNode = ParseExpression(GetBinaryPrecedence(op) + 1);
 
@@ -767,7 +767,7 @@ namespace BlackLua::Internal {
             newExpr->RHS = rhsNode;
             newExpr->Type = op;
 
-            lhsNode = CreateNode(NodeType::BinExpr, newExpr);
+            lhsNode = CreateNode(NodeType::BinExpr, newExpr, o.Line, o.Column);
         }
 
         return lhsNode;
@@ -811,13 +811,11 @@ namespace BlackLua::Internal {
 
     void Parser::ErrorExpected(const std::string& msg) {
         m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Expected {} after token \"{}\"", msg, TokenTypeToString(Peek(-1)->Type)));
-
         m_Error = true;
     }
 
     void Parser::ErrorTooLarge(const std::string_view value) {
         m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Constant {} is too large", value));
-
         m_Error = true;
     }
 

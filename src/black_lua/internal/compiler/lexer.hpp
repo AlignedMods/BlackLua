@@ -75,9 +75,13 @@ namespace BlackLua::Internal {
         Bool,
 
         Char,
+        UChar,
         Short,
+        UShort,
         Int,
+        UInt,
         Long,
+        ULong,
 
         Float,
         Double,
@@ -162,8 +166,14 @@ namespace BlackLua::Internal {
 
             case TokenType::Bool: return "bool";
 
+            case TokenType::Char: return "char";
+            case TokenType::UChar: return "uchar";
+            case TokenType::Short: return "short";
+            case TokenType::UShort: return "ushort";
             case TokenType::Int: return "int";
+            case TokenType::UInt: return "uint";
             case TokenType::Long: return "long";
+            case TokenType::ULong: return "ulong";
 
             case TokenType::Float: return "float";
             case TokenType::Double: return "double";

@@ -63,6 +63,7 @@ namespace BlackLua::Internal {
 
     struct VariableType {
         PrimitiveType Type = PrimitiveType::Invalid;
+        bool Signed = true;
         std::variant<VariableType*, StructDeclaration> Data;
 
         bool operator==(const VariableType& other) {
@@ -74,9 +75,10 @@ namespace BlackLua::Internal {
         }
     };
 
-    inline VariableType* CreateVarType(PrimitiveType type, decltype(VariableType::Data) data = {}) {
+    inline VariableType* CreateVarType(PrimitiveType type, bool _signed = true, decltype(VariableType::Data) data = {}) {
         VariableType* t = GetAllocator()->AllocateNamed<VariableType>();
         t->Type = type;
+        t->Signed = _signed;
         t->Data = data;
 
         return t;

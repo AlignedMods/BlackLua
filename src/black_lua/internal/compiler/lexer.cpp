@@ -80,9 +80,13 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN("bool", Bool);
 
                 BLUA_TOKEN("char", Char);
+                BLUA_TOKEN("uchar", UChar);
                 BLUA_TOKEN("short", Short);
+                BLUA_TOKEN("ushort", UShort);
                 BLUA_TOKEN("int", Int);
+                BLUA_TOKEN("uint", UInt);
                 BLUA_TOKEN("long", Long);
+                BLUA_TOKEN("ulong", ULong);
 
                 BLUA_TOKEN("float", Float);
                 BLUA_TOKEN("double", Double);
@@ -92,7 +96,6 @@ namespace BlackLua::Internal {
                 BLUA_TOKEN("extern", Extern);
 
                 if (!foundToken) {
-                    // BLUA_TOKEN_DATA(buf, Identifier, buf); 
                     AddToken(TokenType::Identifier, buf);
                     foundToken = true;
                     continue;

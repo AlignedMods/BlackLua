@@ -256,648 +256,6 @@ namespace BlackLua::Internal {
         return p;
     }
 
-    void VM::NegateIntegral(StackSlotIndex val) {
-        StackSlot value = GetStackSlot(val);
-
-        switch (value.Size) {
-            case 1: {
-                NegateGeneric<int8_t>(val);
-                break;
-            }
-
-            case 2: {
-                NegateGeneric<int16_t>(val);
-                break;
-            }
-
-            case 4: {
-                NegateGeneric<int32_t>(val);
-                break;
-            }
-
-            case 8: {
-                NegateGeneric<int64_t>(val);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::NegateFloating(StackSlotIndex val) {
-        StackSlot value = GetStackSlot(val);
-
-        switch (value.Size) {
-            case 4: {
-                NegateGeneric<float>(val);
-                break;
-            }
-
-            case 8: {
-                NegateGeneric<double>(val);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::AddIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid AddIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                AddGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                AddGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                AddGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                AddGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::SubIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid SubIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                SubGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                SubGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                SubGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                SubGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::MulIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid MulIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                MulGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                MulGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                MulGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                MulGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::DivIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid DivIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                DivGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                DivGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                DivGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                DivGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::CmpIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid CmpIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                CmpGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                CmpGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                CmpGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                CmpGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::LtIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LtIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                LtGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                LtGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                LtGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                LtGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::LteIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LteIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                LteGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                LteGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                LteGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                LteGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::GtIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GtIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                GtGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                GtGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                GtGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                GtGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::GteIntegral(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GteIntegral() call, sizes of both sides must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 1: {
-                GteGeneric<int8_t>(lhs, rhs);
-                break;
-            }
-
-            case 2: {
-                GteGeneric<int16_t>(lhs, rhs);
-                break;
-            }
-
-            case 4: {
-                GteGeneric<int32_t>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                GteGeneric<int64_t>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::AddFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid AddFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                AddGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                AddGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::SubFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid SubFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                SubGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                SubGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::MulFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid MulFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                MulGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                MulGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::DivFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid DivFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                DivGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                DivGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::CmpFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid CmpFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                CmpGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                CmpGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::LtFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LtFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                LtGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                LtGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::LteFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid LteFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                LteGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                LteGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::GtFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GtFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                GtGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                GtGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::GteFloating(StackSlotIndex lhs, StackSlotIndex rhs) {
-        StackSlot lhsSlot = GetStackSlot(lhs);
-        StackSlot rhsSlot = GetStackSlot(rhs);
-
-        BLUA_ASSERT(lhsSlot.Size == rhsSlot.Size, "Invalid GteFloating() call, sizes of both operands must be the same!");
-
-        switch (lhsSlot.Size) {
-            case 4: {
-                GteGeneric<float>(lhs, rhs);
-                break;
-            }
-
-            case 8: {
-                GteGeneric<double>(lhs, rhs);
-                break;
-            }
-
-            default: BLUA_ASSERT(false, "Unsupported sizes of operands!");
-        }
-    }
-
-    void VM::CastIntegralToIntegral(StackSlotIndex val, size_t size) {
-        StackSlot value = GetStackSlot(val);
-
-        #define CAST_CASE(x, t) case x: { \
-            switch (size) { \
-                case 1: { \
-                    CastGeneric<t, int8_t>(val); \
-                    break; \
-                } \
-                case 2: { \
-                    CastGeneric<t, int16_t>(val); \
-                    break; \
-                } \
-                case 4: { \
-                    CastGeneric<t, int32_t>(val); \
-                    break; \
-                } \
-                case 8: { \
-                    CastGeneric<t, int64_t>(val); \
-                    break; \
-                } \
-                default: BLUA_ASSERT(false, "Invalid size!"); break; \
-            } \
-            break; \
-        }
-
-        switch (value.Size) {
-            CAST_CASE(1, int8_t);
-            CAST_CASE(2, int16_t);
-            CAST_CASE(4, int32_t);
-            CAST_CASE(8, int64_t);
-            default: BLUA_ASSERT(false, "Invalid size!"); break;
-        }
-
-        #undef CAST_CASE
-    }
-
-    void VM::CastIntegralToFloating(StackSlotIndex val, size_t size) {
-        StackSlot value = GetStackSlot(val);
-
-        #define CAST_CASE(x, t) case x: { \
-            switch (size) { \
-                case 4: { \
-                    CastGeneric<t, float>(val); \
-                    break; \
-                } \
-                case 8: { \
-                    CastGeneric<t, double>(val); \
-                    break; \
-                } \
-                default: BLUA_ASSERT(false, "Invalid size!"); break; \
-            } \
-            break; \
-        }
-
-        switch (value.Size) {
-            CAST_CASE(1, int8_t);
-            CAST_CASE(2, int16_t);
-            CAST_CASE(4, int32_t);
-            CAST_CASE(8, int64_t);
-            default: BLUA_ASSERT(false, "Invalid size!"); break;
-        }
-
-        #undef CAST_CASE
-    }
-
-    void VM::CastFloatingToIntegral(StackSlotIndex val, size_t size) {
-        StackSlot value = GetStackSlot(val);
-
-        #define CAST_CASE(x, t) case x: { \
-            switch (size) { \
-                case 1: { \
-                    CastGeneric<t, int8_t>(val); \
-                    break; \
-                } \
-                case 2: { \
-                    CastGeneric<t, int16_t>(val); \
-                    break; \
-                } \
-                case 4: { \
-                    CastGeneric<t, int32_t>(val); \
-                    break; \
-                } \
-                case 8: { \
-                    CastGeneric<t, int64_t>(val); \
-                    break; \
-                } \
-                default: BLUA_ASSERT(false, "Invalid size!"); break; \
-            } \
-            break; \
-        }
-
-        switch (value.Size) {
-            CAST_CASE(4, float);
-            CAST_CASE(8, double);
-            default: BLUA_ASSERT(false, "Invalid size!"); break;
-        }
-
-        #undef CAST_CASE
-    }
-
-    void VM::CastFloatingToFloating(StackSlotIndex val, size_t size) {
-        StackSlot value = GetStackSlot(val);
-
-        #define CAST_CASE(x, t) case x: { \
-            switch (size) { \
-                case 4: { \
-                    CastGeneric<t, float>(val); \
-                    break; \
-                } \
-                case 8: { \
-                    CastGeneric<t, double>(val); \
-                    break; \
-                } \
-                default: BLUA_ASSERT(false, "Invalid size!"); break; \
-            } \
-            break; \
-        }
-
-        switch (value.Size) {
-            CAST_CASE(4, float);
-            CAST_CASE(8, double);
-            default: BLUA_ASSERT(false, "Invalid size!"); break;
-        }
-
-        #undef CAST_CASE
-    }
-
     void VM::RunByteCode(const OpCode* data, size_t count) {
         m_Program = data;
         m_ProgramSize = count;
@@ -908,17 +266,52 @@ namespace BlackLua::Internal {
     }
 
     void VM::Run() {
-        #define CASE_MATH(type) case OpCodeType::type: {     \
-            OpCodeMath math = std::get<OpCodeMath>(op.Data); \
-            type(math.LHSSlot, math.RHSSlot);                \
-            break;                                           \
+        #define CASE_MATH(_enum, _builtinType, langName) case OpCodeType::_enum: { \
+            OpCodeMath m = std::get<OpCodeMath>(op.Data); \
+            _builtinType lhs = Get##langName(m.LHSSlot); \
+            _builtinType rhs = Get##langName(m.RHSSlot); \
+            _builtinType result = lhs + rhs; \
+            PushBytes(sizeof(_builtinType)); \
+            StackSlot s = GetStackSlot(-1); \
+            memcpy(s.Memory, &result, sizeof(_builtinType)); \
+            break; \
         }
 
-        #define CASE_CAST(type) case OpCodeType::type: {     \
-            OpCodeCast cast = std::get<OpCodeCast>(op.Data); \
-            type(cast.Value, cast.Size);                     \
-            break;                                           \
+        #define CASE_MATH_GROUP(_mathop) \
+            CASE_MATH(_mathop##I8,  int8_t,   Char) \
+            CASE_MATH(_mathop##I16, int16_t,  Short) \
+            CASE_MATH(_mathop##I32, int32_t,  Int) \
+            CASE_MATH(_mathop##I64, int64_t,  Long) \
+            CASE_MATH(_mathop##U8,  uint8_t,  Char) \
+            CASE_MATH(_mathop##U16, uint16_t, Short) \
+            CASE_MATH(_mathop##U32, uint32_t, Int) \
+            CASE_MATH(_mathop##U64, uint64_t, Long) \
+            CASE_MATH(_mathop##F32, float,    Float) \
+            CASE_MATH(_mathop##F64, double,   Double)
+
+        #define CASE_CAST(_enum, sourceType, destType) case OpCodeType::_enum: { \
+            StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
+            StackSlot s = GetStackSlot(v); \
+            sourceType t{}; \
+            memcpy(&t, s.Memory, sizeof(sourceType)); \
+            destType d = static_cast<destType>(t); \
+            PushBytes(sizeof(destType)); \
+            StackSlot __a = GetStackSlot(-1); \
+            memcpy(__a.Memory, &d, sizeof(destType)); \
+            break; \
         }
+
+        #define CASE_CAST_GROUP(_cast, _builtinType) \
+            CASE_CAST(Cast##_cast##ToI8,  _builtinType, int8_t) \
+            CASE_CAST(Cast##_cast##ToI16, _builtinType, int16_t) \
+            CASE_CAST(Cast##_cast##ToI32, _builtinType, int32_t) \
+            CASE_CAST(Cast##_cast##ToI64, _builtinType, int64_t) \
+            CASE_CAST(Cast##_cast##ToU8,  _builtinType, uint8_t) \
+            CASE_CAST(Cast##_cast##ToU16, _builtinType, uint16_t) \
+            CASE_CAST(Cast##_cast##ToU32, _builtinType, uint32_t) \
+            CASE_CAST(Cast##_cast##ToU64, _builtinType, uint64_t) \
+            CASE_CAST(Cast##_cast##ToF32, _builtinType, float) \
+            CASE_CAST(Cast##_cast##ToF64, _builtinType, double)
 
         for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
             const OpCode& op = m_Program[m_ProgramCounter];
@@ -1102,51 +495,34 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                case OpCodeType::NegateIntegral: {
-                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
+                CASE_MATH_GROUP(Add)
+                CASE_MATH_GROUP(Sub)
+                CASE_MATH_GROUP(Mul)
+                CASE_MATH_GROUP(Div)
 
-                    NegateIntegral(slot);
-                    break;
-                }
+                CASE_MATH_GROUP(Cmp)
+                CASE_MATH_GROUP(Lt)
+                CASE_MATH_GROUP(Lte)
+                CASE_MATH_GROUP(Gt)
+                CASE_MATH_GROUP(Gte)
 
-                case OpCodeType::NegateFloating: {
-                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
-
-                    NegateFloating(slot);
-                    break;
-                }
-
-                CASE_MATH(AddIntegral);
-                CASE_MATH(SubIntegral);
-                CASE_MATH(MulIntegral);
-                CASE_MATH(DivIntegral);
-
-                CASE_MATH(CmpIntegral);
-                CASE_MATH(LtIntegral);
-                CASE_MATH(LteIntegral);
-                CASE_MATH(GtIntegral);
-                CASE_MATH(GteIntegral);
-
-                CASE_MATH(AddFloating);
-                CASE_MATH(SubFloating);
-                CASE_MATH(MulFloating);
-                CASE_MATH(DivFloating);
-
-                CASE_MATH(CmpFloating);
-                CASE_MATH(LtFloating);
-                CASE_MATH(LteFloating);
-                CASE_MATH(GtFloating);
-                CASE_MATH(GteFloating);
-
-                CASE_CAST(CastIntegralToIntegral);
-                CASE_CAST(CastIntegralToFloating);
-                CASE_CAST(CastFloatingToIntegral);
-                CASE_CAST(CastFloatingToFloating);
+                CASE_CAST_GROUP(I8, int8_t)
+                CASE_CAST_GROUP(I16, int16_t)
+                CASE_CAST_GROUP(I32, int32_t)
+                CASE_CAST_GROUP(I64, int64_t)
+                CASE_CAST_GROUP(U8, uint8_t)
+                CASE_CAST_GROUP(U16, uint16_t)
+                CASE_CAST_GROUP(U32, uint32_t)
+                CASE_CAST_GROUP(U64, uint64_t)
+                CASE_CAST_GROUP(F32, float)
+                CASE_CAST_GROUP(F64, double)
             }
         }
 
         #undef CASE_MATH
+        #undef CASE_MATH_GROUP
         #undef CASE_CAST
+        #undef CASE_CAST_GROUP
     }
 
     StackSlot VM::GetStackSlot(StackSlotIndex slot) {

@@ -23,22 +23,45 @@ namespace BlackLua::Internal {
     }
 
     void Disassembler::DisassembleOpCode(const OpCode& op) {
-        #define CASE_MATH(__op__, __str__) case OpCodeType::__op__: { \
+        #define CASE_MATH(__op__, _op_str_, __str__) case OpCodeType::__op__: { \
             OpCodeMath m = std::get<OpCodeMath>(op.Data); \
-            m_Output += m_Indentation; \
-            m_Output += __str__; \
+            m_Output += fmt::format("{}{} {} ", m_Indentation, _op_str_, __str__); \
             DisassembleStackSlotIndex(m.LHSSlot); m_Output += ' '; DisassembleStackSlotIndex(m.RHSSlot); \
             m_Output += '\n'; \
             break; \
         }
 
-        #define CASE_CAST(__op__, __str__) case OpCodeType::__op__: { \
-            OpCodeCast c = std::get<OpCodeCast>(op.Data); \
-            m_Output += fmt::format("{}{}", m_Indentation, __str__); \
-            DisassembleStackSlotIndex(c.Value); \
-            m_Output += fmt::format(" {}\n", c.Size); \
+        #define CASE_MATH_GROUP(_mathop, _str_) \
+            CASE_MATH(_mathop##I8,  _str_, "i8") \
+            CASE_MATH(_mathop##I16, _str_, "i16") \
+            CASE_MATH(_mathop##I32, _str_, "i32") \
+            CASE_MATH(_mathop##I64, _str_, "i64") \
+            CASE_MATH(_mathop##U8,  _str_, "u8") \
+            CASE_MATH(_mathop##U16, _str_, "u16") \
+            CASE_MATH(_mathop##U32, _str_, "u32") \
+            CASE_MATH(_mathop##U64, _str_, "u64") \
+            CASE_MATH(_mathop##F32, _str_, "f32") \
+            CASE_MATH(_mathop##F64, _str_, "f64")
+
+        #define CASE_CAST(__op__, _op_str_, __str__) case OpCodeType::__op__: { \
+            StackSlotIndex i = std::get<StackSlotIndex>(op.Data); \
+            m_Output += fmt::format("{}cast {} {} ", m_Indentation, _op_str_, __str__); \
+            DisassembleStackSlotIndex(i); \
+            m_Output += '\n'; \
             break; \
         }
+
+        #define CASE_CAST_GROUP(_cast, _str_) \
+            CASE_CAST(Cast##_cast##ToI8,  _str_, "i8") \
+            CASE_CAST(Cast##_cast##ToI16, _str_, "i16") \
+            CASE_CAST(Cast##_cast##ToI32, _str_, "i32") \
+            CASE_CAST(Cast##_cast##ToI64, _str_, "i64") \
+            CASE_CAST(Cast##_cast##ToU8,  _str_, "u8") \
+            CASE_CAST(Cast##_cast##ToU16, _str_, "u16") \
+            CASE_CAST(Cast##_cast##ToU32, _str_, "u32") \
+            CASE_CAST(Cast##_cast##ToU64, _str_, "u64") \
+            CASE_CAST(Cast##_cast##ToF32, _str_, "f32") \
+            CASE_CAST(Cast##_cast##ToF64, _str_, "f64")
 
         switch (op.Type) {
             case OpCodeType::Nop: m_Output += "nop\n"; break;
@@ -214,36 +237,33 @@ namespace BlackLua::Internal {
                 break;
             }
 
-            CASE_MATH(AddIntegral, "add int ");
-            CASE_MATH(SubIntegral, "sub int ");
-            CASE_MATH(MulIntegral, "mul int ");
-            CASE_MATH(DivIntegral, "div int ");
+            CASE_MATH_GROUP(Add, "add")
+            CASE_MATH_GROUP(Sub, "sub")
+            CASE_MATH_GROUP(Mul, "mul")
+            CASE_MATH_GROUP(Div, "div")
 
-            CASE_MATH(CmpIntegral, "cmp int ");
-            CASE_MATH(LtIntegral, "lt int ");
-            CASE_MATH(LteIntegral, "lte int ");
-            CASE_MATH(GtIntegral, "gt int ");
-            CASE_MATH(GteIntegral, "gte int ");
+            CASE_MATH_GROUP(Cmp, "cmp")
+            CASE_MATH_GROUP(Lt, "lt")
+            CASE_MATH_GROUP(Lte, "lte")
+            CASE_MATH_GROUP(Gt, "gt")
+            CASE_MATH_GROUP(Gte, "gte")
 
-            CASE_MATH(AddFloating, "add float ");
-            CASE_MATH(SubFloating, "sub float ");
-            CASE_MATH(MulFloating, "mul float ");
-            CASE_MATH(DivFloating, "div float ");
-
-            CASE_MATH(CmpFloating, "cmp float ");
-            CASE_MATH(LtFloating, "lt float ");
-            CASE_MATH(LteFloating, "lte float ");
-            CASE_MATH(GtFloating, "gt float ");
-            CASE_MATH(GteFloating, "gte float ");
-
-            CASE_CAST(CastIntegralToIntegral, "cast itoi ");
-            CASE_CAST(CastIntegralToFloating, "cast itof ");
-            CASE_CAST(CastFloatingToIntegral, "cast ftoi ");
-            CASE_CAST(CastFloatingToFloating, "cast ftof ");
+            CASE_CAST_GROUP(I8, "i8");
+            CASE_CAST_GROUP(I16, "i16");
+            CASE_CAST_GROUP(I32, "i32");
+            CASE_CAST_GROUP(I64, "i64");
+            CASE_CAST_GROUP(U8, "u8");
+            CASE_CAST_GROUP(U16, "u16");
+            CASE_CAST_GROUP(U32, "u32");
+            CASE_CAST_GROUP(U64, "u64");
+            CASE_CAST_GROUP(F32, "f32");
+            CASE_CAST_GROUP(F64, "f64");
         }
 
         #undef CASE_MATH
+        #undef CASE_MATH_GROUP
         #undef CASE_CAST
+        #undef CASE_CAST_GROUP
     }
 
     void Disassembler::DisassembleStackSlotIndex(const StackSlotIndex& i) {

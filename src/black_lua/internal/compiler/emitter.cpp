@@ -643,27 +643,68 @@ namespace BlackLua::Internal {
                 
                 CompileStackSlot slot = EmitNodeExpression(expr->Expression);
 
-                #define IS_INTEGRAL(__type) __type->Type == PrimitiveType::Bool || __type->Type == PrimitiveType::Char || __type->Type == PrimitiveType::Short || __type->Type == PrimitiveType::Int || __type->Type == PrimitiveType::Long
-                #define IS_FLOATING(__type) __type->Type == PrimitiveType::Float || __type->Type == PrimitiveType::Double
-                
-                if (IS_INTEGRAL(expr->ResolvedSrcType)) {
-                    if (IS_INTEGRAL(expr->ResolvedDstType)) {
-                        m_OpCodes.emplace_back(OpCodeType::CastIntegralToIntegral, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
-                    } else if (IS_FLOATING(expr->ResolvedDstType)) {
-                        m_OpCodes.emplace_back(OpCodeType::CastIntegralToFloating, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
-                    }
-                } else if (IS_FLOATING(expr->ResolvedSrcType)) {
-                    if (IS_FLOATING(expr->ResolvedDstType)) {
-                        m_OpCodes.emplace_back(OpCodeType::CastFloatingToFloating, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
-                    } else if (IS_INTEGRAL(expr->ResolvedDstType)) {
-                        m_OpCodes.emplace_back(OpCodeType::CastFloatingToIntegral, OpCodeCast(CompileToRuntimeStackSlot(slot), GetTypeSize(expr->ResolvedDstType)));
-                    }
-                } else {
-                    BLUA_ASSERT(false, "Unreachable!");
+                #define CASE_INNER(primType, op) case PrimitiveType::primType: m_OpCodes.emplace_back(OpCodeType::op, CompileToRuntimeStackSlot(slot)); break
+
+                #define CASE_OUTER(primType, op, prefix) case PrimitiveType::primType: { \
+                    switch (expr->ResolvedDstType->Type) { \
+                        CASE_INNER(Bool, Cast##op##To##prefix##8); \
+                        CASE_INNER(Char, Cast##op##To##prefix##8); \
+                        CASE_INNER(Short, Cast##op##To##prefix##16); \
+                        CASE_INNER(Int, Cast##op##To##prefix##32); \
+                        CASE_INNER(Float, Cast##op##ToF32); \
+                        CASE_INNER(Double, Cast##op##ToF64); \
+                    } \
+                    break; \
                 }
 
-                #undef IS_INTEGRAL
-                #undef IS_FLOATING
+                if (expr->ResolvedSrcType->Signed) {
+                    if (expr->ResolvedDstType->Signed) {
+                        switch (expr->ResolvedSrcType->Type) {
+                            CASE_OUTER(Bool,   I8,  I)
+                            CASE_OUTER(Char,   I8,  I)
+                            CASE_OUTER(Short,  I16, I)
+                            CASE_OUTER(Int,    I32, I)
+                            CASE_OUTER(Long,   I64, I)
+                            CASE_OUTER(Float,  F32, I)
+                            CASE_OUTER(Double, F64, I)
+                        }
+                    } else {
+                        switch (expr->ResolvedSrcType->Type) {
+                            CASE_OUTER(Bool,   I8,  U)
+                            CASE_OUTER(Char,   I8,  U)
+                            CASE_OUTER(Short,  I16, U)
+                            CASE_OUTER(Int,    I32, U)
+                            CASE_OUTER(Long,   I64, U)
+                            CASE_OUTER(Float,  F32, U)
+                            CASE_OUTER(Double, F64, U)
+                        }
+                    }
+                } else {
+                    if (expr->ResolvedDstType->Signed) {
+                        switch (expr->ResolvedSrcType->Type) {
+                            CASE_OUTER(Bool,   U8,  I)
+                            CASE_OUTER(Char,   U8,  I)
+                            CASE_OUTER(Short,  U16, I)
+                            CASE_OUTER(Int,    U32, I)
+                            CASE_OUTER(Long,   U64, I)
+                            CASE_OUTER(Float,  F32, I)
+                            CASE_OUTER(Double, F64, I)
+                        }
+                    } else {
+                        switch (expr->ResolvedSrcType->Type) {
+                            CASE_OUTER(Bool,   U8,  U)
+                            CASE_OUTER(Char,   U8,  U)
+                            CASE_OUTER(Short,  U16, U)
+                            CASE_OUTER(Int,    U32, U)
+                            CASE_OUTER(Long,   U64, U)
+                            CASE_OUTER(Float,  F32, U)
+                            CASE_OUTER(Double, F64, U)
+                        }
+                    }
+                }
+
+                #undef CASE_INNER
+                #undef CASE_OUTER
                 
                 return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
                 break;
@@ -674,19 +715,19 @@ namespace BlackLua::Internal {
                 
                 CompileStackSlot slot = EmitNodeExpression(expr->Expression);
                 
-                switch (expr->Type) {
-                    case UnaryExprType::Negate: {
-                        if (expr->ResolvedType->Type == PrimitiveType::Bool || expr->ResolvedType->Type == PrimitiveType::Char || expr->ResolvedType->Type == PrimitiveType::Short || expr->ResolvedType->Type == PrimitiveType::Int || expr->ResolvedType->Type == PrimitiveType::Long) {
-                            m_OpCodes.emplace_back(OpCodeType::NegateIntegral, CompileToRuntimeStackSlot(slot));
-                        } else if (expr->ResolvedType->Type == PrimitiveType::Float || expr->ResolvedType->Type == PrimitiveType::Double) {
-                            m_OpCodes.emplace_back(OpCodeType::NegateFloating, CompileToRuntimeStackSlot(slot));
-                        } else {
-                            BLUA_ASSERT(false, "UnaryExpr has no type!, Did you forget to run this through the type checker?");
-                        }
-                
-                        break;
-                    }
-                }
+                // switch (expr->Type) {
+                //     case UnaryExprType::Negate: {
+                //         if (expr->ResolvedType->Type == PrimitiveType::Bool || expr->ResolvedType->Type == PrimitiveType::Char || expr->ResolvedType->Type == PrimitiveType::Short || expr->ResolvedType->Type == PrimitiveType::Int || expr->ResolvedType->Type == PrimitiveType::Long) {
+                //             m_OpCodes.emplace_back(OpCodeType::NegateIntegral, CompileToRuntimeStackSlot(slot));
+                //         } else if (expr->ResolvedType->Type == PrimitiveType::Float || expr->ResolvedType->Type == PrimitiveType::Double) {
+                //             m_OpCodes.emplace_back(OpCodeType::NegateFloating, CompileToRuntimeStackSlot(slot));
+                //         } else {
+                //             BLUA_ASSERT(false, "UnaryExpr has no type!, Did you forget to run this through the type checker?");
+                //         }
+                // 
+                //         break;
+                //     }
+                // }
                 
                 IncrementStackSlotCount();
                 
@@ -699,29 +740,43 @@ namespace BlackLua::Internal {
                 
                 CompileStackSlot rhs = EmitNodeExpression(expr->RHS);
                 CompileStackSlot lhs = EmitNodeExpression(expr->LHS);
-                
-                #define MATH_OP(op, vmOp) case BinExprType::op: { \
-                    if (expr->ResolvedType->Type == PrimitiveType::Bool || expr->ResolvedType->Type == PrimitiveType::Char || expr->ResolvedType->Type == PrimitiveType::Short || expr->ResolvedType->Type == PrimitiveType::Int || expr->ResolvedType->Type == PrimitiveType::Long) { \
-                        m_OpCodes.emplace_back(OpCodeType::vmOp##Integral, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs))); \
-                    } else if (expr->ResolvedType->Type == PrimitiveType::Float || expr->ResolvedType->Type == PrimitiveType::Double) { \
-                        m_OpCodes.emplace_back(OpCodeType::vmOp##Floating, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs))); \
+
+                #define MATH_OP(baseOp, type, _enum) \
+                    if (expr->ResolvedType->Type == PrimitiveType::_enum) { \
+                        m_OpCodes.emplace_back(OpCodeType::baseOp##type, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs))); \
+                        IncrementStackSlotCount(); \
+                    }
+
+                #define MATH_OP_GROUP(binExpr, op) case BinExprType::binExpr: { \
+                    if (expr->ResolvedType->Signed) { \
+                        MATH_OP(op, I8, Bool) \
+                        MATH_OP(op, I8, Char) \
+                        MATH_OP(op, I16, Short) \
+                        MATH_OP(op, I32, Int) \
+                        MATH_OP(op, I64, Long) \
                     } else { \
-                        BLUA_ASSERT(false, "BinExpr has no type!, Did you forget to run this through the type checker?"); \
+                        MATH_OP(op, U8, Bool) \
+                        MATH_OP(op, U8, Char) \
+                        MATH_OP(op, U16, Short) \
+                        MATH_OP(op, U32, Int) \
+                        MATH_OP(op, U64, Long) \
                     } \
-                    IncrementStackSlotCount(); \
+                    \
+                    MATH_OP(op, F32, Float) \
+                    MATH_OP(op, F64, Double) \
                     break; \
                 }
-                
+
                 switch (expr->Type) {
-                    MATH_OP(Add, Add);
-                    MATH_OP(Sub, Sub);
-                    MATH_OP(Mul, Mul);
-                    MATH_OP(Div, Div);
-                    MATH_OP(Less, Lt);
-                    MATH_OP(LessOrEq, Lte);
-                    MATH_OP(Greater, Gt);
-                    MATH_OP(GreaterOrEq, Gte);
-                    MATH_OP(IsEq, Cmp);
+                    MATH_OP_GROUP(Add, Add)
+                    MATH_OP_GROUP(Sub, Sub);
+                    MATH_OP_GROUP(Mul, Mul);
+                    MATH_OP_GROUP(Div, Div);
+                    MATH_OP_GROUP(Less, Lt);
+                    MATH_OP_GROUP(LessOrEq, Lte);
+                    MATH_OP_GROUP(Greater, Gt);
+                    MATH_OP_GROUP(GreaterOrEq, Gte);
+                    MATH_OP_GROUP(IsEq, Cmp);
                     
                     case BinExprType::Eq: {
                         m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
@@ -732,6 +787,7 @@ namespace BlackLua::Internal {
                 }
 
                 #undef MATH_OP
+                #undef MATH_OP_GROUP
                 
                 return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
                 break;

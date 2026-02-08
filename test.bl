@@ -1,6 +1,5 @@
-int foo = 16;
+uint foo = 16u;
 
 void main() {
-    // foo = (int)(4.0f + 9.0f);
-    foo = (long)((float)(9l + 9) - 9.9f);
+    foo = 9u + (uint)8;
 }

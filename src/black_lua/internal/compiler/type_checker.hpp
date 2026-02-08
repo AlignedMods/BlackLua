@@ -11,6 +11,24 @@ namespace BlackLua {
 
 namespace BlackLua::Internal {
 
+    enum class ConversionType {
+        None,
+        Promotion,
+        Narrowing
+    };
+
+    struct ConversionCost {
+        ConversionType Type = ConversionType::None;
+
+        bool CastNeeded = false;
+        bool SignedMismatch = false;
+        bool ImplicitCastPossible = false;
+        bool ExplicitCastPossible = false;
+
+        VariableType* Source = nullptr;
+        VariableType* Destination = nullptr;
+    };
+
     // A quick note about the type checker,
     // It doesn't "generate" anything, it only modifies the AST,
     class TypeChecker {
@@ -41,17 +59,11 @@ namespace BlackLua::Internal {
 
         void CheckNodeReturn(Node* node);
 
-        void CheckNodeExpression(VariableType* type, Node* node);
+        VariableType* CheckNodeExpression(Node* node);
 
         void CheckNode(Node* node);
 
-        // Gets how "expensive" it is to convert a type2 into a type1
-        // You can think of this as calculating how expensive this expression is:
-        // type1 var = type2;
-        // The bigger the return value is, the more expensive it is to do a conversion
-        // 0 is the best conversion rate (no cast needed), and 3 is the worst conversion rate (impossible conversion)
-        size_t GetConversionCost(VariableType* type1, VariableType* type2);
-        VariableType* GetNodeType(Node* node);
+        ConversionCost GetConversionCost(VariableType* type1, VariableType* type2);
         VariableType* GetVarTypeFromString(const std::string& str);
 
         bool IsLValue(Node* node);

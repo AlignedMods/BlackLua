@@ -601,9 +601,13 @@ namespace BlackLua::Internal {
             case TokenType::Void:       strType = "void"; break;
             case TokenType::Bool:       strType = "bool"; break;
             case TokenType::Char:       strType = "char"; break;
+            case TokenType::UChar:       strType = "uchar"; break;
             case TokenType::Short:      strType = "short"; break;
+            case TokenType::UShort:      strType = "ushort"; break;
             case TokenType::Int:        strType = "int"; break;
+            case TokenType::UInt:        strType = "uint"; break;
             case TokenType::Long:       strType = "long"; break;
+            case TokenType::ULong:       strType = "ulong"; break;
             case TokenType::Float:      strType = "float"; break;
             case TokenType::Double:     strType = "double"; break;
             case TokenType::String:     strType = "string"; break;
@@ -656,9 +660,13 @@ namespace BlackLua::Internal {
             case TokenType::Void:
             case TokenType::Bool:
             case TokenType::Char:
+            case TokenType::UChar:
             case TokenType::Short:
+            case TokenType::UShort:
             case TokenType::Int:
+            case TokenType::UInt:
             case TokenType::Long:
+            case TokenType::ULong:
             case TokenType::Float:
             case TokenType::Double:
             case TokenType::String: return true;
@@ -810,7 +818,12 @@ namespace BlackLua::Internal {
     }
 
     void Parser::ErrorExpected(const std::string& msg) {
-        m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Expected {} after token \"{}\"", msg, TokenTypeToString(Peek(-1)->Type)));
+        if (Peek(-1)) {
+            m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Expected {} after token \"{}\"", msg, TokenTypeToString(Peek(-1)->Type)));
+        } else {
+            m_Context->ReportCompilerError(Peek()->Line, Peek()->Column, fmt::format("Expected {} after token \"{}\"", msg, TokenTypeToString(Peek()->Type)));
+        }
+        
         m_Error = true;
     }
 

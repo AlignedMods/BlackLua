@@ -68,7 +68,7 @@ namespace BlackLua::Internal {
         symbolMap[std::string(decl->Identifier)] = { type, node };
         
         if (decl->Value) {
-            CheckNodeExpression(type, decl->Value);
+            CheckNodeExpression(decl->Value);
         }
 
         decl->ResolvedType = type;
@@ -185,7 +185,7 @@ namespace BlackLua::Internal {
     void TypeChecker::CheckNodeWhile(Node* node) {
         NodeWhile* wh = std::get<NodeWhile*>(node->Data);
         
-        CheckNodeExpression(CreateVarType(PrimitiveType::Bool), wh->Condition);
+        CheckNodeExpression(wh->Condition);
         CheckNodeScope(wh->Body);
     }
 
@@ -193,13 +193,13 @@ namespace BlackLua::Internal {
         NodeDoWhile* dowh = std::get<NodeDoWhile*>(node->Data);
 
         CheckNodeScope(dowh->Body);
-        CheckNodeExpression(CreateVarType(PrimitiveType::Bool), dowh->Condition);
+        CheckNodeExpression(dowh->Condition);
     }
 
     void TypeChecker::CheckNodeIf(Node* node) {
         NodeIf* nif = std::get<NodeIf*>(node->Data);
 
-        CheckNodeExpression(CreateVarType(PrimitiveType::Bool), nif->Condition);
+        CheckNodeExpression(nif->Condition);
         CheckNode(nif->Body);
         if (nif->ElseBody) {
             CheckNode(nif->ElseBody);
@@ -222,89 +222,10 @@ namespace BlackLua::Internal {
             return;
         }
 
-        CheckNodeExpression(m_CurrentScope->ReturnType, ret->Value);
+        CheckNodeExpression(ret->Value);
     }
 
-    void TypeChecker::CheckNodeExpression(VariableType* type, Node* node) {
-        if (GetNodeType(node) != CreateVarType(PrimitiveType::Invalid)) {
-            size_t cost = GetConversionCost(type, GetNodeType(node));
-
-            if (cost > 0) {
-                // ErrorMismatchedTypes(type, GetNodeType(node));
-            }
-        }
-    }
-
-    void TypeChecker::CheckNode(Node* node) {
-        NodeType t = node->Type;
-
-        if (t == NodeType::Scope) {
-            CheckNodeScope(node);
-        } else if (t == NodeType::VarDecl) {
-            CheckNodeVarDecl(node);
-        } else if (t == NodeType::ParamDecl) {
-            CheckNodeParamDecl(node);
-        } else if (t == NodeType::FunctionDecl) {
-            CheckNodeFunctionDecl(node);
-        } else if (t == NodeType::FunctionImpl) {
-            CheckNodeFunctionImpl(node);
-        } else if (t == NodeType::StructDecl) {
-            CheckNodeStructDecl(node);
-        } else if (t == NodeType::While) {
-            CheckNodeWhile(node);
-        } else if (t == NodeType::If) {
-            CheckNodeIf(node);
-        } else if (t == NodeType::Return) {
-            CheckNodeReturn(node);
-        } else if (t == NodeType::ArrayAccessExpr) {
-            GetNodeType(node);
-        } else if (t == NodeType::MethodCallExpr) {
-            GetNodeType(node);
-        } else if (t == NodeType::FunctionCallExpr) {
-            GetNodeType(node);
-        } else if (t == NodeType::BinExpr) {
-            GetNodeType(node);
-        }
-    }
-
-    size_t TypeChecker::GetConversionCost(VariableType* type1, VariableType* type2) {
-        if (!type1 || !type2) { return -1; }
-
-        // Equal types, best possible scenario
-        if (type1->Type == type2->Type) {
-            return 0;
-        }
-
-        if (type1->Type == PrimitiveType::Bool || type1->Type == PrimitiveType::Char || type1->Type == PrimitiveType::Short || type1->Type == PrimitiveType::Int || type1->Type == PrimitiveType::Long) {
-            if (type2->Type == PrimitiveType::Bool || type2->Type == PrimitiveType::Char || type2->Type == PrimitiveType::Short || type2->Type == PrimitiveType::Int || type2->Type == PrimitiveType::Long) {
-                return 1;
-            } else if (type2->Type == PrimitiveType::Float || type2->Type == PrimitiveType::Double) {
-                return 2;
-            } else {
-                return 3;
-            }
-        }
-
-        if (type1->Type == PrimitiveType::Float || type1->Type == PrimitiveType::Double) {
-            if (type2->Type == PrimitiveType::Float || type2->Type == PrimitiveType::Double) {
-                return 1;
-            } else if (type2->Type == PrimitiveType::Bool || type2->Type == PrimitiveType::Char || type2->Type == PrimitiveType::Short || type2->Type == PrimitiveType::Int || type2->Type == PrimitiveType::Long) {
-                return 2;
-            } else {
-                return 3;
-            }
-        }
-
-        if (type1 == CreateVarType(PrimitiveType::String)) {
-            if (type2 != CreateVarType(PrimitiveType::String)) {
-                return 3;
-            }
-        }
-
-        return -1;
-    }
-
-    VariableType* TypeChecker::GetNodeType(Node* node) {
+    VariableType* TypeChecker::CheckNodeExpression(Node* node) {
         switch (node->Type) {
             case NodeType::Constant: {
                 auto constant = GetNode<NodeConstant>(node);
@@ -313,8 +234,19 @@ namespace BlackLua::Internal {
                 switch (constant->Type) {
                     case NodeType::Bool:   type = CreateVarType(PrimitiveType::Bool); break;
                     case NodeType::Char:   type = CreateVarType(PrimitiveType::Char); break;
-                    case NodeType::Int:    type = CreateVarType(PrimitiveType::Int); break;
-                    case NodeType::Long:   type = CreateVarType(PrimitiveType::Long); break;
+
+                    case NodeType::Int: {
+                        auto i = std::get<NodeInt*>(constant->Data);
+                        type = CreateVarType(PrimitiveType::Int, !i->Unsigned);
+                        break;
+                    }
+
+                    case NodeType::Long: {
+                        auto l = std::get<NodeLong*>(constant->Data);
+                        type = CreateVarType(PrimitiveType::Long, !l->Unsigned);
+                        break;
+                    }
+
                     case NodeType::Float:  type = CreateVarType(PrimitiveType::Float); break;
                     case NodeType::Double: type = CreateVarType(PrimitiveType::Double); break;
                     case NodeType::String: type = CreateVarType(PrimitiveType::String); break;
@@ -353,12 +285,12 @@ namespace BlackLua::Internal {
             case NodeType::ArrayAccessExpr: {
                 auto expr = GetNode<NodeArrayAccessExpr>(node);
                 
-                VariableType* arrType = GetNodeType(expr->Parent);
+                VariableType* arrType = CheckNodeExpression(expr->Parent);
                 if (arrType->Type != PrimitiveType::Array) {
                     std::cerr << "Error!\n";
                 }
 
-                CheckNodeExpression(CreateVarType(PrimitiveType::Int), expr->Index);
+                CheckNodeExpression(expr->Index);
                 expr->ResolvedType = std::get<VariableType*>(arrType->Data);
 
                 return expr->ResolvedType;
@@ -367,7 +299,7 @@ namespace BlackLua::Internal {
             case NodeType::MemberExpr: {
                 auto expr = GetNode<NodeMemberExpr>(node);
 
-                VariableType* structType = GetNodeType(expr->Parent);
+                VariableType* structType = CheckNodeExpression(expr->Parent);
                 if (structType->Type != PrimitiveType::Structure) {
                     std::cerr << "Error!\n";
                 }
@@ -389,7 +321,7 @@ namespace BlackLua::Internal {
 
             case NodeType::MethodCallExpr: {
                 auto expr = GetNode<NodeMethodCallExpr>(node);
-                VariableType* structType = GetNodeType(expr->Parent);
+                VariableType* structType = CheckNodeExpression(expr->Parent);
                 if (structType->Type != PrimitiveType::Structure) {
                     std::cerr << "Error!\n";
                 }
@@ -409,7 +341,7 @@ namespace BlackLua::Internal {
                     }
                 
                     for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
-                        if (GetNode<NodeParamDecl>(mdecl->Parameters.Items[i])->ResolvedType->Type != GetNodeType(expr->Arguments.Items[i])->Type) {
+                        if (GetNode<NodeParamDecl>(mdecl->Parameters.Items[i])->ResolvedType->Type != CheckNodeExpression(expr->Arguments.Items[i])->Type) {
                             ErrorNoMatchingFunction(expr->Member, node);
                             return CreateVarType(PrimitiveType::Invalid);
                         }
@@ -451,7 +383,7 @@ namespace BlackLua::Internal {
                     }
                 
                     for (size_t i = 0; i < params.Size; i++) {
-                        if (std::get<NodeParamDecl*>(params.Items[i]->Data)->ResolvedType->Type != GetNodeType(expr->Arguments.Items[i])->Type) {
+                        if (std::get<NodeParamDecl*>(params.Items[i]->Data)->ResolvedType->Type != CheckNodeExpression(expr->Arguments.Items[i])->Type) {
                             ErrorNoMatchingFunction(expr->Name, node);
                             return CreateVarType(PrimitiveType::Invalid);
                         }
@@ -466,7 +398,7 @@ namespace BlackLua::Internal {
 
             case NodeType::ParenExpr: {
                 auto expr = GetNode<NodeParenExpr>(node);
-                VariableType* type = GetNodeType(expr->Expression);
+                VariableType* type = CheckNodeExpression(expr->Expression);
 
                 return type;
             }
@@ -474,16 +406,16 @@ namespace BlackLua::Internal {
             case NodeType::CastExpr: {
                 auto expr = GetNode<NodeCastExpr>(node);
                 if (!expr->ResolvedSrcType) {
-                    expr->ResolvedSrcType = GetNodeType(expr->Expression);
+                    expr->ResolvedSrcType = CheckNodeExpression(expr->Expression);
                 }
 
                 if (!expr->ResolvedDstType) {
                     expr->ResolvedDstType = GetVarTypeFromString(expr->Type);
                 }
                 
-                size_t cost = GetConversionCost(expr->ResolvedDstType, expr->ResolvedDstType);
+                ConversionCost cost = GetConversionCost(expr->ResolvedDstType, expr->ResolvedSrcType);
                 
-                if (cost > 2) {
+                if (!cost.ExplicitCastPossible) {
                     m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Cannot cast from {} to {}", PrimitiveTypeToString(expr->ResolvedSrcType->Type), PrimitiveTypeToString(expr->ResolvedDstType->Type)));
                     m_Error = true;
                 }
@@ -493,7 +425,7 @@ namespace BlackLua::Internal {
 
             case NodeType::UnaryExpr: {
                 auto expr = GetNode<NodeUnaryExpr>(node);
-                VariableType* type = GetNodeType(expr->Expression);
+                VariableType* type = CheckNodeExpression(expr->Expression);
 
                 expr->ResolvedType = type;
 
@@ -502,13 +434,13 @@ namespace BlackLua::Internal {
 
             case NodeType::BinExpr: {
                 auto expr = GetNode<NodeBinExpr>(node);
-                VariableType* typeLHS = GetNodeType(expr->LHS);
-                VariableType* typeRHS = GetNodeType(expr->RHS);
+                VariableType* typeLHS = CheckNodeExpression(expr->LHS);
+                VariableType* typeRHS = CheckNodeExpression(expr->RHS);
 
-                size_t cost = GetConversionCost(typeLHS, typeRHS);
-                if (cost != 0) {
+                ConversionCost cost = GetConversionCost(typeLHS, typeRHS);
+                if (cost.CastNeeded) {
                     // Perform an implicit cast (if possible)
-                    if (cost == 1) {
+                    if (cost.ImplicitCastPossible) {
                         // We always want to cast to a wider type
                         // This will check which side of the binary expression we should cast
                         // One thing to note though, if we have an assignment we cannot cast the left side
@@ -583,6 +515,104 @@ namespace BlackLua::Internal {
         return CreateVarType(PrimitiveType::Invalid);
     }
 
+    void TypeChecker::CheckNode(Node* node) {
+        NodeType t = node->Type;
+
+        if (t == NodeType::Scope) {
+            CheckNodeScope(node);
+        } else if (t == NodeType::VarDecl) {
+            CheckNodeVarDecl(node);
+        } else if (t == NodeType::ParamDecl) {
+            CheckNodeParamDecl(node);
+        } else if (t == NodeType::FunctionDecl) {
+            CheckNodeFunctionDecl(node);
+        } else if (t == NodeType::FunctionImpl) {
+            CheckNodeFunctionImpl(node);
+        } else if (t == NodeType::StructDecl) {
+            CheckNodeStructDecl(node);
+        } else if (t == NodeType::While) {
+            CheckNodeWhile(node);
+        } else if (t == NodeType::If) {
+            CheckNodeIf(node);
+        } else if (t == NodeType::Return) {
+            CheckNodeReturn(node);
+        } else if (t == NodeType::ArrayAccessExpr) {
+            CheckNodeExpression(node);
+        } else if (t == NodeType::MethodCallExpr) {
+            CheckNodeExpression(node);
+        } else if (t == NodeType::FunctionCallExpr) {
+            CheckNodeExpression(node);
+        } else if (t == NodeType::BinExpr) {
+            CheckNodeExpression(node);
+        }
+    }
+
+    ConversionCost TypeChecker::GetConversionCost(VariableType* type1, VariableType* type2) {
+        if (!type1 || !type2) { return {}; }
+
+        ConversionCost cost{};
+        cost.CastNeeded = true;
+        cost.ExplicitCastPossible = true;
+        cost.ImplicitCastPossible = true;
+
+        cost.Source = type2;
+        cost.Destination = type1;
+
+        if (type1->Signed != type2->Signed) {
+            cost.SignedMismatch = true;
+            cost.ImplicitCastPossible = false;
+        }
+
+        // Equal types, best possible scenario
+        if (type1->Type == type2->Type) {
+            cost.Type = ConversionType::None;
+            cost.CastNeeded = cost.SignedMismatch;
+            return cost;
+        }
+
+        if (type1->Type == PrimitiveType::Bool || type1->Type == PrimitiveType::Char || type1->Type == PrimitiveType::Short || type1->Type == PrimitiveType::Int || type1->Type == PrimitiveType::Long) {
+            if (type2->Type == PrimitiveType::Bool || type2->Type == PrimitiveType::Char || type2->Type == PrimitiveType::Short || type2->Type == PrimitiveType::Int || type2->Type == PrimitiveType::Long) {
+                if (GetTypeSize(type1) > GetTypeSize(type2)) {
+                    cost.Type = ConversionType::Narrowing;
+                } else {
+                    cost.Type = ConversionType::Promotion;
+                }
+            } else if (type2->Type == PrimitiveType::Float || type2->Type == PrimitiveType::Double) {
+                cost.ImplicitCastPossible = false;
+
+                if (GetTypeSize(type1) > GetTypeSize(type2)) {
+                    cost.Type = ConversionType::Narrowing;
+                } else {
+                    cost.Type = ConversionType::Promotion;
+                }
+            } else {
+                cost.ExplicitCastPossible = false;
+            }
+        }
+
+        if (type1->Type == PrimitiveType::Float || type1->Type == PrimitiveType::Double) {
+            if (type2->Type == PrimitiveType::Float || type2->Type == PrimitiveType::Double) {
+                if (GetTypeSize(type1) > GetTypeSize(type1)) {
+                    cost.Type = ConversionType::Narrowing;
+                } else {
+                    cost.Type = ConversionType::Promotion;
+                }
+            } else if (type2->Type == PrimitiveType::Bool || type2->Type == PrimitiveType::Char || type2->Type == PrimitiveType::Short || type2->Type == PrimitiveType::Int || type2->Type == PrimitiveType::Long) {
+                cost.ImplicitCastPossible = false;
+
+                if (GetTypeSize(type1) > GetTypeSize(type2)) {
+                    cost.Type = ConversionType::Narrowing;
+                } else {
+                    cost.Type = ConversionType::Promotion;
+                }
+            } else {
+                cost.ExplicitCastPossible = false;
+            }
+        }
+
+        return cost;
+    }
+
     VariableType* TypeChecker::GetVarTypeFromString(const std::string& str) {
         size_t bracket = str.find('[');
 
@@ -596,18 +626,22 @@ namespace BlackLua::Internal {
             isolatedType = str;
         }
 
-        #define TYPE(str, t) if (isolatedType == str) { type->Type = PrimitiveType::t; }
+        #define TYPE(str, t, _signed) if (isolatedType == str) { type->Type = PrimitiveType::t; type->Signed = _signed; }
 
         VariableType* type = CreateVarType(PrimitiveType::Invalid);
-        TYPE("void", Void);
-        TYPE("bool", Bool);
-        TYPE("char", Char);
-        TYPE("short", Short);
-        TYPE("int", Int);
-        TYPE("long", Long);
-        TYPE("float", Float);
-        TYPE("double", Double);
-        TYPE("string", String);
+        TYPE("void",   Void, true);
+        TYPE("bool",   Bool, true);
+        TYPE("char",   Char, true);
+        TYPE("uchar",  Char, false);
+        TYPE("short",  Short, true);
+        TYPE("ushort", Short, false);
+        TYPE("int",    Int, true);
+        TYPE("uint",   Int, false);
+        TYPE("long",   Long, true);
+        TYPE("ulong",  Long, false);
+        TYPE("float",  Float, true);
+        TYPE("double", Double, true);
+        TYPE("string", String, false);
 
         #undef TYPE
 

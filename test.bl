@@ -1,5 +1,5 @@
 uint foo = 16u;
 
 void main() {
-    foo = 9u + (uint)8;
+    foo = (uint)(4 % 2);
 }

@@ -3,6 +3,30 @@
 
 namespace BlackLua::Internal {
 
+    template <typename T>
+    T Add(T lhs, T rhs) { return lhs + rhs; }
+    template <typename T>
+    T Sub(T lhs, T rhs) { return lhs - rhs; }
+    template <typename T>
+    T Mul(T lhs, T rhs) { return lhs * rhs; }
+    template <typename T>
+    T Div(T lhs, T rhs) { return lhs / rhs; }
+    template <std::integral T>
+    T Mod(T lhs, T rhs) { return lhs % rhs; }
+    template <std::floating_point T>
+    T Mod(T lhs, T rhs) { return std::fmod(lhs, rhs); }
+
+    template <typename T>
+    T Cmp(T lhs, T rhs) { return lhs == rhs; }
+    template <typename T>
+    T Lt(T lhs, T rhs) { return lhs < rhs; }
+    template <typename T>
+    T Lte(T lhs, T rhs) { return lhs <= rhs; }
+    template <typename T>
+    T Gt(T lhs, T rhs) { return lhs > rhs; }
+    template <typename T>
+    T Gte(T lhs, T rhs) { return lhs >= rhs; }
+
     VM::VM(Context* ctx) {
         m_Stack.resize(4 * 1024 * 1024); // 4MB stack by default
         m_StackSlots.resize(1024); // 1024 slots by default
@@ -266,28 +290,28 @@ namespace BlackLua::Internal {
     }
 
     void VM::Run() {
-        #define CASE_MATH(_enum, _builtinType, langName) case OpCodeType::_enum: { \
+        #define CASE_MATH(_enum, _builtinType, langName, _builtinOp) case OpCodeType::_enum: { \
             OpCodeMath m = std::get<OpCodeMath>(op.Data); \
             _builtinType lhs = Get##langName(m.LHSSlot); \
             _builtinType rhs = Get##langName(m.RHSSlot); \
-            _builtinType result = lhs + rhs; \
+            _builtinType result = _builtinOp(lhs, rhs); \
             PushBytes(sizeof(_builtinType)); \
             StackSlot s = GetStackSlot(-1); \
             memcpy(s.Memory, &result, sizeof(_builtinType)); \
             break; \
         }
 
-        #define CASE_MATH_GROUP(_mathop) \
-            CASE_MATH(_mathop##I8,  int8_t,   Char) \
-            CASE_MATH(_mathop##I16, int16_t,  Short) \
-            CASE_MATH(_mathop##I32, int32_t,  Int) \
-            CASE_MATH(_mathop##I64, int64_t,  Long) \
-            CASE_MATH(_mathop##U8,  uint8_t,  Char) \
-            CASE_MATH(_mathop##U16, uint16_t, Short) \
-            CASE_MATH(_mathop##U32, uint32_t, Int) \
-            CASE_MATH(_mathop##U64, uint64_t, Long) \
-            CASE_MATH(_mathop##F32, float,    Float) \
-            CASE_MATH(_mathop##F64, double,   Double)
+        #define CASE_MATH_GROUP(_mathop, op) \
+            CASE_MATH(_mathop##I8,  int8_t,   Char,   op) \
+            CASE_MATH(_mathop##I16, int16_t,  Short,  op) \
+            CASE_MATH(_mathop##I32, int32_t,  Int,    op) \
+            CASE_MATH(_mathop##I64, int64_t,  Long,   op) \
+            CASE_MATH(_mathop##U8,  uint8_t,  Char,   op) \
+            CASE_MATH(_mathop##U16, uint16_t, Short,  op) \
+            CASE_MATH(_mathop##U32, uint32_t, Int,    op) \
+            CASE_MATH(_mathop##U64, uint64_t, Long,   op) \
+            CASE_MATH(_mathop##F32, float,    Float,  op) \
+            CASE_MATH(_mathop##F64, double,   Double, op)
 
         #define CASE_CAST(_enum, sourceType, destType) case OpCodeType::_enum: { \
             StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
@@ -495,16 +519,17 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                CASE_MATH_GROUP(Add)
-                CASE_MATH_GROUP(Sub)
-                CASE_MATH_GROUP(Mul)
-                CASE_MATH_GROUP(Div)
+                CASE_MATH_GROUP(Add, Add)
+                CASE_MATH_GROUP(Sub, Sub)
+                CASE_MATH_GROUP(Mul, Mul)
+                CASE_MATH_GROUP(Div, Div)
+                CASE_MATH_GROUP(Mod, Mod)
 
-                CASE_MATH_GROUP(Cmp)
-                CASE_MATH_GROUP(Lt)
-                CASE_MATH_GROUP(Lte)
-                CASE_MATH_GROUP(Gt)
-                CASE_MATH_GROUP(Gte)
+                CASE_MATH_GROUP(Cmp, Cmp)
+                CASE_MATH_GROUP(Lt, Lt)
+                CASE_MATH_GROUP(Lte, Lte)
+                CASE_MATH_GROUP(Gt, Gt)
+                CASE_MATH_GROUP(Gte, Gte)
 
                 CASE_CAST_GROUP(I8, int8_t)
                 CASE_CAST_GROUP(I16, int16_t)

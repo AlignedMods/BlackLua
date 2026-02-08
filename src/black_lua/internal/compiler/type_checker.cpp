@@ -491,6 +491,8 @@ namespace BlackLua::Internal {
                     case BinExprType::MulInPlace:
                     case BinExprType::Div:
                     case BinExprType::DivInPlace:
+                    case BinExprType::Mod:
+                    case BinExprType::ModInPlace:
                         resolved = typeLHS; break;
                     
                     case BinExprType::IsEq:

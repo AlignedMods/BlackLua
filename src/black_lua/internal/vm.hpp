@@ -68,6 +68,7 @@ namespace BlackLua::Internal {
         TYPED_OP(Sub)
         TYPED_OP(Mul)
         TYPED_OP(Div)
+        TYPED_OP(Mod)
 
         TYPED_OP(Cmp)
         TYPED_OP(Lt)

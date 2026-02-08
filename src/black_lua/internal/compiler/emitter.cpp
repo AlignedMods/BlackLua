@@ -772,6 +772,7 @@ namespace BlackLua::Internal {
                     MATH_OP_GROUP(Sub, Sub);
                     MATH_OP_GROUP(Mul, Mul);
                     MATH_OP_GROUP(Div, Div);
+                    MATH_OP_GROUP(Mod, Mod);
                     MATH_OP_GROUP(Less, Lt);
                     MATH_OP_GROUP(LessOrEq, Lte);
                     MATH_OP_GROUP(Greater, Gt);

@@ -21,7 +21,7 @@ namespace BlackLua::Internal {
         Minus, MinusEq, MinusMinus,
         Star, StarEq,
         Slash, SlashEq,
-        Percent,
+        Percent, PercentEq,
         Hash,
         IsEq,
         IsNotEq,

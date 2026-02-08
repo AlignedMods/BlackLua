@@ -280,6 +280,25 @@ namespace BlackLua::Internal {
                     continue;
                 }
 
+                if (c == '%') {
+                    bool isEq = false;
+
+                    if (Peek()) {
+                        char nc = *Peek();
+
+                        if (nc == '=') {
+                            Consume();
+                            isEq = true;
+                        }
+
+                        if (isEq) {
+                            AddToken(TokenType::PercentEq);
+                        } else {
+                            AddToken(TokenType::Percent);
+                        }
+                    }
+                }
+
                 if (c == '=') {
                     bool isEq = false;
 

@@ -74,6 +74,7 @@ namespace BlackLua::Internal {
         Sub, SubInPlace, SubOne,
         Mul, MulInPlace,
         Div, DivInPlace,
+        Mod, ModInPlace,
     
         Less,
         LessOrEq,
@@ -98,6 +99,8 @@ namespace BlackLua::Internal {
             case BinExprType::MulInPlace: return "*=";
             case BinExprType::Div: return "/";
             case BinExprType::DivInPlace: return "/=";
+            case BinExprType::Mod: return "%";
+            case BinExprType::ModInPlace: return "%=";
     
             case BinExprType::Less: return "<";
             case BinExprType::LessOrEq: return "<=";

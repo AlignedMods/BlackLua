@@ -580,6 +580,8 @@ namespace BlackLua::Internal {
             case TokenType::StarEq: return BinExprType::MulInPlace;
             case TokenType::Slash: return BinExprType::Div;
             case TokenType::SlashEq: return BinExprType::DivInPlace;
+            case TokenType::Percent: return BinExprType::Mod;
+            case TokenType::PercentEq: return BinExprType::ModInPlace;
             case TokenType::Less: return BinExprType::Less;
             case TokenType::LessOrEq: return BinExprType::LessOrEq;
             case TokenType::Greater: return BinExprType::Greater;
@@ -720,19 +722,23 @@ namespace BlackLua::Internal {
             case BinExprType::IsNotEq:
                 return 20;
 
+            case BinExprType::Mod:
+            case BinExprType::ModInPlace:
+                return 30;
+
             case BinExprType::Add:
             case BinExprType::AddInPlace:
             case BinExprType::AddOne:
             case BinExprType::Sub:
             case BinExprType::SubInPlace:
             case BinExprType::SubOne:
-                return 30;
+                return 40;
 
             case BinExprType::Mul:
             case BinExprType::MulInPlace:
             case BinExprType::Div:
             case BinExprType::DivInPlace:
-                return 40;
+                return 50;
         }
 
         BLUA_ASSERT(false, "Unreachable");

@@ -241,6 +241,7 @@ namespace BlackLua::Internal {
             CASE_MATH_GROUP(Sub, "sub")
             CASE_MATH_GROUP(Mul, "mul")
             CASE_MATH_GROUP(Div, "div")
+            CASE_MATH_GROUP(Mod, "mod")
 
             CASE_MATH_GROUP(Cmp, "cmp")
             CASE_MATH_GROUP(Lt, "lt")

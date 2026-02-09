@@ -303,6 +303,22 @@ namespace BlackLua::Internal {
         return CreateNode(NodeType::If, node, i.Line, i.Column);
     }
 
+    Node* Parser::ParseBreak() {
+        Token b = Consume(); // Consume "break"
+
+        NodeEmpty* node = Allocate<NodeEmpty>();
+
+        return CreateNode(NodeType::Break, node, b.Line, b.Column);
+    }
+
+    Node* Parser::ParseContinue() {
+        Token c = Consume(); // Consume "continue"
+
+        NodeEmpty* node = Allocate<NodeEmpty>();
+
+        return CreateNode(NodeType::Continue, node, c.Line, c.Column);
+    }
+
     Node* Parser::ParseReturn() {
         Token r = Consume(); // Consume "return"
 
@@ -712,6 +728,11 @@ namespace BlackLua::Internal {
     size_t Parser::GetBinaryPrecedence(BinExprType type) {
         switch (type) {
             case BinExprType::Eq:
+            case BinExprType::AddInPlace:
+            case BinExprType::SubInPlace:
+            case BinExprType::MulInPlace:
+            case BinExprType::ModInPlace:
+            case BinExprType::DivInPlace:
                 return 10;
 
             case BinExprType::Less:
@@ -723,21 +744,16 @@ namespace BlackLua::Internal {
                 return 20;
 
             case BinExprType::Mod:
-            case BinExprType::ModInPlace:
                 return 30;
 
             case BinExprType::Add:
-            case BinExprType::AddInPlace:
             case BinExprType::AddOne:
             case BinExprType::Sub:
-            case BinExprType::SubInPlace:
             case BinExprType::SubOne:
                 return 40;
 
             case BinExprType::Mul:
-            case BinExprType::MulInPlace:
             case BinExprType::Div:
-            case BinExprType::DivInPlace:
                 return 50;
         }
 
@@ -808,6 +824,8 @@ namespace BlackLua::Internal {
             node = ParseFor();
         } else if (t == TokenType::If) {
             node = ParseIf();
+        } else if (t == TokenType::Break) {
+            node = ParseBreak();
         } else if (t == TokenType::Return) {
             node = ParseReturn();
         } else {
@@ -1065,6 +1083,11 @@ namespace BlackLua::Internal {
                     PrintNode(nif->Body, indentation + 4);
                     PrintNode(nif->ElseBody, indentation + 4);
 
+                    break;
+                }
+
+                case NodeType::Break: {
+                    std::cout << "Break\n";
                     break;
                 }
 

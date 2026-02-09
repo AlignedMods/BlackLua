@@ -753,7 +753,7 @@ namespace BlackLua::Internal {
 
             case NodeType::BinExpr: {
                 NodeBinExpr* expr = std::get<NodeBinExpr*>(node->Data);
-                
+
                 CompileStackSlot rhs = EmitNodeExpression(expr->RHS);
                 CompileStackSlot lhs = EmitNodeExpression(expr->LHS);
 
@@ -785,10 +785,16 @@ namespace BlackLua::Internal {
 
                 switch (expr->Type) {
                     MATH_OP_GROUP(Add, Add)
+                    MATH_OP_GROUP(AddInPlace, Add)
                     MATH_OP_GROUP(Sub, Sub);
+                    MATH_OP_GROUP(SubInPlace, Sub);
                     MATH_OP_GROUP(Mul, Mul);
+                    MATH_OP_GROUP(MulInPlace, Mul);
                     MATH_OP_GROUP(Div, Div);
+                    MATH_OP_GROUP(DivInPlace, Div);
                     MATH_OP_GROUP(Mod, Mod);
+                    MATH_OP_GROUP(ModInPlace, Mod);
+
                     MATH_OP_GROUP(Less, Lt);
                     MATH_OP_GROUP(LessOrEq, Lte);
                     MATH_OP_GROUP(Greater, Gt);
@@ -798,8 +804,18 @@ namespace BlackLua::Internal {
                     case BinExprType::Eq: {
                         m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
                         return lhs;
-                
-                        break;
+
+                    }
+                }
+
+                switch (expr->Type) {
+                    case BinExprType::AddInPlace:
+                    case BinExprType::SubInPlace:
+                    case BinExprType::MulInPlace:
+                    case BinExprType::DivInPlace:
+                    case BinExprType::ModInPlace: {
+                        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), -1));
+                        return lhs;
                     }
                 }
 

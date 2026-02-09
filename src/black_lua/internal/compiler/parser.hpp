@@ -45,6 +45,8 @@ namespace BlackLua::Internal {
 
         Node* ParseIf();
 
+        Node* ParseBreak();
+        Node* ParseContinue();
         Node* ParseReturn();
 
         // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables)

@@ -1,5 +1,5 @@
-float foo = 10.0f;
+int foo = 4;
 
 void main() {
-    foo = 9.0 / -2.0f;
+    foo *= 8 + 9;
 }

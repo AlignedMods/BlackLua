@@ -37,6 +37,8 @@ namespace BlackLua::Internal {
     
         If,
     
+        Break,
+        Continue,
         Return,
     
         ArrayAccessExpr,
@@ -141,6 +143,9 @@ namespace BlackLua::Internal {
             Size++;
         }
     };
+
+    // For nodes that have no data tied to them
+    struct NodeEmpty {};
     
     struct NodeBool {
         bool Value = false;
@@ -341,7 +346,8 @@ namespace BlackLua::Internal {
     
     struct Node {
         NodeType Type = NodeType::Bool;
-        std::variant<NodeConstant*, 
+        std::variant<NodeEmpty*,
+                     NodeConstant*, 
                      NodeScope*,
                      NodeVarDecl*, NodeParamDecl*, NodeVarRef*,
                      NodeStructDecl*, NodeFieldDecl*, NodeMethodDecl*,

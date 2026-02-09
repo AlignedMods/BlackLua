@@ -9,7 +9,7 @@ int main(int argc, char** argv) {
     BlackLua::CompiledSource* compiled = context.CompileFile("test.bl");
     std::cout << context.Disassemble(compiled);
     context.Run(compiled, "test");
-    vm.Call(0);
+    vm.Call(1);
     
     fmt::print("{}", vm.GetInt(-1));
     

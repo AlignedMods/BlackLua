@@ -1,5 +1,9 @@
 int foo = 4;
 
+int bar(uint hello) {
+    return (int)hello + 4;
+}
+
 void main() {
-    foo *= 8 + 9;
+    foo = bar(4lu);
 }

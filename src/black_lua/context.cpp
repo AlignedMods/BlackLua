@@ -49,18 +49,18 @@ namespace BlackLua {
     CompiledSource* Context::CompileString(const std::string& source) {
         bool valid = true;
 
-        BlackLua::Internal::Lexer l = BlackLua::Internal::Lexer::Parse(source);
+        Internal::Lexer l = Internal::Lexer::Parse(source);
 
-        BlackLua::Internal::Parser p = BlackLua::Internal::Parser::Parse(l.GetTokens(), this);
+        Internal::Parser p = Internal::Parser::Parse(l.GetTokens(), this);
         valid = p.IsValid();
         if (!valid) { return nullptr; } 
         p.PrintAST();
 
-        BlackLua::Internal::TypeChecker c = BlackLua::Internal::TypeChecker::Check(p.GetNodes(), this);
+        Internal::TypeChecker c = Internal::TypeChecker::Check(p.GetNodes(), this);
         valid = c.IsValid();
         if (!valid) { return nullptr; }
 
-        BlackLua::Internal::Emitter e = BlackLua::Internal::Emitter::Emit(p.GetNodes());
+        Internal::Emitter e = Internal::Emitter::Emit(p.GetNodes());
 
         CompiledSource* src = new CompiledSource();
         src->OpCodes = e.GetOpCodes();
@@ -80,7 +80,7 @@ namespace BlackLua {
 
     std::string Context::Disassemble(CompiledSource* compiled) {
         if (compiled) {
-            BlackLua::Internal::Disassembler d = BlackLua::Internal::Disassembler::Disassemble(&compiled->OpCodes);
+            Internal::Disassembler d = Internal::Disassembler::Disassemble(&compiled->OpCodes);
             return d.GetDisassembly();
         }
         

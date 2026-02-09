@@ -383,9 +383,29 @@ namespace BlackLua::Internal {
                     }
                 
                     for (size_t i = 0; i < params.Size; i++) {
-                        if (std::get<NodeParamDecl*>(params.Items[i]->Data)->ResolvedType->Type != CheckNodeExpression(expr->Arguments.Items[i])->Type) {
-                            ErrorNoMatchingFunction(expr->Name, node);
-                            return CreateVarType(PrimitiveType::Invalid);
+                        Node* param = params.Items[i];
+                        Node* arg = expr->Arguments.Items[i];
+
+                        VariableType* typeParam = GetNode<NodeParamDecl>(param)->ResolvedType;
+                        VariableType* typeArg = CheckNodeExpression(arg);
+
+                        ConversionCost cost = GetConversionCost(typeParam, typeArg);
+                        if (cost.CastNeeded) {
+                            // Perform an implicit cast (if possible)
+                            if (cost.ImplicitCastPossible) {
+                                NodeCastExpr* cast = GetAllocator()->AllocateNamed<NodeCastExpr>();
+                                Node* newNode = GetAllocator()->AllocateNamed<Node>();
+                                memcpy(newNode, arg, sizeof(Node));
+                                cast->Expression = newNode;
+                                cast->ResolvedSrcType = typeArg;
+                                cast->ResolvedDstType = typeParam;
+
+                                arg->Data = cast;
+                                arg->Type = NodeType::CastExpr;
+                            } else {
+                                m_Context->ReportCompilerError(arg->Line, arg->Column, fmt::format("Mismatched function argument types, parameter type is {}, while argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
+                                m_Error = true;
+                            }
                         }
                     }
                 
@@ -416,7 +436,7 @@ namespace BlackLua::Internal {
                 ConversionCost cost = GetConversionCost(expr->ResolvedDstType, expr->ResolvedSrcType);
                 
                 if (!cost.ExplicitCastPossible) {
-                    m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Cannot cast from {} to {}", PrimitiveTypeToString(expr->ResolvedSrcType->Type), PrimitiveTypeToString(expr->ResolvedDstType->Type)));
+                    m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Cannot cast from {} to {}", VariableTypeToString(expr->ResolvedSrcType), VariableTypeToString(expr->ResolvedDstType)));
                     m_Error = true;
                 }
                 
@@ -466,7 +486,7 @@ namespace BlackLua::Internal {
                             expr->LHS->Type = NodeType::CastExpr;
                         }
                     } else {
-                        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Mismatched types, have {} and {}", PrimitiveTypeToString(typeLHS->Type), PrimitiveTypeToString(typeRHS->Type)));
+                        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Mismatched types, have {} and {}", VariableTypeToString(typeLHS), VariableTypeToString(typeRHS)));
                         m_Error = true;
                     }
                 }

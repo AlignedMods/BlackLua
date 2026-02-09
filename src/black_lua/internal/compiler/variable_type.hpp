@@ -24,27 +24,6 @@ namespace BlackLua::Internal {
         Structure
     };
 
-    inline const char* PrimitiveTypeToString(PrimitiveType type) {
-        switch (type) {
-            case PrimitiveType::Invalid: return "invalid";
-            case PrimitiveType::Void: return "void";
-            case PrimitiveType::Bool: return "bool";
-            case PrimitiveType::Char: return "char";
-            case PrimitiveType::Short: return "short";
-            case PrimitiveType::Int: return "int";
-            case PrimitiveType::Long: return "long";
-            case PrimitiveType::Float: return "float";
-            case PrimitiveType::Double: return "double";
-            case PrimitiveType::String: return "string";
-
-            case PrimitiveType::Array: return "array";
-            case PrimitiveType::Structure: return "struct";
-        }
-
-        BLUA_ASSERT(false, "Unreachable!");
-        return "invalid";
-    }
-
     struct VariableType;
 
     struct StructFieldDeclaration {
@@ -82,6 +61,40 @@ namespace BlackLua::Internal {
         t->Data = data;
 
         return t;
+    }
+
+    inline std::string VariableTypeToString(VariableType* type) {
+        std::string str;
+        if (!type->Signed) {
+            str = "u";
+        }
+
+        switch (type->Type) {
+            case PrimitiveType::Invalid: str += "invalid"; break;
+            case PrimitiveType::Void:    str += "void"; break;
+            case PrimitiveType::Bool:    str += "bool"; break;
+            case PrimitiveType::Char:    str += "char"; break;
+            case PrimitiveType::Short:   str += "short"; break;
+            case PrimitiveType::Int:     str += "int"; break;
+            case PrimitiveType::Long:    str += "long"; break;
+            case PrimitiveType::Float:   str += "float"; break;
+            case PrimitiveType::Double:  str += "double"; break;
+            case PrimitiveType::String:  str += "string"; break;
+
+            case PrimitiveType::Array: {
+                str += fmt::format("{}[]", VariableTypeToString(std::get<VariableType*>(type->Data)));
+                break;
+            }
+
+            case PrimitiveType::Structure: {
+                StructDeclaration decl = std::get<StructDeclaration>(type->Data);
+                str += decl.Identifier;
+
+                break;
+            }
+        }
+
+        return str;
     }
 
     inline size_t GetTypeSize(VariableType* type) {

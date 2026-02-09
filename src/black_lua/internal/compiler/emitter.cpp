@@ -366,7 +366,7 @@ namespace BlackLua::Internal {
             EmitNodeParamDecl(impl->Parameters.Items[i]);
         
             // Copy the arguments into the parameters
-            m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(impl->Parameters.Size + 1 + returnSlot)));
+            m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(impl->Parameters.Size + 1 + returnSlot)));
             varsPushed++;
         }
         
@@ -712,24 +712,40 @@ namespace BlackLua::Internal {
 
             case NodeType::UnaryExpr: {
                 NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(node->Data);
-                
                 CompileStackSlot slot = EmitNodeExpression(expr->Expression);
                 
-                // switch (expr->Type) {
-                //     case UnaryExprType::Negate: {
-                //         if (expr->ResolvedType->Type == PrimitiveType::Bool || expr->ResolvedType->Type == PrimitiveType::Char || expr->ResolvedType->Type == PrimitiveType::Short || expr->ResolvedType->Type == PrimitiveType::Int || expr->ResolvedType->Type == PrimitiveType::Long) {
-                //             m_OpCodes.emplace_back(OpCodeType::NegateIntegral, CompileToRuntimeStackSlot(slot));
-                //         } else if (expr->ResolvedType->Type == PrimitiveType::Float || expr->ResolvedType->Type == PrimitiveType::Double) {
-                //             m_OpCodes.emplace_back(OpCodeType::NegateFloating, CompileToRuntimeStackSlot(slot));
-                //         } else {
-                //             BLUA_ASSERT(false, "UnaryExpr has no type!, Did you forget to run this through the type checker?");
-                //         }
-                // 
-                //         break;
-                //     }
-                // }
-                
-                IncrementStackSlotCount();
+                #define MATH_OP(baseOp, type, _enum) \
+                    if (expr->ResolvedType->Type == PrimitiveType::_enum) { \
+                        m_OpCodes.emplace_back(OpCodeType::baseOp##type, CompileToRuntimeStackSlot(slot)); \
+                        IncrementStackSlotCount(); \
+                    }
+
+                #define MATH_OP_GROUP(binExpr, op) case UnaryExprType::binExpr: { \
+                    if (expr->ResolvedType->Signed) { \
+                        MATH_OP(op, I8, Bool) \
+                        MATH_OP(op, I8, Char) \
+                        MATH_OP(op, I16, Short) \
+                        MATH_OP(op, I32, Int) \
+                        MATH_OP(op, I64, Long) \
+                    } else { \
+                        MATH_OP(op, U8, Bool) \
+                        MATH_OP(op, U8, Char) \
+                        MATH_OP(op, U16, Short) \
+                        MATH_OP(op, U32, Int) \
+                        MATH_OP(op, U64, Long) \
+                    } \
+                    \
+                    MATH_OP(op, F32, Float) \
+                    MATH_OP(op, F64, Double) \
+                    break; \
+                }
+
+                switch (expr->Type) {
+                    MATH_OP_GROUP(Negate, Negate)
+                }
+
+                #undef MATH_OP
+                #undef MATH_OP_GROUP
                 
                 return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
                 break;

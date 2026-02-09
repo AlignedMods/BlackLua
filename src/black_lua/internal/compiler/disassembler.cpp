@@ -23,45 +23,65 @@ namespace BlackLua::Internal {
     }
 
     void Disassembler::DisassembleOpCode(const OpCode& op) {
-        #define CASE_MATH(__op__, _op_str_, __str__) case OpCodeType::__op__: { \
+        #define CASE_UNARYEXPR(_enum, opStr, str) case OpCodeType::_enum: { \
+            StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
+            m_Output += fmt::format("{}{} {} ", m_Indentation, opStr, str); \
+            DisassembleStackSlotIndex(v); \
+            m_Output += '\n'; \
+            break; \
+        }
+
+        #define CASE_UNARYEXPR_GROUP(unaryop, str) \
+            CASE_UNARYEXPR(unaryop##I8,  str, "i8") \
+            CASE_UNARYEXPR(unaryop##I16, str, "i16") \
+            CASE_UNARYEXPR(unaryop##I32, str, "i32") \
+            CASE_UNARYEXPR(unaryop##I64, str, "i64") \
+            CASE_UNARYEXPR(unaryop##U8,  str, "u8") \
+            CASE_UNARYEXPR(unaryop##U16, str, "u16") \
+            CASE_UNARYEXPR(unaryop##U32, str, "u32") \
+            CASE_UNARYEXPR(unaryop##U64, str, "u64") \
+            CASE_UNARYEXPR(unaryop##F32, str, "f32") \
+            CASE_UNARYEXPR(unaryop##F64, str, "f64")
+
+        #define CASE_BINEXPR(_enum, opStr, str) case OpCodeType::_enum: { \
             OpCodeMath m = std::get<OpCodeMath>(op.Data); \
-            m_Output += fmt::format("{}{} {} ", m_Indentation, _op_str_, __str__); \
+            m_Output += fmt::format("{}{} {} ", m_Indentation, opStr, str); \
             DisassembleStackSlotIndex(m.LHSSlot); m_Output += ' '; DisassembleStackSlotIndex(m.RHSSlot); \
             m_Output += '\n'; \
             break; \
         }
 
-        #define CASE_MATH_GROUP(_mathop, _str_) \
-            CASE_MATH(_mathop##I8,  _str_, "i8") \
-            CASE_MATH(_mathop##I16, _str_, "i16") \
-            CASE_MATH(_mathop##I32, _str_, "i32") \
-            CASE_MATH(_mathop##I64, _str_, "i64") \
-            CASE_MATH(_mathop##U8,  _str_, "u8") \
-            CASE_MATH(_mathop##U16, _str_, "u16") \
-            CASE_MATH(_mathop##U32, _str_, "u32") \
-            CASE_MATH(_mathop##U64, _str_, "u64") \
-            CASE_MATH(_mathop##F32, _str_, "f32") \
-            CASE_MATH(_mathop##F64, _str_, "f64")
+        #define CASE_BINEXPR_GROUP(mathop, str) \
+            CASE_BINEXPR(mathop##I8,  str, "i8") \
+            CASE_BINEXPR(mathop##I16, str, "i16") \
+            CASE_BINEXPR(mathop##I32, str, "i32") \
+            CASE_BINEXPR(mathop##I64, str, "i64") \
+            CASE_BINEXPR(mathop##U8,  str, "u8") \
+            CASE_BINEXPR(mathop##U16, str, "u16") \
+            CASE_BINEXPR(mathop##U32, str, "u32") \
+            CASE_BINEXPR(mathop##U64, str, "u64") \
+            CASE_BINEXPR(mathop##F32, str, "f32") \
+            CASE_BINEXPR(mathop##F64, str, "f64")
 
-        #define CASE_CAST(__op__, _op_str_, __str__) case OpCodeType::__op__: { \
+        #define CASE_CAST(_enum, opStr, str) case OpCodeType::_enum: { \
             StackSlotIndex i = std::get<StackSlotIndex>(op.Data); \
-            m_Output += fmt::format("{}cast {} {} ", m_Indentation, _op_str_, __str__); \
+            m_Output += fmt::format("{}cast {} {} ", m_Indentation, opStr, str); \
             DisassembleStackSlotIndex(i); \
             m_Output += '\n'; \
             break; \
         }
 
-        #define CASE_CAST_GROUP(_cast, _str_) \
-            CASE_CAST(Cast##_cast##ToI8,  _str_, "i8") \
-            CASE_CAST(Cast##_cast##ToI16, _str_, "i16") \
-            CASE_CAST(Cast##_cast##ToI32, _str_, "i32") \
-            CASE_CAST(Cast##_cast##ToI64, _str_, "i64") \
-            CASE_CAST(Cast##_cast##ToU8,  _str_, "u8") \
-            CASE_CAST(Cast##_cast##ToU16, _str_, "u16") \
-            CASE_CAST(Cast##_cast##ToU32, _str_, "u32") \
-            CASE_CAST(Cast##_cast##ToU64, _str_, "u64") \
-            CASE_CAST(Cast##_cast##ToF32, _str_, "f32") \
-            CASE_CAST(Cast##_cast##ToF64, _str_, "f64")
+        #define CASE_CAST_GROUP(_cast, str) \
+            CASE_CAST(Cast##_cast##ToI8,  str, "i8") \
+            CASE_CAST(Cast##_cast##ToI16, str, "i16") \
+            CASE_CAST(Cast##_cast##ToI32, str, "i32") \
+            CASE_CAST(Cast##_cast##ToI64, str, "i64") \
+            CASE_CAST(Cast##_cast##ToU8,  str, "u8") \
+            CASE_CAST(Cast##_cast##ToU16, str, "u16") \
+            CASE_CAST(Cast##_cast##ToU32, str, "u32") \
+            CASE_CAST(Cast##_cast##ToU64, str, "u64") \
+            CASE_CAST(Cast##_cast##ToF32, str, "f32") \
+            CASE_CAST(Cast##_cast##ToF64, str, "f64")
 
         switch (op.Type) {
             case OpCodeType::Nop: m_Output += "nop\n"; break;
@@ -97,10 +117,22 @@ namespace BlackLua::Internal {
                 m_Output += " <0x";
                 const uint8_t* bytes = reinterpret_cast<const uint8_t*>(s.Data);
 
-                for (size_t i = 0; i < s.DataSize; i++) {
-                    m_Output += fmt::format("{:02x}", bytes[i]);
-                }
+                {
+                    int32_t i = 0x01;
+                    uint8_t rawI[4]{};
+                    memcpy(rawI, &i, 4);
 
+                    if (rawI[0] == 0x01) { // Little endian
+                        for (int32_t i = static_cast<int32_t>(s.DataSize) - 1; i >= 0; i--) {
+                            m_Output += fmt::format("{:02x}", bytes[i]);
+                        }
+                    } else if (rawI[3] == 0x01) { // Big endian
+                        for (size_t i = 0; i < s.DataSize; i++) {
+                            m_Output += fmt::format("{:02x}", bytes[i]);
+                        }
+                    }
+                }
+                
                 m_Output += ">\n";
 
                 break;
@@ -237,17 +269,19 @@ namespace BlackLua::Internal {
                 break;
             }
 
-            CASE_MATH_GROUP(Add, "add")
-            CASE_MATH_GROUP(Sub, "sub")
-            CASE_MATH_GROUP(Mul, "mul")
-            CASE_MATH_GROUP(Div, "div")
-            CASE_MATH_GROUP(Mod, "mod")
+            CASE_UNARYEXPR_GROUP(Negate, "neg")
 
-            CASE_MATH_GROUP(Cmp, "cmp")
-            CASE_MATH_GROUP(Lt, "lt")
-            CASE_MATH_GROUP(Lte, "lte")
-            CASE_MATH_GROUP(Gt, "gt")
-            CASE_MATH_GROUP(Gte, "gte")
+            CASE_BINEXPR_GROUP(Add, "add")
+            CASE_BINEXPR_GROUP(Sub, "sub")
+            CASE_BINEXPR_GROUP(Mul, "mul")
+            CASE_BINEXPR_GROUP(Div, "div")
+            CASE_BINEXPR_GROUP(Mod, "mod")
+
+            CASE_BINEXPR_GROUP(Cmp, "cmp")
+            CASE_BINEXPR_GROUP(Lt, "lt")
+            CASE_BINEXPR_GROUP(Lte, "lte")
+            CASE_BINEXPR_GROUP(Gt, "gt")
+            CASE_BINEXPR_GROUP(Gte, "gte")
 
             CASE_CAST_GROUP(I8, "i8");
             CASE_CAST_GROUP(I16, "i16");
@@ -261,8 +295,10 @@ namespace BlackLua::Internal {
             CASE_CAST_GROUP(F64, "f64");
         }
 
-        #undef CASE_MATH
-        #undef CASE_MATH_GROUP
+        #undef CASE_UNARYEXPR
+        #undef CASE_UNARYEXPR_GROUP
+        #undef CASE_BINEXPR
+        #undef CASE_BINEXPR_GROUP
         #undef CASE_CAST
         #undef CASE_CAST_GROUP
     }

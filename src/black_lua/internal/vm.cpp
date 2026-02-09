@@ -14,7 +14,11 @@ namespace BlackLua::Internal {
     template <std::integral T>
     T Mod(T lhs, T rhs) { return lhs % rhs; }
     template <std::floating_point T>
-    T Mod(T lhs, T rhs) { return std::fmod(lhs, rhs); }
+    T Mod(T lhs, T rhs) {
+        T r = std::fmod(lhs, rhs);
+        if (r < 0) { r += std::abs(rhs); }
+        return r;
+    }
 
     template <typename T>
     T Cmp(T lhs, T rhs) { return lhs == rhs; }
@@ -290,28 +294,54 @@ namespace BlackLua::Internal {
     }
 
     void VM::Run() {
-        #define CASE_MATH(_enum, _builtinType, langName, _builtinOp) case OpCodeType::_enum: { \
-            OpCodeMath m = std::get<OpCodeMath>(op.Data); \
-            _builtinType lhs = Get##langName(m.LHSSlot); \
-            _builtinType rhs = Get##langName(m.RHSSlot); \
-            _builtinType result = _builtinOp(lhs, rhs); \
-            PushBytes(sizeof(_builtinType)); \
-            StackSlot s = GetStackSlot(-1); \
-            memcpy(s.Memory, &result, sizeof(_builtinType)); \
+        #define CASE_UNARYEXPR(_enum, builtinType, builtinOp) case OpCodeType::_enum: { \
+            StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
+            StackSlot s = GetStackSlot(v); \
+            builtinType value{}; \
+            memcpy(&value, s.Memory, sizeof(builtinType)); \
+            builtinType result = builtinOp(value); \
+            PushBytes(sizeof(builtinType)); \
+            StackSlot newSlot = GetStackSlot(-1); \
+            memcpy(newSlot.Memory, &result, sizeof(builtinType)); \
             break; \
         }
 
-        #define CASE_MATH_GROUP(_mathop, op) \
-            CASE_MATH(_mathop##I8,  int8_t,   Char,   op) \
-            CASE_MATH(_mathop##I16, int16_t,  Short,  op) \
-            CASE_MATH(_mathop##I32, int32_t,  Int,    op) \
-            CASE_MATH(_mathop##I64, int64_t,  Long,   op) \
-            CASE_MATH(_mathop##U8,  uint8_t,  Char,   op) \
-            CASE_MATH(_mathop##U16, uint16_t, Short,  op) \
-            CASE_MATH(_mathop##U32, uint32_t, Int,    op) \
-            CASE_MATH(_mathop##U64, uint64_t, Long,   op) \
-            CASE_MATH(_mathop##F32, float,    Float,  op) \
-            CASE_MATH(_mathop##F64, double,   Double, op)
+        #define CASE_UNARYEXPR_GROUP(unaryop, op) \
+            CASE_UNARYEXPR(unaryop##I8,  int8_t,   op) \
+            CASE_UNARYEXPR(unaryop##I16, int16_t,  op) \
+            CASE_UNARYEXPR(unaryop##I32, int32_t,  op) \
+            CASE_UNARYEXPR(unaryop##I64, int64_t,  op) \
+            CASE_UNARYEXPR(unaryop##U8,  uint8_t,  op) \
+            CASE_UNARYEXPR(unaryop##U16, uint16_t, op) \
+            CASE_UNARYEXPR(unaryop##U32, uint32_t, op) \
+            CASE_UNARYEXPR(unaryop##U64, uint64_t, op) \
+            CASE_UNARYEXPR(unaryop##F32, float,    op) \
+            CASE_UNARYEXPR(unaryop##F64, double,   op)
+
+        #define CASE_BINEXPR(_enum, builtinType, builtinOp) case OpCodeType::_enum: { \
+            OpCodeMath m = std::get<OpCodeMath>(op.Data); \
+            builtinType lhs{}; \
+            builtinType rhs{}; \
+            memcpy(&lhs, GetStackSlot(m.LHSSlot).Memory, sizeof(builtinType)); \
+            memcpy(&rhs, GetStackSlot(m.RHSSlot).Memory, sizeof(builtinType)); \
+            builtinType result = builtinOp(lhs, rhs); \
+            PushBytes(sizeof(builtinType)); \
+            StackSlot s = GetStackSlot(-1); \
+            memcpy(s.Memory, &result, sizeof(builtinType)); \
+            break; \
+        }
+
+        #define CASE_BINEXPR_GROUP(mathop, op) \
+            CASE_BINEXPR(mathop##I8,  int8_t,   op) \
+            CASE_BINEXPR(mathop##I16, int16_t,  op) \
+            CASE_BINEXPR(mathop##I32, int32_t,  op) \
+            CASE_BINEXPR(mathop##I64, int64_t,  op) \
+            CASE_BINEXPR(mathop##U8,  uint8_t,  op) \
+            CASE_BINEXPR(mathop##U16, uint16_t, op) \
+            CASE_BINEXPR(mathop##U32, uint32_t, op) \
+            CASE_BINEXPR(mathop##U64, uint64_t, op) \
+            CASE_BINEXPR(mathop##F32, float,    op) \
+            CASE_BINEXPR(mathop##F64, double,   op)
 
         #define CASE_CAST(_enum, sourceType, destType) case OpCodeType::_enum: { \
             StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
@@ -519,17 +549,19 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                CASE_MATH_GROUP(Add, Add)
-                CASE_MATH_GROUP(Sub, Sub)
-                CASE_MATH_GROUP(Mul, Mul)
-                CASE_MATH_GROUP(Div, Div)
-                CASE_MATH_GROUP(Mod, Mod)
+                CASE_UNARYEXPR_GROUP(Negate, -);
 
-                CASE_MATH_GROUP(Cmp, Cmp)
-                CASE_MATH_GROUP(Lt, Lt)
-                CASE_MATH_GROUP(Lte, Lte)
-                CASE_MATH_GROUP(Gt, Gt)
-                CASE_MATH_GROUP(Gte, Gte)
+                CASE_BINEXPR_GROUP(Add, Add)
+                CASE_BINEXPR_GROUP(Sub, Sub)
+                CASE_BINEXPR_GROUP(Mul, Mul)
+                CASE_BINEXPR_GROUP(Div, Div)
+                CASE_BINEXPR_GROUP(Mod, Mod)
+
+                CASE_BINEXPR_GROUP(Cmp, Cmp)
+                CASE_BINEXPR_GROUP(Lt, Lt)
+                CASE_BINEXPR_GROUP(Lte, Lte)
+                CASE_BINEXPR_GROUP(Gt, Gt)
+                CASE_BINEXPR_GROUP(Gte, Gte)
 
                 CASE_CAST_GROUP(I8, int8_t)
                 CASE_CAST_GROUP(I16, int16_t)
@@ -544,8 +576,10 @@ namespace BlackLua::Internal {
             }
         }
 
-        #undef CASE_MATH
-        #undef CASE_MATH_GROUP
+        #undef CASE_UNARYEXPR
+        #undef CASE_UNARYEXPR_GROUP
+        #undef CASE_BINEXPR
+        #undef CASE_BINEXPR_GROUP
         #undef CASE_CAST
         #undef CASE_CAST_GROUP
     }

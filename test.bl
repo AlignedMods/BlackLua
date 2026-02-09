@@ -1,5 +1,5 @@
-uint foo = 16u;
+float foo = 10.0f;
 
 void main() {
-    foo = (uint)(4 % 2);
+    foo = 9.0 / -2.0f;
 }

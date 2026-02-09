@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
     context.Run(compiled, "test");
     vm.Call(0);
     
-    fmt::print("{}", vm.GetInt(-1));
+    fmt::print("{}", vm.GetFloat(-1));
     
     context.FreeSource(compiled);
 

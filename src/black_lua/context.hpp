@@ -9,6 +9,8 @@
 namespace BlackLua {
 
     struct CompiledSource;
+    class Allocator;
+
     using RuntimeErrorHandlerFn = void(*)(const std::string& error);
     using CompilerErrorHandlerFn = void(*)(size_t line, size_t column, const std::string& file, const std::string& error);
 
@@ -16,17 +18,19 @@ namespace BlackLua {
         Context();
         static Context Create();
 
-        CompiledSource* CompileFile(const std::string& path);
-        CompiledSource* CompileString(const std::string& source);
+        void CompileFile(const std::string& path, const std::string& module);
+        void CompileString(const std::string& source, const std::string& module);
 
-        // Deallocates the compiled source
-        void FreeSource(CompiledSource* source);
+        // Deallocates the given module
+        void FreeModule(const std::string& module);
 
         // Run the compiled string in the VM
         // Dissasemble the byte emitted byte code
-        void Run(CompiledSource* compiled, const std::string& module);
+        void Run(const std::string& module);
+
+        std::string DumpAST(const std::string& module);
         // Returns a string containing the disassembled byte code
-        std::string Disassemble(CompiledSource* compiled);
+        std::string Disassemble(const std::string& module);
 
         void SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn);
         void SetCompilerErrorHandler(CompilerErrorHandlerFn fn);
@@ -36,12 +40,13 @@ namespace BlackLua {
         // If the current error handler is NULL, it will use the default handler
         void ReportRuntimeError(const std::string& error);
 
+        Allocator* GetAllocator();
         Internal::VM& GetVM();
 
     private:
-        std::unordered_map<std::string, int> m_Modules;
+        std::unordered_map<std::string, CompiledSource*> m_Modules;
         Internal::VM m_VM;
-        std::string m_CurrentFile; // Current file being compiled
+        CompiledSource* m_CurrentCompiledSource = nullptr;
 
         RuntimeErrorHandlerFn m_RuntimeErrorHandler = nullptr;
         CompilerErrorHandlerFn m_CompilerErrorHandler = nullptr;

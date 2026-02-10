@@ -1,0 +1,58 @@
+#pragma once
+
+#include "core.hpp"
+#include "context.hpp"
+#include "allocator.hpp"
+#include "internal/compiler/core/string_view.hpp"
+
+#include <cstring>
+
+namespace BlackLua::Internal {
+
+    class StringBuilder {
+    public:
+        StringBuilder() = default;
+
+        inline bool operator==(const StringBuilder other) {
+            if (m_Size != other.m_Size) { return false; }
+            return std::strncmp(m_Str, other.m_Str, m_Size) == 0;
+        }
+
+        inline bool operator==(const StringView other) {
+            if (m_Size != other.Size()) { return false; }
+            return std::strncmp(m_Str, other.Data(), m_Size) == 0;
+        }
+
+        inline size_t Size() const { return m_Size; }
+        inline const char* Data() const { return m_Str; }
+
+        inline void Append(Context* ctx, const StringView str) {
+            m_Capacity += str.Size();
+            char* newStr = reinterpret_cast<char*>(ctx->GetAllocator()->Allocate(m_Capacity));
+            if (m_Str) {
+                memcpy(newStr, m_Str, m_Size);
+            }
+            
+            for (size_t i = 0; i < str.Size(); i++) {
+                newStr[m_Size + i] = *(str.Data() + i);
+            }
+
+            m_Str = newStr;
+            m_Size += str.Size();
+        }
+
+    private:
+        char* m_Str = nullptr;
+        size_t m_Capacity = 0;
+        size_t m_Size = 0;
+    };
+
+} // namespace BlackLua::Internal
+
+template <> struct fmt::formatter<BlackLua::Internal::StringBuilder> : formatter<string_view> {
+
+    inline auto format(BlackLua::Internal::StringBuilder builder, format_context& ctx) const -> format_context::iterator {
+        return formatter<string_view>::format(string_view(builder.Data(), builder.Size()), ctx);
+    }
+
+};

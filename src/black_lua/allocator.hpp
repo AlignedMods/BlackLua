@@ -61,28 +61,10 @@ namespace BlackLua {
             m_Index = 0;
         }
 
-        inline static Allocator* Get() { return s_ActiveAllocator; }
-        inline static void Set(Allocator* const alloc) { s_ActiveAllocator = alloc; }
-
     private:
         uint8_t* m_Data = nullptr;
         size_t m_Capacity = 0;
         size_t m_Index = 0;
-
-        inline static Allocator* s_ActiveAllocator = nullptr;
     };
-
-    inline void SetupDefaultAllocator() {
-        static Allocator s_Alloc(10 * 1024 * 1024); // 10 MB, should be plenty for any compilation unit
-        Allocator::Set(&s_Alloc);
-    }
-
-    inline void SetupAllocator(Allocator* const alloc) {
-        Allocator::Set(alloc);
-    }
-
-    inline Allocator* GetAllocator() {
-        return Allocator::Get();
-    }
 
 } // namespace BlackLua

@@ -64,12 +64,13 @@ namespace BlackLua::Internal {
         void CheckNode(Node* node);
 
         ConversionCost GetConversionCost(VariableType* type1, VariableType* type2);
-        VariableType* GetVarTypeFromString(const std::string& str);
+        void InsertImplicitCast(Node* node, VariableType* dest, VariableType* src);
+        VariableType* GetVarTypeFromString(StringView str);
 
         bool IsLValue(Node* node);
 
-        void ErrorUndeclaredIdentifier(const std::string_view ident, Node* node);
-        void ErrorNoMatchingFunction(const std::string_view func, Node* node);
+        void ErrorUndeclaredIdentifier(const StringView ident, Node* node);
+        void ErrorNoMatchingFunction(const StringView func, Node* node);
 
     private:
         ASTNodes* m_Nodes = nullptr; // We modify these directly

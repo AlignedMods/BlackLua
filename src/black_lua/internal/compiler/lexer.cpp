@@ -1,31 +1,38 @@
 #include "internal/compiler/lexer.hpp"
 
-#define BLUA_TOKEN(str, type)        \
-    if (buf == str) {                \
-        AddToken(TokenType::type);   \
-        foundToken = true;           \
-        continue;                    \
+#define BLUA_TOKEN_DATA(str, type) \
+    if (buf == str) { \
+        AddToken(TokenType::type, buf); \
+        continue; \
     }
 
-#define BLUA_TOKEN_C(character, type) \
-    if (c == character) {             \
-        AddToken(TokenType::type);    \
-        continue;                     \
-    }
-
-#define BLUA_TOKEN_DATA(str, type, data)   \
-    if (buf == str) {                      \
-        AddToken(TokenType::type, data);   \
-        foundToken = true;                 \
-        continue;                          \
+#define BLUA_TOKEN_POSSIBLE_EQ(base, noEq, yesEq) \
+    case base: { \
+        bool isEq = false; \
+        \
+        if (Peek()) { \
+            char nc = *Peek(); \
+            \
+            if (nc == '=') { \
+                Consume(); \
+                isEq = true; \
+            } \
+            \
+            if (isEq) { \
+                AddToken(TokenType::yesEq); \
+            } else { \
+                AddToken(TokenType::noEq); \
+            } \
+        } \
+        break; \
     }
 
 namespace BlackLua::Internal {
 
-    Lexer Lexer::Parse(const std::string& source) {
+    Lexer Lexer::Lex(const StringView source) {
         Lexer l;
         l.m_Source = source;
-        l.ParseImpl();
+        l.LexImpl();
         
         return l;
     }
@@ -34,76 +41,56 @@ namespace BlackLua::Internal {
         return m_Tokens;
     }
 
-    void Lexer::ParseImpl() {
+    void Lexer::LexImpl() {
         while (Peek()) {
-            std::string buf;
+            if (std::isalpha(*Peek())) {
+                size_t startIndex = m_Index;
 
-            if (std::isalpha(*Peek()) || *Peek() == '_') {
-                buf += Consume();
-
-                while (Peek()) {
-                    if (std::isalnum(*Peek()) || *Peek() == '_') {
-                        buf += Consume();
-                    } else {
-                        break;
-                    }
+                while (std::isalnum(*Peek()) || *Peek() == '_') {
+                    Consume();
                 }
 
-                bool foundToken = false;
+                StringView buf(m_Source.Data() + startIndex, m_Index - startIndex);
+                BLUA_TOKEN_DATA("if", If)
+                BLUA_TOKEN_DATA("else", Else)
 
-                BLUA_TOKEN("and", And);
-                BLUA_TOKEN("not", Not);
-                BLUA_TOKEN("or", Or);
+                BLUA_TOKEN_DATA("while", While)
+                BLUA_TOKEN_DATA("do", Do)
+                BLUA_TOKEN_DATA("for", For)
 
-                BLUA_TOKEN("if", If);
-                BLUA_TOKEN("else", Else);
-                BLUA_TOKEN("then", Then);
-                BLUA_TOKEN("end", End);
+                BLUA_TOKEN_DATA("break", Break)
+                BLUA_TOKEN_DATA("return", Return)
 
-                BLUA_TOKEN("while", While);
-                BLUA_TOKEN("do", Do);
-                BLUA_TOKEN("for", For);
-                BLUA_TOKEN("repeat", Repeat);
-                BLUA_TOKEN("until", Until);
-                BLUA_TOKEN("in", In);
+                BLUA_TOKEN_DATA("struct", Struct)
 
-                BLUA_TOKEN("break", Break);
-                BLUA_TOKEN("return", Return);
+                BLUA_TOKEN_DATA("true", True)
+                BLUA_TOKEN_DATA("false", False)
 
-                BLUA_TOKEN("struct", Struct);
+                BLUA_TOKEN_DATA("void", Void)
 
-                BLUA_TOKEN("true", True);
-                BLUA_TOKEN("false", False);
+                BLUA_TOKEN_DATA("bool", Bool)
 
-                BLUA_TOKEN("void", Void);
+                BLUA_TOKEN_DATA("char", Char)
+                BLUA_TOKEN_DATA("uchar", UChar)
+                BLUA_TOKEN_DATA("short", Short)
+                BLUA_TOKEN_DATA("ushort", UShort)
+                BLUA_TOKEN_DATA("int", Int)
+                BLUA_TOKEN_DATA("uint", UInt)
+                BLUA_TOKEN_DATA("long", Long)
+                BLUA_TOKEN_DATA("ulong", ULong)
 
-                BLUA_TOKEN("bool", Bool);
+                BLUA_TOKEN_DATA("float", Float)
+                BLUA_TOKEN_DATA("double", Double)
 
-                BLUA_TOKEN("char", Char);
-                BLUA_TOKEN("uchar", UChar);
-                BLUA_TOKEN("short", Short);
-                BLUA_TOKEN("ushort", UShort);
-                BLUA_TOKEN("int", Int);
-                BLUA_TOKEN("uint", UInt);
-                BLUA_TOKEN("long", Long);
-                BLUA_TOKEN("ulong", ULong);
+                BLUA_TOKEN_DATA("string", String)
 
-                BLUA_TOKEN("float", Float);
-                BLUA_TOKEN("double", Double);
+                BLUA_TOKEN_DATA("extern", Extern)
 
-                BLUA_TOKEN("string", String);
-
-                BLUA_TOKEN("extern", Extern);
-
-                if (!foundToken) {
-                    AddToken(TokenType::Identifier, buf);
-                    foundToken = true;
-                    continue;
-                }
-
-                continue;
+                // If all else fails, we say it's an identifier
+                AddToken(TokenType::Identifier, buf);
             } else if (std::isdigit(*Peek())) {
-                buf += Consume();
+                size_t startIndex = m_Index;
+                size_t endIndex = 0;
 
                 bool encounteredPeriod = false;
                 bool isUnsigned = false;
@@ -112,14 +99,16 @@ namespace BlackLua::Internal {
 
                 while (Peek()) {
                     if (std::isdigit(*Peek())) {
-                        buf += Consume();
+                        Consume();
                     } else if (*Peek() == '.' && !encounteredPeriod) {
-                        buf += Consume();
+                        Consume();
                         encounteredPeriod = true;
                     } else {
                         break;
                     }
                 }
+
+                StringView buf(m_Source.Data() + startIndex, m_Index - startIndex);
 
                 // Handle suffixes (u, l, f)
                 while (Peek()) {
@@ -161,290 +150,122 @@ namespace BlackLua::Internal {
 
                 continue;
             } else if (!std::isspace(*Peek())) {
-                char c = Consume();
+                switch (Consume()) {
+                    case ';': AddToken(TokenType::Semi); break;
+                    case '(': AddToken(TokenType::LeftParen); break;
+                    case ')': AddToken(TokenType::RightParen); break;
+                    case '[': AddToken(TokenType::LeftBracket); break;
+                    case ']': AddToken(TokenType::RightBracket); break;
+                    case '{': AddToken(TokenType::LeftCurly); break;
+                    case '}': AddToken(TokenType::RightCurly); break;
+                    case '~': AddToken(TokenType::Squigly); break;
+                    case ',': AddToken(TokenType::Comma); break;
+                    case ':': AddToken(TokenType::Colon); break;
+                    case '.': AddToken(TokenType::Dot); break;
 
-                // NOTE: There are some special tokens (like -, <, >, =) which have to go through more testing
-                BLUA_TOKEN_C(';', Semi);
-                BLUA_TOKEN_C('(', LeftParen);
-                BLUA_TOKEN_C(')', RightParen);
-                BLUA_TOKEN_C('[', LeftBracket);
-                BLUA_TOKEN_C(']', RightBracket);
-                BLUA_TOKEN_C('{', LeftCurly);
-                BLUA_TOKEN_C('}', RightCurly);
+                    BLUA_TOKEN_POSSIBLE_EQ('+', Plus, PlusEq)
+                    BLUA_TOKEN_POSSIBLE_EQ('-', Minus, MinusEq)
+                    BLUA_TOKEN_POSSIBLE_EQ('*', Star, StarEq)
+                    BLUA_TOKEN_POSSIBLE_EQ('%', Percent, PercentEq)
+                    BLUA_TOKEN_POSSIBLE_EQ('=', Eq, IsEq)
+                    BLUA_TOKEN_POSSIBLE_EQ('!', Not, IsNotEq)
+                    BLUA_TOKEN_POSSIBLE_EQ('<', Less, LessOrEq)
+                    BLUA_TOKEN_POSSIBLE_EQ('>', Greater, GreaterOrEq)
 
-                BLUA_TOKEN_C('~', Squigly);
-                BLUA_TOKEN_C(',', Comma);
-                BLUA_TOKEN_C(':', Colon);
-                BLUA_TOKEN_C('.', Dot);
+                    case '/': {
+                        bool isComment = false;
+                        bool isEq = false;
 
-                if (c == '+') {
-                    bool isEq = false;
-                    bool isPlus = false;
+                        if (Peek()) {
+                            char nc = *Peek(); // Don't consume the character just in case
 
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        } else if (nc == '+') {
-                            Consume();
-                            isPlus = true;
+                            if (nc == '/') {
+                                Consume();
+                                isComment = true;
+                            } else if (nc == '=') {
+                                Consume();
+                                isEq = true;
+                            }
                         }
 
-                        if (isEq) {
-                            AddToken(TokenType::PlusEq);
-                        } else if (isPlus) {
-                            AddToken(TokenType::PlusPlus);
+                        if (isComment) {
+                            while (Peek()) {
+                                char nc = Consume();
+
+                                if (nc == '\n' || nc == EOF) {
+                                    m_CurrentLine++;
+                                    break;
+                                }
+                            }
+                        } else if (isEq) {
+                            AddToken(TokenType::SlashEq);
                         } else {
-                            AddToken(TokenType::Plus);
-                        }
-                    }
-                }
-
-                if (c == '-') {
-                    bool isEq = false;
-                    bool isMinus = false;
-
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        } else if (nc == '-') {
-                            Consume();
-                            isMinus = true;
+                            AddToken(TokenType::Slash);
                         }
 
-                        if (isEq) {
-                            AddToken(TokenType::MinusEq);
-                        } else if (isMinus) {
-                            AddToken(TokenType::MinusMinus);
-                        } else {
-                            AddToken(TokenType::Minus);
-                        }
-                    }
-                }
-
-                if (c == '*') {
-                    bool isEq = false;
-
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        }
-
-                        if (isEq) {
-                            AddToken(TokenType::StarEq);
-                        } else {
-                            AddToken(TokenType::Star);
-                        }
-                    }
-                }
-
-                if (c == '/') {
-                    bool isComment = false;
-                    bool isEq = false;
-
-                    if (Peek()) {
-                        char nc = *Peek(); // Don't consume the character just in case
-
-                        if (nc == '/') {
-                            Consume();
-                            isComment = true;
-                        } else if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        }
+                        break;
                     }
 
-                    if (isComment) {
+                    case '\'': {
+                        size_t startIndex = m_Index;
+
+                        if (Peek()) {
+                            Consume();
+                            
+                            if (Peek() && *Peek() == '\'') {
+                                Consume();
+                            } else {
+                                // TODO: Add error message
+                            }
+                        }
+
+                        AddToken(TokenType::CharLit, StringView(m_Source.Data() + startIndex, 1));
+                        break;
+                    }
+
+                    case '"': {
+                        size_t startIndex = m_Index;
+
                         while (Peek()) {
                             char nc = Consume();
-
-                            if (nc == '\n' || nc == EOF) {
-                                m_CurrentLine++;
+                        
+                            if (nc == '"' || nc == EOF) {
                                 break;
                             }
                         }
-                    } else if (isEq) {
-                        AddToken(TokenType::SlashEq);
-                    } else {
-                        AddToken(TokenType::Slash);
-                    }
 
-                    continue;
-                }
-
-                if (c == '%') {
-                    bool isEq = false;
-
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        }
-
-                        if (isEq) {
-                            AddToken(TokenType::PercentEq);
-                        } else {
-                            AddToken(TokenType::Percent);
-                        }
+                        AddToken(TokenType::StrLit, StringView(m_Source.Data() + startIndex, m_Index - startIndex));
+                        break;
                     }
                 }
-
-                if (c == '=') {
-                    bool isEq = false;
-
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        }
-                    }
-
-                    if (isEq) {
-                        AddToken(TokenType::IsEq);
-                        continue;
-                    } else {
-                        AddToken(TokenType::Eq);
-                        continue;
-                    }
-                }
-
-                if (c == '!') {
-                    bool isEq = false;
-
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        }
-                    }
-
-                    if (isEq) {
-                        AddToken(TokenType::IsNotEq);
-                        continue;
-                    } else {
-                        AddToken(TokenType::Not);
-                        continue;
-                    }
-                }
-
-                if (c == '<') {
-                    bool isEq = false;
-
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        }
-                    }
-
-                    if (isEq) {
-                        AddToken(TokenType::LessOrEq);
-                        continue;
-                    } else {
-                        AddToken(TokenType::Less);
-                        continue;
-                    }
-                }
-
-                if (c == '>') {
-                    bool isEq = false;
-
-                    if (Peek()) {
-                        char nc = *Peek();
-
-                        if (nc == '=') {
-                            Consume();
-                            isEq = true;
-                        }
-                    }
-
-                    if (isEq) {
-                        AddToken(TokenType::GreaterOrEq);
-                        continue;
-                    } else {
-                        AddToken(TokenType::Greater);
-                        continue;
-                    }
-                }
-
-                if (c == '\'') {
-                    char c = 0;
-                    if (Peek()) {
-                        c = Consume();
-                        
-                        if (Peek() && *Peek() == '\'') {
-                            Consume();
-                        } else {
-                            // TODO: Add error message
-                        }
-                    }
-
-                    std::string str;
-                    str += c;
-                    AddToken(TokenType::CharLit, str);
-                }
-
-                if (c == '"') {
-                    while (Peek()) {
-                        char nc = Consume();
-                    
-                        if (nc == '"' || nc == EOF) {
-                            break;
-                        }
-
-                        buf += nc;
-                    }
-
-                    AddToken(TokenType::StrLit, buf);
-
-                    continue;
-                }
-
-                continue;
             } else {
-                char c = Consume();
-
-                if (c == '\n') {
+                if (*Peek() == '\n') {
                     m_CurrentLine++;
-                    m_CurrentLineStart = m_Index;
+                    m_CurrentLineStart = m_Index + 1;
                 }
+
+                Consume();
 
                 continue;
             }
         }
     }
 
-    char* Lexer::Peek() {
-        if (m_Index < m_Source.size()) {
-            return &m_Source.at(m_Index);
+    const char* Lexer::Peek() {
+        if (m_Index < m_Source.Size()) {
+            return m_Source.Data() + m_Index;
         } else {
             return nullptr;
         }
     }
 
     char Lexer::Consume() {
-        BLUA_ASSERT(m_Index < m_Source.size(), "Consume out of bounds!");
-
-        return m_Source.at(m_Index++);
+        BLUA_ASSERT(m_Index < m_Source.Size(), "Consume out of bounds!");
+        m_Index++;
+        return m_Source.At(m_Index - 1);
     }
 
-    void Lexer::AddToken(TokenType type, const std::string& data) {
+    void Lexer::AddToken(TokenType type, const StringView data) {
         Token token;
         token.Type = type;
         token.Data = data;

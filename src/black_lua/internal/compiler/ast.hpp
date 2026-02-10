@@ -3,6 +3,12 @@
 #include "core.hpp"
 #include "allocator.hpp"
 #include "internal/compiler/variable_type.hpp"
+#include "internal/compiler/core/string_view.hpp"
+#include "internal/compiler/core/string_builder.hpp"
+
+namespace BlackLua {
+    struct Context;
+} // namespace BlackLua
 
 namespace BlackLua::Internal {
 
@@ -125,23 +131,7 @@ namespace BlackLua::Internal {
         size_t Capacity = 0;
         size_t Size = 0;
     
-        inline void Append(Node* node) {
-            if (Capacity == 0) {
-                Items = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * 1));
-                Capacity = 1;
-            }
-    
-            if (Size >= Capacity) {
-                Capacity *= 2;
-    
-                Node** newItems = reinterpret_cast<Node**>(GetAllocator()->Allocate(sizeof(Node*) * Capacity));
-                memcpy(newItems, Items, sizeof(Node*) * Size);
-                Items = newItems;
-            }
-    
-            Items[Size] = node;
-            Size++;
-        }
+        void Append(Context* ctx, Node* n);
     };
 
     // For nodes that have no data tied to them
@@ -174,7 +164,7 @@ namespace BlackLua::Internal {
     };
     
     struct NodeString {
-        std::string_view String; // NOTE: This **should** be fine, if there is ever any issues with strings PLEASE check this first! (always make references to tokens!)
+        StringView String; // NOTE: This **should** be fine, if there is ever any issues with strings PLEASE check this first! (always make references to tokens!)
     };
     
     struct NodeInitializerList {
@@ -193,8 +183,8 @@ namespace BlackLua::Internal {
     };
     
     struct NodeVarDecl {
-        std::string_view Identifier;
-        std::string Type;
+        StringView Identifier;
+        StringBuilder Type;
     
         Node* Value = nullptr;
     
@@ -202,35 +192,35 @@ namespace BlackLua::Internal {
     };
 
     struct NodeParamDecl {
-        std::string_view Identifier;
-        std::string Type;
+        StringView Identifier;
+        StringBuilder Type;
 
         VariableType* ResolvedType = nullptr;
     };
     
     struct NodeVarRef {
-        std::string_view Identifier;
+        StringView Identifier;
     
         VariableType* ResolvedType = nullptr;
     };
     
     struct NodeStructDecl {
-        std::string_view Identifier;
+        StringView Identifier;
     
         NodeList Fields;
     };
     
     struct NodeFieldDecl {
-        std::string_view Identifier;
-        std::string Type;
+        StringView Identifier;
+        StringBuilder Type;
     };
 
     struct NodeMethodDecl {
-        std::string_view Name;
-        std::string Signature;
+        StringView Name;
+        StringBuilder Signature;
     
         NodeList Parameters;
-        std::string ReturnType;
+        StringBuilder ReturnType;
 
         Node* Body = nullptr;
     
@@ -238,11 +228,11 @@ namespace BlackLua::Internal {
     };
 
     struct NodeFunctionDecl {
-        std::string_view Name;
-        std::string Signature;
+        StringView Name;
+        StringBuilder Signature;
     
         NodeList Parameters;
-        std::string ReturnType;
+        StringBuilder ReturnType;
     
         bool Extern = false;
     
@@ -250,10 +240,10 @@ namespace BlackLua::Internal {
     };
     
     struct NodeFunctionImpl {
-        std::string_view Name;
+        StringView Name;
     
         NodeList Parameters;
-        std::string ReturnType;
+        StringBuilder ReturnType;
     
         Node* Body = nullptr; // Type is always NodeScope
     
@@ -296,7 +286,7 @@ namespace BlackLua::Internal {
     
     struct NodeMemberExpr {
         Node* Parent = nullptr;
-        std::string_view Member;
+        StringView Member;
     
         VariableType* ResolvedParentType = nullptr;
         VariableType* ResolvedMemberType = nullptr;
@@ -304,7 +294,7 @@ namespace BlackLua::Internal {
 
     struct NodeMethodCallExpr {
         Node* Parent = nullptr;
-        std::string_view Member;
+        StringView Member;
 
         NodeList Arguments;
 
@@ -313,7 +303,7 @@ namespace BlackLua::Internal {
     };
     
     struct NodeFunctionCallExpr {
-        std::string_view Name;
+        StringView Name;
         NodeList Arguments;
     };
     
@@ -322,7 +312,7 @@ namespace BlackLua::Internal {
     };
     
     struct NodeCastExpr {
-        std::string Type;
+        StringView Type;
         Node* Expression = nullptr;
     
         VariableType* ResolvedSrcType = nullptr;

@@ -1,5 +1,6 @@
 #include "internal/vm.hpp"
 #include "allocator.hpp"
+#include "context.hpp"
 
 namespace BlackLua::Internal {
 
@@ -68,7 +69,7 @@ namespace BlackLua::Internal {
     }
 
     void VM::PushScope() {
-        Scope* newScope = GetAllocator()->AllocateNamed<Scope>();
+        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
         newScope->Previous = m_CurrentScope;
         newScope->Offset = m_StackPointer;
         newScope->SlotOffset = m_StackSlotPointer;

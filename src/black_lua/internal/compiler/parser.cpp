@@ -26,12 +26,6 @@ namespace BlackLua::Internal {
         return !m_Error;
     }
 
-    void Parser::PrintAST() {
-        for (const auto& n : m_Nodes) {
-            PrintNode(n, 0);
-        }
-    }
-
     void Parser::ParseImpl() {
         while (Peek() && !m_Error) {
             Node* node = ParseStatement();
@@ -55,7 +49,7 @@ namespace BlackLua::Internal {
         return m_Tokens.at(m_Index++);
     }
 
-    Token* Parser::TryConsume(TokenType type, const std::string& error) {
+    Token* Parser::TryConsume(TokenType type, const StringView error) {
         if (Match(type)) {
             Token& t = Consume();
             return &t;
@@ -79,7 +73,7 @@ namespace BlackLua::Internal {
     }
 
     Node* Parser::ParseType(bool external) {
-        std::string type = ParseVariableType();
+        StringBuilder type = ParseVariableType();
 
         if (Peek(1)) {
             if (Peek(1)->Type == TokenType::LeftParen) {
@@ -100,7 +94,7 @@ namespace BlackLua::Internal {
         return node;
     }
 
-    Node* Parser::ParseVariableDecl(const std::string& type) {
+    Node* Parser::ParseVariableDecl(StringBuilder type) {
         Token* ident = TryConsume(TokenType::Identifier, "identifier");
 
         if (ident) {
@@ -119,7 +113,7 @@ namespace BlackLua::Internal {
         }
     }
 
-    Node* Parser::ParseFunctionDecl(const std::string& returnType, bool external) {
+    Node* Parser::ParseFunctionDecl(StringBuilder returnType, bool external) {
         Token* ident = TryConsume(TokenType::Identifier, "identifier");
 
         if (ident) {
@@ -181,7 +175,7 @@ namespace BlackLua::Internal {
         while (!Match(TokenType::RightCurly)) {
             if (IsVariableType()) {
                 Node* field = nullptr;
-                std::string type = ParseVariableType();
+                StringBuilder type = ParseVariableType();
 
                 Token* fieldName = TryConsume(TokenType::Identifier, "identifier");
                 if (!fieldName) { return nullptr; }
@@ -199,7 +193,7 @@ namespace BlackLua::Internal {
                     decl->Parameters = params;
                     decl->Body = ParseScope();
 
-                    node->Fields.Append(CreateNode(NodeType::MethodDecl, decl, fieldName->Line, fieldName->Column));
+                    node->Fields.Append(m_Context, CreateNode(NodeType::MethodDecl, decl, fieldName->Line, fieldName->Column));
                 } else {
                     NodeFieldDecl* decl = Allocate<NodeFieldDecl>();
                     decl->Identifier = fieldName->Data;
@@ -207,7 +201,7 @@ namespace BlackLua::Internal {
 
                     TryConsume(TokenType::Semi, "';'");
 
-                    node->Fields.Append(CreateNode(NodeType::FieldDecl, decl, fieldName->Line, fieldName->Column));
+                    node->Fields.Append(m_Context, CreateNode(NodeType::FieldDecl, decl, fieldName->Line, fieldName->Column));
                 }
             }
         }
@@ -352,7 +346,7 @@ namespace BlackLua::Internal {
             case TokenType::CharLit: {
                 Consume();
     
-                int8_t ch = static_cast<int8_t>(value.Data[0]);
+                int8_t ch = static_cast<int8_t>(value.Data.Data()[0]);
                 
                 NodeChar* node = Allocate<NodeChar>(ch);
                 return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Char, node), value.Line, value.Column);
@@ -363,7 +357,7 @@ namespace BlackLua::Internal {
                 Consume();
     
                 int32_t num = 0;
-                auto [ptr, ec] = std::from_chars(value.Data.data(), value.Data.data() + value.Data.size(), num);
+                auto [ptr, ec] = std::from_chars(value.Data.Data(), value.Data.Data() + value.Data.Size(), num);
     
                 if (ec != std::errc()) {
                     ErrorTooLarge(value.Data);
@@ -379,7 +373,7 @@ namespace BlackLua::Internal {
                 Consume();
     
                 uint32_t num = 0;
-                auto [ptr, ec] = std::from_chars(value.Data.data(), value.Data.data() + value.Data.size(), num);
+                auto [ptr, ec] = std::from_chars(value.Data.Data(), value.Data.Data() + value.Data.Size(), num);
     
                 if (ec != std::errc()) {
                     ErrorTooLarge(value.Data);
@@ -394,7 +388,12 @@ namespace BlackLua::Internal {
             case TokenType::LongLit: {
                 Consume();
     
-                int64_t num = std::stoll(std::string(value.Data));
+                int64_t num = 0;
+                auto [ptr, ec] = std::from_chars(value.Data.Data(), value.Data.Data() + value.Data.Size(), num);
+    
+                if (ec != std::errc()) {
+                    ErrorTooLarge(value.Data);
+                }
                 NodeLong* node = Allocate<NodeLong>(num, false);
                 
                 return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, node), value.Line, value.Column);
@@ -404,7 +403,12 @@ namespace BlackLua::Internal {
             case TokenType::ULongLit: {
                 Consume();
     
-                uint64_t num = std::stoull(std::string(value.Data));
+                uint64_t num = 0;
+                auto [ptr, ec] = std::from_chars(value.Data.Data(), value.Data.Data() + value.Data.Size(), num);
+    
+                if (ec != std::errc()) {
+                    ErrorTooLarge(value.Data);
+                }
                 NodeLong* node = Allocate<NodeLong>(static_cast<int64_t>(num), true);
                 
                 return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Long, node), value.Line, value.Column);
@@ -414,8 +418,13 @@ namespace BlackLua::Internal {
             case TokenType::FloatLit: {
                 Consume();
     
-                float f = std::stof(std::string(value.Data));
-                NodeFloat* node = Allocate<NodeFloat>(f);
+                float num = 0.0f;
+                auto [ptr, ec] = std::from_chars(value.Data.Data(), value.Data.Data() + value.Data.Size(), num);
+    
+                if (ec != std::errc()) {
+                    ErrorTooLarge(value.Data);
+                }
+                NodeFloat* node = Allocate<NodeFloat>(num);
                 
                 return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Float, node), value.Line, value.Column);
                 break;
@@ -424,8 +433,13 @@ namespace BlackLua::Internal {
             case TokenType::DoubleLit: {
                 Consume();
     
-                double d = std::stod(std::string(value.Data));
-                NodeDouble* node = Allocate<NodeDouble>(d);
+                double num = 0.0;
+                auto [ptr, ec] = std::from_chars(value.Data.Data(), value.Data.Data() + value.Data.Size(), num);
+    
+                if (ec != std::errc()) {
+                    ErrorTooLarge(value.Data);
+                }
+                NodeDouble* node = Allocate<NodeDouble>(num);
                 
                 return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::Double, node), value.Line, value.Column);
                 break;
@@ -434,7 +448,7 @@ namespace BlackLua::Internal {
             case TokenType::StrLit: {
                 Consume();
     
-                std::string_view str = value.Data;
+                StringView str = value.Data;
                 NodeString* node = Allocate<NodeString>(str);
                 
                 return CreateNode(NodeType::Constant, Allocate<NodeConstant>(NodeType::String, node), value.Line, value.Column);
@@ -455,12 +469,12 @@ namespace BlackLua::Internal {
                 Token p = Consume();
     
                 if (IsVariableType()) {
-                    std::string type = ParseVariableType();
+                    StringBuilder type = ParseVariableType();
 
                     TryConsume(TokenType::RightParen, "')'");
                 
                     NodeCastExpr* node = Allocate<NodeCastExpr>();
-                    node->Type = type;
+                    node->Type = StringView(type.Data(), type.Size());
                     node->Expression = ParseValue();
                 
                     return CreateNode(NodeType::CastExpr, node, p.Line, p.Column);
@@ -483,7 +497,7 @@ namespace BlackLua::Internal {
     
                 while (!Match(TokenType::RightCurly)) {
                     Node* n = ParseExpression();
-                    node->Nodes.Append(n);
+                    node->Nodes.Append(m_Context, n);
     
                     if (Match(TokenType::Comma)) {
                         Consume();
@@ -515,7 +529,7 @@ namespace BlackLua::Internal {
                             Consume();
                         }
     
-                        node->Arguments.Append(val);
+                        node->Arguments.Append(m_Context, val);
                     }
     
                     TryConsume(TokenType::RightParen, "')'");
@@ -550,7 +564,7 @@ namespace BlackLua::Internal {
                                     Consume();
                                 }
     
-                                methodExpr->Arguments.Append(val);
+                                methodExpr->Arguments.Append(m_Context, val);
                             }
     
                             TryConsume(TokenType::RightParen, "')'");
@@ -588,10 +602,8 @@ namespace BlackLua::Internal {
         switch (op.Type) {
             case TokenType::Plus: return BinExprType::Add;
             case TokenType::PlusEq: return BinExprType::AddInPlace;
-            case TokenType::PlusPlus: return BinExprType::AddOne;
             case TokenType::Minus: return BinExprType::Sub;
             case TokenType::MinusEq: return BinExprType::SubInPlace;
-            case TokenType::MinusMinus: return BinExprType::SubOne;
             case TokenType::Star: return BinExprType::Mul;
             case TokenType::StarEq: return BinExprType::MulInPlace;
             case TokenType::Slash: return BinExprType::Div;
@@ -609,28 +621,27 @@ namespace BlackLua::Internal {
         }
     }
 
-    std::string Parser::ParseVariableType() {
-        if (!Peek()) { return ""; }
+    StringBuilder Parser::ParseVariableType() {
         Token type = Consume();
 
-        std::string strType;
+        StringBuilder strType;
 
         switch (type.Type) {
-            case TokenType::Void:       strType = "void"; break;
-            case TokenType::Bool:       strType = "bool"; break;
-            case TokenType::Char:       strType = "char"; break;
-            case TokenType::UChar:       strType = "uchar"; break;
-            case TokenType::Short:      strType = "short"; break;
-            case TokenType::UShort:      strType = "ushort"; break;
-            case TokenType::Int:        strType = "int"; break;
-            case TokenType::UInt:        strType = "uint"; break;
-            case TokenType::Long:       strType = "long"; break;
-            case TokenType::ULong:       strType = "ulong"; break;
-            case TokenType::Float:      strType = "float"; break;
-            case TokenType::Double:     strType = "double"; break;
-            case TokenType::String:     strType = "string"; break;
-            case TokenType::Identifier: strType = type.Data; break;
-            default:                    strType = ""; break;
+            case TokenType::Void:       strType.Append(m_Context, "void"); break;
+            case TokenType::Bool:       strType.Append(m_Context, "bool"); break;
+            case TokenType::Char:       strType.Append(m_Context, "char"); break;
+            case TokenType::UChar:      strType.Append(m_Context, "uchar"); break;
+            case TokenType::Short:      strType.Append(m_Context, "short"); break;
+            case TokenType::UShort:     strType.Append(m_Context, "ushort"); break;
+            case TokenType::Int:        strType.Append(m_Context, "int"); break;
+            case TokenType::UInt:       strType.Append(m_Context, "uint"); break;
+            case TokenType::Long:       strType.Append(m_Context, "long"); break;
+            case TokenType::ULong:      strType.Append(m_Context, "ulong"); break;
+            case TokenType::Float:      strType.Append(m_Context, "float"); break;
+            case TokenType::Double:     strType.Append(m_Context, "double"); break;
+            case TokenType::String:     strType.Append(m_Context, "string"); break;
+            case TokenType::Identifier: strType.Append(m_Context, type.Data); break;
+            default:                    strType.Append(m_Context, ""); break;
         }
 
         if (Peek(1)) {
@@ -638,7 +649,7 @@ namespace BlackLua::Internal {
                 Consume();
                 Consume();
 
-                strType += "[]";
+                strType.Append(m_Context, "[]");
             }
         }
 
@@ -649,7 +660,7 @@ namespace BlackLua::Internal {
         NodeList params;
 
         while (!Match(TokenType::RightParen)) {
-            std::string type = ParseVariableType();
+            StringBuilder type = ParseVariableType();
 
             Token& ident = Consume();
             
@@ -663,7 +674,7 @@ namespace BlackLua::Internal {
                 Consume();
             }
 
-            params.Append(n);
+            params.Append(m_Context, n);
         }
 
         return params;
@@ -768,7 +779,7 @@ namespace BlackLua::Internal {
 
         while (!Match(TokenType::RightCurly)) {
             Node* n = ParseStatement();
-            node->Nodes.Append(n);
+            node->Nodes.Append(m_Context, n);
         }
 
         TryConsume(TokenType::RightCurly, "'}'");
@@ -841,7 +852,7 @@ namespace BlackLua::Internal {
         return node;
     }
 
-    void Parser::ErrorExpected(const std::string& msg) {
+    void Parser::ErrorExpected(const StringView msg) {
         if (Peek(-1)) {
             m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Expected {} after token \"{}\"", msg, TokenTypeToString(Peek(-1)->Type)));
         } else {
@@ -851,335 +862,9 @@ namespace BlackLua::Internal {
         m_Error = true;
     }
 
-    void Parser::ErrorTooLarge(const std::string_view value) {
+    void Parser::ErrorTooLarge(const StringView value) {
         m_Context->ReportCompilerError(Peek(-1)->Line, Peek(-1)->Column, fmt::format("Constant {} is too large", value));
         m_Error = true;
-    }
-
-    void Parser::PrintNode(Node* n, size_t indentation) {
-        std::string ident;
-        ident.append(indentation, ' ');
-        std::cout << ident;
-
-        if (n == nullptr) {
-            fmt::print("NULL");
-        } else {
-            switch (n->Type) {
-                case NodeType::Constant: {
-                    NodeConstant* constant = std::get<NodeConstant*>(n->Data);
-
-                    std::cout << "Constant, Value: \n";
-                    ident.append(4, ' ');
-                    std::cout << ident;
-
-                    switch (constant->Type) {
-                        case NodeType::Bool: {
-                            NodeBool* b = std::get<NodeBool*>(constant->Data);
-
-                            if (b->Value) {
-                                std::cout << "Bool, Value: true\n";
-                            } else {
-                                std::cout << "Bool, Value: false\n";
-                            }
-
-                            break;
-                        }
-
-                        case NodeType::Int: {
-                            NodeInt* i = std::get<NodeInt*>(constant->Data);
-
-                            if (i->Unsigned) {  
-                                std::cout << "Int, Value: " << static_cast<uint32_t>(i->Int) << ", Signed: false \n";
-                            } else {
-                                std::cout << "Int, Value: " << i->Int << ", Signed: true \n";
-                            }
-
-                            break;
-                        }
-
-                        case NodeType::Long: {
-                            NodeLong* l = std::get<NodeLong*>(constant->Data);
-
-                            if (l->Unsigned) {  
-                                std::cout << "Long, Value: " << static_cast<uint64_t>(l->Long) << ", Signed: false \n";
-                            } else {
-                                std::cout << "Long, Value: " << l->Long << ", Signed: true \n";
-                            }
-
-                            break;
-                        }
-
-                        case NodeType::Float: {
-                            NodeFloat* f = std::get<NodeFloat*>(constant->Data);
-
-                            // For floating point numbers we want all the precision which is why we resort to printf
-                            // This is possible do with std::cout, but is rather clunky. std::format could work nicely here but i don't
-                            // want to depend on c++20. fmt::format is better than std::format but i don't want to drag unnecessary dependencies
-                            // Even though fmt is a really nice library so we might end up using it at one point
-                            printf("Float, Value: %.5f\n", f->Float);
-
-                            break;
-                        }
-
-                        case NodeType::Double: {
-                            NodeDouble* d = std::get<NodeDouble*>(constant->Data);
-
-                            printf("Double, Value: %.15f\n", d->Double);
-
-                            break;
-                        }
-
-                        case NodeType::String: {
-                            NodeString* str = std::get<NodeString*>(constant->Data);
-
-                            std::cout << "String, Value: \"" << str->String << "\"\n";
-
-                            break;
-                        }
-
-                        case NodeType::InitializerList: {
-                            NodeInitializerList* list = std::get<NodeInitializerList*>(constant->Data);
-
-                            std::cout << "InitializerList, Values: \n";
-                            for (size_t i = 0; i < list->Nodes.Size; i++) {
-                                PrintNode(list->Nodes.Items[i], indentation + 4);
-                            }
-
-                            break;
-                        }
-                    }
-
-                    break;
-                }
-
-                case NodeType::Scope: {
-                    NodeScope* scope = std::get<NodeScope*>(n->Data);
-
-                    std::cout << "Scope, Body: \n";
-                    for (size_t i = 0; i < scope->Nodes.Size; i++) {
-                        PrintNode(scope->Nodes.Items[i], indentation + 4);
-                    }
-
-                    break;
-                }
-                
-                case NodeType::VarDecl: {
-                    NodeVarDecl* decl = std::get<NodeVarDecl*>(n->Data);
-
-                    std::cout << "VarDecl, Type: " << decl->Type << ", Name: " << decl->Identifier << ", Value: \n";
-                    PrintNode(decl->Value, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::ParamDecl: {
-                    NodeParamDecl* decl = std::get<NodeParamDecl*>(n->Data);
-
-                    std::cout << "ParamDecl, Type: " << decl->Type << ", Name: " << decl->Identifier << "\n";
-
-                    break;
-                }
-
-                case NodeType::VarRef: {
-                    NodeVarRef* ref = std::get<NodeVarRef*>(n->Data);
-
-                    std::cout << "VarRef, Name: " << ref->Identifier << '\n';
-
-                    break;
-                }
-
-                case NodeType::StructDecl: {
-                    NodeStructDecl* decl = std::get<NodeStructDecl*>(n->Data);
-
-                    std::cout << "StructDecl, Name: " << decl->Identifier << ", Fields: \n";
-
-                    for (size_t i = 0; i < decl->Fields.Size; i++) {
-                        PrintNode(decl->Fields.Items[i], indentation + 4);
-                    }
-
-                    break;
-                }
-
-                case NodeType::FieldDecl: {
-                    NodeFieldDecl* decl = std::get<NodeFieldDecl*>(n->Data);
-
-                    std::cout << "FieldDecl, Type: " << decl->Type << ", Name: " << decl->Identifier << '\n';
-
-                    break;
-                }
-
-                case NodeType::MethodDecl: {
-                    NodeMethodDecl* decl = std::get<NodeMethodDecl*>(n->Data);
-
-                    std::cout << "MethodDecl, Name: " << decl->Name << ", Return type: " << decl->ReturnType << '\n';
-                    for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                        PrintNode(decl->Parameters.Items[i], indentation + 4);
-                    }
-                    PrintNode(decl->Body, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::FunctionDecl: {
-                    NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(n->Data);
-
-                    std::cout << "FunctionDecl, Name: " << decl->Name << ", Return type: " << decl->ReturnType << '\n';
-                    for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                        PrintNode(decl->Parameters.Items[i], indentation + 4);
-                    }
-
-                    break;
-                }
-
-                case NodeType::FunctionImpl: {
-                    NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(n->Data);
-
-                    std::cout << "FunctionImpl, Name: " << impl->Name << ", Return type: " << impl->ReturnType << '\n';
-                    for (size_t i = 0; i < impl->Parameters.Size; i++) {
-                        PrintNode(impl->Parameters.Items[i], indentation + 4);
-                    }
-                    PrintNode(impl->Body, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::While: {
-                    NodeWhile* wh = std::get<NodeWhile*>(n->Data);
-
-                    std::cout << "WhileStatement: \n";
-                    PrintNode(wh->Condition, indentation + 4);
-                    PrintNode(wh->Body, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::DoWhile: {
-                    NodeDoWhile* dowh = std::get<NodeDoWhile*>(n->Data);
-
-                    std::cout << "DoWhileStatement: \n";
-                    PrintNode(dowh->Body, indentation + 4);
-                    PrintNode(dowh->Condition, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::For: {
-                    NodeFor* nfor = std::get<NodeFor*>(n->Data);
-
-                    std::cout << "ForStatement: \n";
-                    PrintNode(nfor->Prologue, indentation + 4);
-                    PrintNode(nfor->Condition, indentation + 4);
-                    PrintNode(nfor->Epilogue, indentation + 4);
-                    PrintNode(nfor->Body, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::If: {
-                    NodeIf* nif = std::get<NodeIf*>(n->Data);
-
-                    std::cout << "IfStatement: \n";
-                    PrintNode(nif->Condition, indentation + 4);
-                    PrintNode(nif->Body, indentation + 4);
-                    PrintNode(nif->ElseBody, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::Break: {
-                    std::cout << "Break\n";
-                    break;
-                }
-
-                case NodeType::Return: {
-                    NodeReturn* ret = std::get<NodeReturn*>(n->Data);
-
-                    std::cout << "Return, Value: \n";
-                    PrintNode(ret->Value, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::ArrayAccessExpr: {
-                    NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(n->Data);
-
-                    std::cout << "ArrayAccessExpr: \n";
-                    PrintNode(expr->Parent, indentation + 4);
-                    PrintNode(expr->Index, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::MemberExpr: {
-                    NodeMemberExpr* expr = std::get<NodeMemberExpr*>(n->Data);
-
-                    std::cout << "MemberExpr: " << expr->Member << '\n';
-                    PrintNode(expr->Parent, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::MethodCallExpr: {
-                    NodeMethodCallExpr* call = std::get<NodeMethodCallExpr*>(n->Data);
-
-                    std::cout << "MethodCallExpr, Name: " << call->Member << ", Parameters: \n";
-                    for (size_t i = 0; i < call->Arguments.Size; i++) {
-                        PrintNode(call->Arguments.Items[i], indentation + 4);
-                    }
-                    PrintNode(call->Parent, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::FunctionCallExpr: {
-                    NodeFunctionCallExpr* call = std::get<NodeFunctionCallExpr*>(n->Data);
-
-                    std::cout << "FunctionCallExpr, Name: " << call->Name << ", Parameters: \n";
-                    for (size_t i = 0; i < call->Arguments.Size; i++) {
-                        PrintNode(call->Arguments.Items[i], indentation + 4);
-                    }
-
-                    break;
-                }
-
-                case NodeType::ParenExpr: {
-                    NodeParenExpr* expr = std::get<NodeParenExpr*>(n->Data);
-
-                    std::cout << "ParenExpr, Expression: \n";
-                    PrintNode(expr->Expression, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::CastExpr: {
-                    NodeCastExpr* expr = std::get<NodeCastExpr*>(n->Data);
-
-                    std::cout << "CastExpr, Type: " << expr->Type << ", Expression: \n";
-                    PrintNode(expr->Expression, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::UnaryExpr: {
-                    NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(n->Data);
-
-                    std::cout << "UnaryExpr, Operation: " << UnaryExprTypeToString(expr->Type) << ", Expression: \n";
-                    PrintNode(expr->Expression, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::BinExpr: {
-                    NodeBinExpr* expr = std::get<NodeBinExpr*>(n->Data);
-
-                    std::cout << "BinExpr, Operation: " << BinExprTypeToString(expr->Type) << "\n";
-                    PrintNode(expr->LHS, indentation + 4);
-                    PrintNode(expr->RHS, indentation + 4);
-
-                    break;
-                }
-            }
-        }
     }
 
 } // namespace BlackLua::Internal

@@ -14,7 +14,7 @@ namespace BlackLua::Internal {
         public:
             using OpCodes = std::vector<OpCode>;
 
-            static Emitter Emit(const ASTNodes* nodes);
+            static Emitter Emit(const ASTNodes* nodes, Context* ctx);
             const OpCodes& GetOpCodes() const;
     
         private:
@@ -79,6 +79,8 @@ namespace BlackLua::Internal {
             };
     
             Scope* m_CurrentScope = nullptr;
+
+            Context* m_Context = nullptr;
         };
 
 } // namespace BlackLua::Internal

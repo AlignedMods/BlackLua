@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.hpp"
+#include "internal/compiler/core/string_view.hpp"
 
 #include <string>
 #include <vector>
@@ -9,7 +10,6 @@ namespace BlackLua::Internal {
 
     enum class TokenType {
         Semi,
-        Eq,
         LeftParen,
         RightParen,
         LeftBracket,
@@ -17,18 +17,16 @@ namespace BlackLua::Internal {
         LeftCurly,
         RightCurly,
 
-        Plus, PlusEq, PlusPlus,
-        Minus, MinusEq, MinusMinus,
+        Plus, PlusEq,
+        Minus, MinusEq,
         Star, StarEq,
         Slash, SlashEq,
         Percent, PercentEq,
+        Eq, IsEq,
+        Not, IsNotEq,
+        Less, LessOrEq,
+        Greater, GreaterOrEq,
         Hash,
-        IsEq,
-        IsNotEq,
-        LessOrEq,
-        GreaterOrEq,
-        Less,
-        Greater,
 
         Squigly,
         Comma,
@@ -37,21 +35,12 @@ namespace BlackLua::Internal {
         DoubleDot,
         TripleDot,
 
-        And,
-        Not,
-        Or,
-
         If,
         Else,
-        Then,
-        End,
 
         While,
         Do,
         For,
-        Repeat,
-        Until,
-        In,
 
         Break,
         Return,
@@ -96,7 +85,6 @@ namespace BlackLua::Internal {
     inline const char* TokenTypeToString(TokenType type) {
         switch (type) {
             case TokenType::Semi: return ";";
-            case TokenType::Eq: return "=";
             case TokenType::LeftParen: return "(";
             case TokenType::RightParen: return ")";
             case TokenType::LeftBracket: return "[";
@@ -106,22 +94,23 @@ namespace BlackLua::Internal {
 
             case TokenType::Plus: return "+";
             case TokenType::PlusEq: return "+=";
-            case TokenType::PlusPlus: return "++";
             case TokenType::Minus: return "-";
             case TokenType::MinusEq: return "-=";
-            case TokenType::MinusMinus: return "--";
             case TokenType::Star: return "*";
             case TokenType::StarEq: return "*=";
             case TokenType::Slash: return "/";
             case TokenType::SlashEq: return "/=";
             case TokenType::Percent: return "%";
-            case TokenType::Hash: return "#";
+            case TokenType::PercentEq: return "%=";
+            case TokenType::Eq: return "=";
             case TokenType::IsEq: return "==";
-            case TokenType::IsNotEq: return "~-";
-            case TokenType::LessOrEq: return "<=";
-            case TokenType::GreaterOrEq: return ">=";
+            case TokenType::Not: return "!";
+            case TokenType::IsNotEq: return "!=";
             case TokenType::Less: return "<";
+            case TokenType::LessOrEq: return "<=";
             case TokenType::Greater: return ">";
+            case TokenType::GreaterOrEq: return ">=";
+            case TokenType::Hash: return "#";
 
             case TokenType::Squigly: return "~";
             case TokenType::Comma: return ",";
@@ -130,21 +119,12 @@ namespace BlackLua::Internal {
             case TokenType::DoubleDot: return "..";
             case TokenType::TripleDot: return "...";
 
-            case TokenType::And: return "and";
-            case TokenType::Not: return "not";
-            case TokenType::Or: return "or";
-
             case TokenType::If: return "if";
             case TokenType::Else: return "else";
-            case TokenType::Then: return "then";
-            case TokenType::End: return "end";
 
             case TokenType::While: return "while";
             case TokenType::Do: return "do";
             case TokenType::For: return "for";
-            case TokenType::Repeat: return "repeat";
-            case TokenType::Until: return "until";
-            case TokenType::In: return "in";
 
             case TokenType::Break: return "break";
             case TokenType::Return: return "return";
@@ -191,8 +171,8 @@ namespace BlackLua::Internal {
     }
 
     struct Token {
-        TokenType Type = TokenType::And;
-        std::string Data;
+        TokenType Type = TokenType::Semi;
+        StringView Data;
         int Line = 0;
         int Column = 0;
     };
@@ -201,28 +181,27 @@ namespace BlackLua::Internal {
     public:
         using Tokens = std::vector<Token>;
 
-        static Lexer Parse(const std::string& source);
-
+        static Lexer Lex(StringView sourse);
         const Tokens& GetTokens() const;
 
     private:
-        void ParseImpl();
+        void LexImpl();
 
         // "Peek" at the next character in the source string,
         // if it doesn't exist return NULL
         // "if (Peek())" is the same as if (m_Index < m_Source.size())
-        char* Peek();
+        const char* Peek();
 
         // "Consume" the next character in the source string
         // NOTE: Consume is not allowed to be called after the end of the source string
         char Consume();
 
-        void AddToken(TokenType type, const std::string& data = {});
+        void AddToken(TokenType type, const StringView data = {});
 
     private:
         Tokens m_Tokens;
         size_t m_Index = 0;
-        std::string m_Source;
+        StringView m_Source;
         int m_CurrentLine = 1;
         int m_CurrentLineStart = 0; // The number of characters it takes to get to this line (from the start of the file)
     };

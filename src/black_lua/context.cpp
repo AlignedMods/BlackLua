@@ -4,6 +4,7 @@
 #include "internal/compiler/type_checker.hpp"
 #include "internal/compiler/emitter.hpp"
 #include "internal/compiler/disassembler.hpp"
+#include "internal/compiler/ast_dumper.hpp"
 #include "internal/stdlib/array.hpp"
 
 #include <fstream>
@@ -13,6 +14,11 @@ namespace BlackLua {
 
     struct CompiledSource {
         std::vector<Internal::OpCode> OpCodes;
+        Internal::ASTNodes ASTNodes;
+        Allocator* Allocator = nullptr;
+        std::string SourceCode;
+
+        std::string Module;
     };
 
     Context::Context()
@@ -28,11 +34,11 @@ namespace BlackLua {
         return ctx;
     }
 
-    CompiledSource* Context::CompileFile(const std::string& path) {
+    void Context::CompileFile(const std::string& path, const std::string& module) {
         std::ifstream file(path);
         if (!file.is_open()) {
             std::cerr << "Failed to open file: " << path << "!\n";
-            return {};
+            return;
         }
 
         std::stringstream ss;
@@ -40,51 +46,78 @@ namespace BlackLua {
         std::string contents = ss.str();
         ss.flush();
 
-        m_CurrentFile = path;
-        CompiledSource* c = CompileString(contents);
-        m_CurrentFile.clear();
-        return c;
+        CompileString(contents, module);
     }
 
-    CompiledSource* Context::CompileString(const std::string& source) {
+    void Context::CompileString(const std::string& source, const std::string& module) {
         bool valid = true;
 
-        Internal::Lexer l = Internal::Lexer::Parse(source);
+        CompiledSource* src = new CompiledSource();
+        src->Allocator = new Allocator(10 * 1024 * 1024);
+        src->SourceCode = source;
+        src->Module = module;
+        m_CurrentCompiledSource = src;
+
+        Internal::Lexer l = Internal::Lexer::Lex({ src->SourceCode.c_str(), src->SourceCode.size() });
 
         Internal::Parser p = Internal::Parser::Parse(l.GetTokens(), this);
         valid = p.IsValid();
-        if (!valid) { return nullptr; } 
-        p.PrintAST();
+        if (!valid) {delete src->Allocator; return; }
+        src->ASTNodes = *p.GetNodes();
 
-        Internal::TypeChecker c = Internal::TypeChecker::Check(p.GetNodes(), this);
+        Internal::TypeChecker c = Internal::TypeChecker::Check(&src->ASTNodes, this);
         valid = c.IsValid();
-        if (!valid) { return nullptr; }
+        if (!valid) { delete src->Allocator; return; }
 
-        Internal::Emitter e = Internal::Emitter::Emit(p.GetNodes());
-
-        CompiledSource* src = new CompiledSource();
+        Internal::Emitter e = Internal::Emitter::Emit(p.GetNodes(), this);
         src->OpCodes = e.GetOpCodes();
 
-        return src;
+        m_Modules[module] = src;
     }
 
-    void Context::FreeSource(CompiledSource* source) {
-        delete source;
-    }
-
-    void Context::Run(CompiledSource* compiled, const std::string& module) {
-        if (compiled) {
-            m_VM.RunByteCode(compiled->OpCodes.data(), compiled->OpCodes.size());
+    void Context::FreeModule(const std::string& module) {
+        if (!m_Modules.contains(module)) {
+            fmt::print("Module {} does not exist in the current context!", module);
+            return;
         }
+
+        CompiledSource* src = m_Modules.at(module);
+        delete src->Allocator;
+        delete src;
+        m_Modules.erase(module);
     }
 
-    std::string Context::Disassemble(CompiledSource* compiled) {
-        if (compiled) {
-            Internal::Disassembler d = Internal::Disassembler::Disassemble(&compiled->OpCodes);
-            return d.GetDisassembly();
+    void Context::Run(const std::string& module) {
+        if (!m_Modules.contains(module)) {
+            fmt::print("Module {} does not exist in the current context!", module);
+            return;
         }
-        
-        return {};
+
+        CompiledSource* src = m_Modules.at(module);
+        m_CurrentCompiledSource = src;
+        m_VM.RunByteCode(src->OpCodes.data(), src->OpCodes.size());
+    }
+
+    std::string Context::DumpAST(const std::string& module) {
+        if (!m_Modules.contains(module)) {
+            fmt::print("Module {} does not exist in the current context!", module);
+            return {};
+        }
+
+        CompiledSource* src = m_Modules.at(module);
+        Internal::ASTDumper d = Internal::ASTDumper::DumpAST(&src->ASTNodes);
+        return d.GetOutput();
+    }
+
+    std::string Context::Disassemble(const std::string& module) {
+        if (!m_Modules.contains(module)) {
+            fmt::print("Module {} does not exist in the current context!", module);
+            return {};
+        }
+
+        CompiledSource* src = m_Modules.at(module);
+        Internal::Disassembler d = Internal::Disassembler::Disassemble(&src->OpCodes);
+        return d.GetDisassembly();
     }
 
     void Context::SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn) {
@@ -97,9 +130,9 @@ namespace BlackLua {
 
     void Context::ReportCompilerError(size_t line, size_t column, const std::string& error) {
         if (m_CompilerErrorHandler) {
-            m_CompilerErrorHandler(line, column, m_CurrentFile, error);
+            m_CompilerErrorHandler(line, column, m_CurrentCompiledSource->Module, error);
         } else {
-            fmt::print(fg(fmt::color::gray), "{}:{}:{}, ", m_CurrentFile, line, column);
+            fmt::print(fg(fmt::color::gray), "{}:{}:{}, ", m_CurrentCompiledSource->Module, line, column);
             fmt::print(fg(fmt::color::pale_violet_red), "fatal error: ");
             fmt::print("{}\n", error);
         }
@@ -113,6 +146,10 @@ namespace BlackLua {
         }
 
         m_VM.StopExecution();
+    }
+
+    Allocator* Context::GetAllocator() {
+        return m_CurrentCompiledSource->Allocator;
     }
 
     Internal::VM& Context::GetVM() {

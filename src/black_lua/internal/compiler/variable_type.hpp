@@ -2,9 +2,16 @@
 
 #include "core.hpp"
 #include "allocator.hpp"
+#include "internal/compiler/core/string_view.hpp"
 
 #include <variant>
 #include <vector>
+
+namespace BlackLua {
+
+    struct Context;
+
+} // namespace BlackLua
 
 namespace BlackLua::Internal {
 
@@ -27,14 +34,14 @@ namespace BlackLua::Internal {
     struct VariableType;
 
     struct StructFieldDeclaration {
-        std::string_view Identifier;
+        StringView Identifier;
         size_t Offset = 0;
 
         VariableType* ResolvedType = nullptr;
     };
 
     struct StructDeclaration {
-        std::string_view Identifier;
+        StringView Identifier;
         std::vector<StructFieldDeclaration> Fields;
 
         size_t Size = 0;
@@ -54,14 +61,7 @@ namespace BlackLua::Internal {
         }
     };
 
-    inline VariableType* CreateVarType(PrimitiveType type, bool _signed = true, decltype(VariableType::Data) data = {}) {
-        VariableType* t = GetAllocator()->AllocateNamed<VariableType>();
-        t->Type = type;
-        t->Signed = _signed;
-        t->Data = data;
-
-        return t;
-    }
+    VariableType* CreateVarType(Context* ctx, PrimitiveType type, bool _signed = true, decltype(VariableType::Data) data = {});
 
     inline std::string VariableTypeToString(VariableType* type) {
         std::string str;
@@ -82,13 +82,13 @@ namespace BlackLua::Internal {
             case PrimitiveType::String:  str += "string"; break;
 
             case PrimitiveType::Array: {
-                str += fmt::format("{}[]", VariableTypeToString(std::get<VariableType*>(type->Data)));
+                str = fmt::format("{}[]", VariableTypeToString(std::get<VariableType*>(type->Data)));
                 break;
             }
 
             case PrimitiveType::Structure: {
                 StructDeclaration decl = std::get<StructDeclaration>(type->Data);
-                str += decl.Identifier;
+                str = fmt::format("{}", decl.Identifier);
 
                 break;
             }

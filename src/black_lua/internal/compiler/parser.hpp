@@ -4,6 +4,7 @@
 #include "internal/compiler/variable_type.hpp"
 #include "internal/compiler/ast.hpp"
 #include "internal/compiler/lexer.hpp"
+#include "context.hpp"
 
 namespace BlackLua {
     struct Context;
@@ -18,14 +19,12 @@ namespace BlackLua::Internal {
         ASTNodes* GetNodes();
         bool IsValid() const;
 
-        void PrintAST();
-
     private:
         void ParseImpl();
 
         Token* Peek(size_t count = 0);
         Token& Consume();
-        Token* TryConsume(TokenType type, const std::string& error);
+        Token* TryConsume(TokenType type, StringView error);
 
         // Checks if the current token matches with the requested type
         // This function cannot fail
@@ -33,8 +32,8 @@ namespace BlackLua::Internal {
 
         Node* ParseType(bool external = false);
 
-        Node* ParseVariableDecl(const std::string& type); // This function expects the first token to be the identifier!
-        Node* ParseFunctionDecl(const std::string& returnType, bool external = false);
+        Node* ParseVariableDecl(StringBuilder type); // This function expects the first token to be the identifier!
+        Node* ParseFunctionDecl(StringBuilder returnType, bool external = false);
         Node* ParseExtern();
 
         Node* ParseStructDecl();
@@ -52,7 +51,7 @@ namespace BlackLua::Internal {
         // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables)
         Node* ParseValue();
         BinExprType ParseOperator();
-        std::string ParseVariableType();
+        StringBuilder ParseVariableType();
         NodeList ParseFunctionParameters();
         bool IsPrimitiveType();
         bool IsVariableType();
@@ -67,17 +66,17 @@ namespace BlackLua::Internal {
 
         Node* ParseStatement();
 
-        void ErrorExpected(const std::string& msg);
-        void ErrorTooLarge(const std::string_view value);
+        void ErrorExpected(const StringView msg);
+        void ErrorTooLarge(const StringView value);
 
         template <typename T>
         T* Allocate() {
-            return GetAllocator()->AllocateNamed<T>();
+            return m_Context->GetAllocator()->AllocateNamed<T>();
         }
 
         template <typename T, typename... Args>
         T* Allocate(Args&&... args) {
-            return GetAllocator()->AllocateNamed<T>(std::forward<Args>(args)...);
+            return m_Context->GetAllocator()->AllocateNamed<T>(std::forward<Args>(args)...);
         }
 
         template <typename T>
@@ -86,11 +85,9 @@ namespace BlackLua::Internal {
             newNode->Type = type;
             newNode->Data = node;
             newNode->Line = line;
-            newNode->Column = line;
+            newNode->Column = column;
             return newNode;
         }
-
-        void PrintNode(Node* node, size_t indentation);
 
     private:
         ASTNodes m_Nodes;

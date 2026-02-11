@@ -68,21 +68,21 @@ namespace BlackLua::Internal {
         m_StackSlotPointer--;
     }
 
-    void VM::PushScope() {
-        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-        newScope->Previous = m_CurrentScope;
-        newScope->Offset = m_StackPointer;
-        newScope->SlotOffset = m_StackSlotPointer;
+    void VM::PushStackFrame() {
+        StackFrame newStackFrame;
+        newStackFrame.Offset = m_StackPointer;
+        newStackFrame.SlotOffset = m_StackSlotPointer;
 
-        m_CurrentScope = newScope;
+        m_StackFrames.push_back(newStackFrame);
     }
 
-    void VM::PopScope() {
-        BLUA_ASSERT(m_CurrentScope, "Calling PopScope() with no active scope!");
+    void VM::PopStackFrame() {
+        BLUA_ASSERT(m_StackFrames.size() > 0, "Calling PopStackFrame() with no active stack frame!");
 
-        m_StackPointer = m_CurrentScope->Offset;
-        m_StackSlotPointer = m_CurrentScope->SlotOffset;
-        m_CurrentScope = m_CurrentScope->Previous;
+        StackFrame current = m_StackFrames.back();
+        m_StackPointer = current.Offset;
+        m_StackSlotPointer = current.SlotOffset;
+        m_StackFrames.pop_back();
     }
 
     void VM::AddExtern(const std::string& signature, ExternFn fn) {
@@ -96,10 +96,10 @@ namespace BlackLua::Internal {
         BLUA_ASSERT(m_Labels.contains(label), "Trying to jump to an unknown label!");
         m_ProgramCounter = m_Labels.at(label) + 1;
 
-        PushScope();
+        PushStackFrame();
 
-        m_CurrentScope->ReturnAddress = pc;
-        m_CurrentScope->ReturnSlot = m_StackSlotPointer;
+        m_StackFrames.back().ReturnAddress = pc;
+        m_StackFrames.back().ReturnSlot = m_StackSlotPointer;
 
         Run();
     }
@@ -290,7 +290,6 @@ namespace BlackLua::Internal {
         m_ProgramSize = count;
 
         RegisterLables();
-
         Run();
     }
 
@@ -332,6 +331,19 @@ namespace BlackLua::Internal {
             break; \
         }
 
+        #define CASE_BINEXPR_BOOL(_enum, builtinType, builtinOp) case OpCodeType::_enum: { \
+            OpCodeMath m = std::get<OpCodeMath>(op.Data); \
+            builtinType lhs{}; \
+            builtinType rhs{}; \
+            memcpy(&lhs, GetStackSlot(m.LHSSlot).Memory, sizeof(builtinType)); \
+            memcpy(&rhs, GetStackSlot(m.RHSSlot).Memory, sizeof(builtinType)); \
+            bool result = builtinOp(lhs, rhs); \
+            PushBytes(1); \
+            StackSlot s = GetStackSlot(-1); \
+            memcpy(s.Memory, &result, 1); \
+            break; \
+        }
+
         #define CASE_BINEXPR_GROUP(mathop, op) \
             CASE_BINEXPR(mathop##I8,  int8_t,   op) \
             CASE_BINEXPR(mathop##I16, int16_t,  op) \
@@ -343,6 +355,18 @@ namespace BlackLua::Internal {
             CASE_BINEXPR(mathop##U64, uint64_t, op) \
             CASE_BINEXPR(mathop##F32, float,    op) \
             CASE_BINEXPR(mathop##F64, double,   op)
+
+        #define CASE_BINEXPR_BOOL_GROUP(mathop, op) \
+            CASE_BINEXPR_BOOL(mathop##I8,  int8_t,   op) \
+            CASE_BINEXPR_BOOL(mathop##I16, int16_t,  op) \
+            CASE_BINEXPR_BOOL(mathop##I32, int32_t,  op) \
+            CASE_BINEXPR_BOOL(mathop##I64, int64_t,  op) \
+            CASE_BINEXPR_BOOL(mathop##U8,  uint8_t,  op) \
+            CASE_BINEXPR_BOOL(mathop##U16, uint16_t, op) \
+            CASE_BINEXPR_BOOL(mathop##U32, uint32_t, op) \
+            CASE_BINEXPR_BOOL(mathop##U64, uint64_t, op) \
+            CASE_BINEXPR_BOOL(mathop##F32, float,    op) \
+            CASE_BINEXPR_BOOL(mathop##F64, double,   op)
 
         #define CASE_CAST(_enum, sourceType, destType) case OpCodeType::_enum: { \
             StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
@@ -391,13 +415,13 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                case OpCodeType::PushScope: {
-                    PushScope();
+                case OpCodeType::PushStackFrame: {
+                    PushStackFrame();
                     break;
                 }
 
-                case OpCodeType::PopScope: {
-                    PopScope();
+                case OpCodeType::PopStackFrame: {
+                    PopStackFrame();
                     break;
                 }
 
@@ -502,7 +526,16 @@ namespace BlackLua::Internal {
 
                 case OpCodeType::Call: {
                     int32_t label = std::get<StackSlotIndex>(op.Data).Slot;
-                    Call(label);
+                    // Perform a jump
+                    size_t pc = m_ProgramCounter;
+
+                    BLUA_ASSERT(m_Labels.contains(label), "Trying to jump to an unknown label!");
+                    m_ProgramCounter = m_Labels.at(label); // Even though the label map points to the actual label op code, because the pc gets incremented in the next loop iteration, this will work
+
+                    PushStackFrame();
+
+                    m_StackFrames.back().ReturnAddress = pc;
+                    m_StackFrames.back().ReturnSlot = m_StackSlotPointer;
 
                     break;
                 }
@@ -515,17 +548,17 @@ namespace BlackLua::Internal {
                 }
 
                 case OpCodeType::Ret: {
-                    BLUA_ASSERT(m_CurrentScope, "Trying to return out of no scope!");
+                    BLUA_ASSERT(m_StackFrames.size() > 0, "Trying to return out of no stack frame!");
 
-                    // Keep popping scopes until we find the function scope
-                    while (m_CurrentScope->ReturnAddress == SIZE_MAX) {
-                        BLUA_ASSERT(m_CurrentScope->Previous, "Trying return out of non function scope!");
+                    // Keep popping stack frames until we find the function scope
+                    while (m_StackFrames.back().ReturnAddress == SIZE_MAX) {
+                        BLUA_ASSERT(m_StackFrames.size() > 0, "Trying return out of non function stack frame!");
 
-                        PopScope();
+                        PopStackFrame();
                     }
 
-                    m_ProgramCounter = m_CurrentScope->ReturnAddress;
-                    PopScope();
+                    m_ProgramCounter = m_StackFrames.back().ReturnAddress;
+                    PopStackFrame();
 
                     break;
                 }
@@ -533,19 +566,19 @@ namespace BlackLua::Internal {
                 case OpCodeType::RetValue: {
                     StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
 
-                    BLUA_ASSERT(m_CurrentScope, "Trying to return out of no scope!");
+                    BLUA_ASSERT(m_StackFrames.size() > 0, "Trying to return out of no stack frame!");
 
-                    Copy(m_CurrentScope->ReturnSlot, slot);
+                    Copy(m_StackFrames.back().ReturnSlot, slot);
 
-                    // Keep popping scopes until we find the function scope
-                    while (m_CurrentScope->ReturnAddress == SIZE_MAX) {
-                        BLUA_ASSERT(m_CurrentScope->Previous, "Trying return out of non function scope!");
+                    // Keep popping stack frames until we find the function scope
+                    while (m_StackFrames.back().ReturnAddress == SIZE_MAX) {
+                        BLUA_ASSERT(m_StackFrames.size() > 0, "Trying return out of non function stack frame!");
 
-                        PopScope();
+                        PopStackFrame();
                     }
 
-                    m_ProgramCounter = m_CurrentScope->ReturnAddress;
-                    PopScope();
+                    m_ProgramCounter = m_StackFrames.back().ReturnAddress;
+                    PopStackFrame();
 
                     break;
                 }
@@ -558,11 +591,11 @@ namespace BlackLua::Internal {
                 CASE_BINEXPR_GROUP(Div, Div)
                 CASE_BINEXPR_GROUP(Mod, Mod)
 
-                CASE_BINEXPR_GROUP(Cmp, Cmp)
-                CASE_BINEXPR_GROUP(Lt, Lt)
-                CASE_BINEXPR_GROUP(Lte, Lte)
-                CASE_BINEXPR_GROUP(Gt, Gt)
-                CASE_BINEXPR_GROUP(Gte, Gte)
+                CASE_BINEXPR_BOOL_GROUP(Cmp, Cmp)
+                CASE_BINEXPR_BOOL_GROUP(Lt, Lt)
+                CASE_BINEXPR_BOOL_GROUP(Lte, Lte)
+                CASE_BINEXPR_BOOL_GROUP(Gt, Gt)
+                CASE_BINEXPR_BOOL_GROUP(Gte, Gte)
 
                 CASE_CAST_GROUP(I8, int8_t)
                 CASE_CAST_GROUP(I16, int16_t)

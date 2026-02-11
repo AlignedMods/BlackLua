@@ -44,8 +44,8 @@ namespace BlackLua::Internal {
 
         PushBytes,
         Pop,
-        PushScope,
-        PopScope,
+        PushStackFrame,
+        PopStackFrame,
         Store,
         Get, // Automaticaly pushes the value onto the stack
         Copy, // Copies a value into another slot
@@ -57,9 +57,9 @@ namespace BlackLua::Internal {
         Jt, // Perform a jump if the value at the specified slot is true (value must be a boolean)
         Jf, // Perform a jump if the value at the specified slot is false (value must be a boolean)
 
-        Call, // Performs a jump and sets up a scope
+        Call, // Performs a jump and sets up a stack frame
         CallExtern, // Calls a native C/C++ function
-        Ret, // Performs a jump to the current scopes return address, then pops the current scope
+        Ret, // Performs a jump to the current stack frame's return address, then pops the current stack frame
         RetValue, // Does the same as ret but also copies a slot into the given return slot
 
         TYPED_OP(Negate)
@@ -247,10 +247,10 @@ namespace BlackLua::Internal {
         // Pops the current stack slot
         void Pop();
 
-        // Creates a new scope
-        void PushScope();
-        // Removes the current scope and goes back to the previous one (if there is one)
-        void PopScope();
+        // Creates a new stack frame
+        void PushStackFrame();
+        // Removes the current stack frame and goes back to the previous one (if there is one)
+        void PopStackFrame();
 
         void AddExtern(const std::string& signature, ExternFn fn);
 
@@ -307,14 +307,14 @@ namespace BlackLua::Internal {
         std::vector<StackSlot> m_StackSlots;
         int32_t m_StackSlotPointer = 0;
 
-        struct Scope {
-            Scope* Previous = nullptr;
+        struct StackFrame {
             size_t Offset = 0;
             size_t SlotOffset = 0;
             size_t ReturnAddress = SIZE_MAX;
             int32_t ReturnSlot = 0;
         };
-        Scope* m_CurrentScope = nullptr;
+
+        std::vector<StackFrame> m_StackFrames;
         size_t m_CurrentReturnAdress = SIZE_MAX;
 
         const OpCode* m_Program = nullptr;

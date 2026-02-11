@@ -8,7 +8,7 @@ int main(int argc, char** argv) {
     std::cout << context.DumpAST("test.bl");
     std::cout << context.Disassemble("test.bl");
     context.Run("test.bl");
-    vm.Call(1);
+    vm.Call(5);
     
     fmt::print("{}", vm.GetInt(-1));
     

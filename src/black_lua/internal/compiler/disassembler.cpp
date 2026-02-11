@@ -104,8 +104,8 @@ namespace BlackLua::Internal {
             }
 
             case OpCodeType::Pop: m_Output += m_Indentation; m_Output += "pop\n"; break;
-            case OpCodeType::PushScope: m_Output += m_Indentation; m_Output += "push scope\n"; break;
-            case OpCodeType::PopScope: m_Output += m_Indentation; m_Output += "pop scope\n"; break;
+            case OpCodeType::PushStackFrame: m_Output += m_Indentation; m_Output += "push stack frame\n"; break;
+            case OpCodeType::PopStackFrame: m_Output += m_Indentation; m_Output += "pop stack frame\n"; break;
 
             case OpCodeType::Store: {
                 OpCodeStore s = std::get<OpCodeStore>(op.Data);
@@ -218,6 +218,7 @@ namespace BlackLua::Internal {
                 DisassembleStackSlotIndex(j.Slot);
                 m_Output += " ";
                 m_Output += std::to_string(j.Label);
+                m_Output += '\n';
 
                 break;
             }
@@ -230,6 +231,7 @@ namespace BlackLua::Internal {
                 DisassembleStackSlotIndex(j.Slot);
                 m_Output += " ";
                 m_Output += std::to_string(j.Label);
+                m_Output += '\n';
 
                 break;
             }

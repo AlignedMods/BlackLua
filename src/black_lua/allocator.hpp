@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <utility>
 #include <iostream>
-#include <format>
 
 namespace BlackLua {
 
@@ -53,12 +52,6 @@ namespace BlackLua {
             T* mem = reinterpret_cast<T*>(Allocate(sizeof(T)));
 
             return new (mem) T{std::forward<Args>(args)...};
-        }
-
-        inline void Reset() {
-            delete[] m_Data;
-            m_Data = new uint8_t[m_Capacity];
-            m_Index = 0;
         }
 
     private:

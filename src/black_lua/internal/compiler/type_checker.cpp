@@ -513,6 +513,7 @@ namespace BlackLua::Internal {
                 }
         
                 expr->ResolvedType = resolved;
+                expr->ResolvedSourceType = typeLHS;
                 return resolved;
             }
         

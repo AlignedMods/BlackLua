@@ -255,7 +255,7 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeScope(Node* node) {
         NodeScope* scope = std::get<NodeScope*>(node->Data);
 
-        m_OpCodes.emplace_back(OpCodeType::PushScope);
+        m_OpCodes.emplace_back(OpCodeType::PushStackFrame);
 
         Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
         newScope->Parent = m_CurrentScope;
@@ -267,7 +267,7 @@ namespace BlackLua::Internal {
         }
 
         m_CurrentScope = m_CurrentScope->Parent;
-        m_OpCodes.emplace_back(OpCodeType::PopScope);
+        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
     }
 
     void Emitter::EmitNodeVarDecl(Node* node) {
@@ -441,7 +441,7 @@ namespace BlackLua::Internal {
         m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "while loop condition");
         m_OpCodes.emplace_back(OpCodeType::Label, loop, "while loop condition");
 
-        m_OpCodes.emplace_back(OpCodeType::PushScope);
+        m_OpCodes.emplace_back(OpCodeType::PushStackFrame);
 
         Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
         newScope->Parent = m_CurrentScope;
@@ -457,12 +457,12 @@ namespace BlackLua::Internal {
             EmitNode(scope->Nodes.Items[i]);
         }
 
-        m_OpCodes.emplace_back(OpCodeType::PopScope);
+        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
 
         m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "while loop condition");
 
         m_OpCodes.emplace_back(OpCodeType::Label, loopEnd, "while loop end");
-        m_OpCodes.emplace_back(OpCodeType::PopScope);
+        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
         m_CurrentScope = m_CurrentScope->Parent;
     }
 
@@ -472,10 +472,14 @@ namespace BlackLua::Internal {
         CompileStackSlot slot = EmitNodeExpression(nif->Condition);
         int32_t ifLabel = m_LabelCount;
         int32_t elseLabel = m_LabelCount + 1;
-        int32_t afterIfLabel = m_LabelCount + 2;
+        int32_t afterIfLabel = (nif->ElseBody) ? m_LabelCount + 2 : m_LabelCount + 1;
 
         m_OpCodes.emplace_back(OpCodeType::Jt, OpCodeJump(CompileToRuntimeStackSlot(slot), ifLabel));
-        m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(slot), elseLabel));
+
+        if (nif->ElseBody) {
+            m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(slot), elseLabel));
+        }
+
         m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
 
         // If label
@@ -484,11 +488,12 @@ namespace BlackLua::Internal {
         EmitNode(nif->Body);
         m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
 
-        // Else label
-        CreateLabel();
-
-        EmitNode(nif->ElseBody);
-        m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
+        if (nif->ElseBody) {
+            // Else label
+            CreateLabel();
+            EmitNode(nif->ElseBody);
+            m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
+        }
 
         // After if label
         CreateLabel();
@@ -760,13 +765,13 @@ namespace BlackLua::Internal {
                 CompileStackSlot lhs = EmitNodeExpression(expr->LHS);
         
                 #define MATH_OP(baseOp, type, _enum) \
-                    if (expr->ResolvedType->Type == PrimitiveType::_enum) { \
+                    if (expr->ResolvedSourceType->Type == PrimitiveType::_enum) { \
                         m_OpCodes.emplace_back(OpCodeType::baseOp##type, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs))); \
                         IncrementStackSlotCount(); \
                     }
         
                 #define MATH_OP_GROUP(binExpr, op) case BinExprType::binExpr: { \
-                    if (expr->ResolvedType->Signed) { \
+                    if (expr->ResolvedSourceType->Signed) { \
                         MATH_OP(op, I8, Bool) \
                         MATH_OP(op, I8, Char) \
                         MATH_OP(op, I16, Short) \

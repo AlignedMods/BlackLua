@@ -332,6 +332,7 @@ namespace BlackLua::Internal {
         BinExprType Type = BinExprType::Invalid;
     
         VariableType* ResolvedType = nullptr;
+        VariableType* ResolvedSourceType = nullptr;
     };
     
     struct Node {

@@ -25,7 +25,7 @@ namespace BlackLua::Internal {
         m_Output += ident;
 
         if (n == nullptr) {
-            m_Output += "NULL";
+            m_Output += "NULL\n";
         } else {
             m_Output += fmt::format("{}:{} ", n->Line, n->Column);
 

@@ -8,10 +8,10 @@ int main(int argc, char** argv) {
     std::cout << context.DumpAST("test.bl");
     std::cout << context.Disassemble("test.bl");
     context.Run("test.bl");
-    vm.Call(5);
+    context.Call("main", "test.bl");
     
-    fmt::print("{}", vm.GetInt(-1));
-    
+    fmt::println("{}", vm.GetInt(-1));
+
     context.FreeModule("test.bl");
 
     return 0;

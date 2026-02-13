@@ -91,7 +91,7 @@ namespace BlackLua::Internal {
                         case NodeType::String: {
                             NodeString* str = std::get<NodeString*>(constant->Data);
 
-                            m_Output += fmt::format("String, Value: \"{}\"", str->String);
+                            m_Output += fmt::format("String, Value: \"{}\"\n", str->String);
                             break;
                         }
 
@@ -183,17 +183,9 @@ namespace BlackLua::Internal {
                         DumpASTNode(decl->Parameters.Items[i], indentation + 4);
                     }
 
-                    break;
-                }
-
-                case NodeType::FunctionImpl: {
-                    NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(n->Data);
-
-                    m_Output += fmt::format("FunctionImpl, Name: {}, Return type: {}\n", impl->Name, VariableTypeToString(impl->ResolvedType));
-                    for (size_t i = 0; i < impl->Parameters.Size; i++) {
-                        DumpASTNode(impl->Parameters.Items[i], indentation + 4);
+                    if (decl->Body) {
+                        DumpASTNode(decl->Body, indentation + 4);
                     }
-                    DumpASTNode(impl->Body, indentation + 4);
 
                     break;
                 }
@@ -251,6 +243,27 @@ namespace BlackLua::Internal {
 
                     m_Output += "Return, Value:\n";
                     DumpASTNode(ret->Value, indentation + 4);
+                    break;
+                }
+
+                case NodeType::StringConstructExpr: {
+                    m_Output += "StringConstructExpr\n";
+                    break;
+                }
+
+                case NodeType::StringConstructLiteralExpr: {
+                    NodeStringConstructLiteralExpr* expr = std::get<NodeStringConstructLiteralExpr*>(n->Data);
+                    
+                    m_Output += "StringConstructLiteralExpr\n";
+                    DumpASTNode(expr->Literal, indentation + 4);
+                    break;
+                }
+
+                case NodeType::StringCopyConstructExpr: {
+                    NodeStringCopyConstructExpr* expr = std::get<NodeStringCopyConstructExpr*>(n->Data);
+                    
+                    m_Output += "StringCopyConstructExpr\n";
+                    DumpASTNode(expr->Source, indentation + 4);
                     break;
                 }
 

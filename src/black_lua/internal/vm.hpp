@@ -47,6 +47,7 @@ namespace BlackLua::Internal {
         PushStackFrame,
         PopStackFrame,
         Store,
+        StoreString,
         Get, // Automaticaly pushes the value onto the stack
         Copy, // Copies a value into another slot
         Dup, // Creates a new stack slot and copies a value into it
@@ -60,7 +61,6 @@ namespace BlackLua::Internal {
         Call, // Performs a jump and sets up a stack frame
         CallExtern, // Calls a native C/C++ function
         Ret, // Performs a jump to the current stack frame's return address, then pops the current stack frame
-        RetValue, // Does the same as ret but also copies a slot into the given return slot
 
         TYPED_OP(Negate)
 

@@ -138,6 +138,31 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case OpCodeType::StoreString: {
+                OpCodeStore s = std::get<OpCodeStore>(op.Data);
+
+                m_Output += m_Indentation;
+                m_Output += "store ";
+                DisassembleStackSlotIndex(s.SlotIndex);
+
+                m_Output += " \"";
+                const char* bytes = reinterpret_cast<const char*>(s.Data);
+
+                {
+                    int32_t i = 0x01;
+                    uint8_t rawI[4]{};
+                    memcpy(rawI, &i, 4);
+
+                    for (size_t i = 0; i < s.DataSize; i++) {
+                        m_Output += fmt::format("{}", bytes[i]);
+                    }
+                }
+                
+                m_Output += "\"\n";
+
+                break;
+            }
+
             case OpCodeType::Get: {
                 StackSlotIndex i = std::get<StackSlotIndex>(op.Data);
 
@@ -260,17 +285,6 @@ namespace BlackLua::Internal {
 
             case OpCodeType::Ret: m_Output += m_Indentation; m_Output += "ret\n"; break;
 
-            case OpCodeType::RetValue: {
-                StackSlotIndex i = std::get<StackSlotIndex>(op.Data);
-
-                m_Output += m_Indentation;
-                m_Output += "ret value ";
-                DisassembleStackSlotIndex(i);
-                m_Output += '\n';
-
-                break;
-            }
-
             CASE_UNARYEXPR_GROUP(Negate, "neg")
 
             CASE_BINEXPR_GROUP(Add, "add")
@@ -307,9 +321,9 @@ namespace BlackLua::Internal {
 
     void Disassembler::DisassembleStackSlotIndex(const StackSlotIndex& i) {
         if (i.Offset == 0 && i.Size == 0) {
-            m_Output += "%(";
+            m_Output += "%";
             m_Output += std::to_string(i.Slot);
-            m_Output += ")";
+            m_Output += "";
         } else {
             m_Output += "(";
             m_Output += std::to_string(i.Slot);

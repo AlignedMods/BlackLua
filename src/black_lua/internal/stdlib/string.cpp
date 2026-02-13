@@ -9,10 +9,9 @@ namespace BlackLua::Internal {
         int32_t Capacity = 0;
     };
 
-    void bl__string__init__(Context* ctx) {
+    void bl__string__construct__(Context* ctx) {
         String* str = new String();
 
-        // By default the static buffer is used
         str->Size = 0;
         str->Capacity = 1;
         str->DynamicBuffer = new int8_t[1];
@@ -20,27 +19,41 @@ namespace BlackLua::Internal {
         ctx->GetVM().StorePointer(-1, str);
     }
 
+    void bl__string__construct_from_literal__(Context* ctx) {
+        StackSlot s = ctx->GetVM().GetStackSlot(-2);
+        
+        String* str = new String();
+        str->Capacity = s.Size;
+        str->DynamicBuffer = new int8_t[str->Capacity];
+
+        memcpy(str->DynamicBuffer, s.Memory, s.Size);
+
+        ctx->GetVM().StorePointer(-1, str);
+    }
+
     void bl__string__copy__(Context* ctx) {
-        BLUA_ASSERT(false, "TODO");
+        String* str = reinterpret_cast<String*>(ctx->GetVM().GetPointer(-2));
+
+        String* newStr = new String();
+        newStr->Capacity = str->Capacity;
+        newStr->Size = str->Size;
+        newStr->DynamicBuffer = new int8_t[newStr->Capacity];
+
+        memcpy(newStr->DynamicBuffer, str->DynamicBuffer, str->Size);
+
+        ctx->GetVM().StorePointer(-1, newStr);
     }
 
     void bl__string__destruct__(Context* ctx) {
         String* str = reinterpret_cast<String*>(ctx->GetVM().GetPointer(-1));
 
-        if (str->Size >= 25) {
-            delete[] str->DynamicBuffer;
-        }
+        delete[] str->DynamicBuffer;
 
         str->Size = 0;
         str->Capacity = 0;
 
         delete str;
         ctx->GetVM().StorePointer(-1, nullptr);
-    }
-
-    void bl__string__construct_from_literal__(Context* ctx) {
-        String* str = reinterpret_cast<String*>(ctx->GetVM().GetPointer(-2));
-
     }
 
 } // namespace BlackLua::Internal

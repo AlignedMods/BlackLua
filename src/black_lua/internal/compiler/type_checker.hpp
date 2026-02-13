@@ -46,11 +46,10 @@ namespace BlackLua::Internal {
 
         void CheckNodeVarDecl(Node* node);
         void CheckNodeParamDecl(Node* node);
-        void CheckNodeFunctionDecl(Node* node);
 
         void CheckNodeStructDecl(Node* node);
 
-        void CheckNodeFunctionImpl(Node* node);
+        void CheckNodeFunctionDecl(Node* node);
 
         void CheckNodeWhile(Node* node);
         void CheckNodeDoWhile(Node* node);

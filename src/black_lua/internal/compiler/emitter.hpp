@@ -2,6 +2,7 @@
 
 #include "internal/compiler/ast.hpp"
 #include "internal/vm.hpp"
+#include "internal/compiler/reflection/compiler_reflection.hpp"
 
 namespace BlackLua::Internal {
 
@@ -15,6 +16,7 @@ namespace BlackLua::Internal {
             using OpCodes = std::vector<OpCode>;
 
             static Emitter Emit(const ASTNodes* nodes, Context* ctx);
+            const CompilerReflectionData& GetReflectionData() const;
             const OpCodes& GetOpCodes() const;
     
         private:
@@ -29,9 +31,8 @@ namespace BlackLua::Internal {
     
             void EmitNodeVarDecl(Node* node);
             void EmitNodeParamDecl(Node* node);
+
             void EmitNodeFunctionDecl(Node* node);
-    
-            void EmitNodeFunctionImpl(Node* node);
 
             void EmitNodeStructDecl(Node* node);
     
@@ -75,11 +76,13 @@ namespace BlackLua::Internal {
             struct Scope {
                 Scope* Parent = nullptr;
                 size_t SlotCount = 0;
+                CompileStackSlot ReturnSlot;
                 std::unordered_map<std::string, Declaration> DeclaredSymbols;
             };
     
             Scope* m_CurrentScope = nullptr;
 
+            CompilerReflectionData m_ReflectionData;
             Context* m_Context = nullptr;
         };
 

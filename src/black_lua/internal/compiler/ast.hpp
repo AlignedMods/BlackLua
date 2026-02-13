@@ -35,7 +35,6 @@ namespace BlackLua::Internal {
         MethodDecl,
     
         FunctionDecl,
-        FunctionImpl,
     
         While,
         DoWhile,
@@ -47,6 +46,9 @@ namespace BlackLua::Internal {
         Continue,
         Return,
     
+        StringConstructExpr,
+        StringConstructLiteralExpr,
+        StringCopyConstructExpr,
         ArrayAccessExpr,
         MemberExpr,
         MethodCallExpr,
@@ -237,19 +239,10 @@ namespace BlackLua::Internal {
         bool Extern = false;
     
         VariableType* ResolvedType = nullptr;
-    };
-    
-    struct NodeFunctionImpl {
-        StringView Name;
-    
-        NodeList Parameters;
-        StringBuilder ReturnType;
-    
+
         Node* Body = nullptr; // Type is always NodeScope
-    
-        VariableType* ResolvedType = nullptr;
-    };
-    
+    };\
+
     struct NodeWhile {
         Node* Condition = nullptr;
         Node* Body = nullptr; // Type is always NodeScope
@@ -277,6 +270,14 @@ namespace BlackLua::Internal {
         Node* Value = nullptr;
     };
     
+    struct NodeStringConstructLiteralExpr {
+        Node* Literal = nullptr;
+    };
+
+    struct NodeStringCopyConstructExpr {
+        Node* Source = nullptr;
+    };
+
     struct NodeArrayAccessExpr {
         Node* Parent = nullptr;
         Node* Index = nullptr;
@@ -342,11 +343,11 @@ namespace BlackLua::Internal {
                      NodeScope*,
                      NodeVarDecl*, NodeParamDecl*, NodeVarRef*,
                      NodeStructDecl*, NodeFieldDecl*, NodeMethodDecl*,
-                     NodeFunctionDecl*, NodeFunctionImpl*,
+                     NodeFunctionDecl*,
                      NodeWhile*, NodeDoWhile*, NodeFor*,
                      NodeIf*,
                      NodeReturn*,
-                     NodeArrayAccessExpr*, NodeMemberExpr*, NodeMethodCallExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
+                     NodeStringConstructLiteralExpr*, NodeStringCopyConstructExpr*, NodeArrayAccessExpr*, NodeMemberExpr*, NodeMethodCallExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
 
         size_t Line = 0;
         size_t Column = 0;

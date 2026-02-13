@@ -70,7 +70,28 @@ namespace BlackLua::Internal {
         if (decl->Value) {
             CheckNodeExpression(decl->Value);
         }
+
+        if (type->Type == PrimitiveType::String) {
+            if (decl->Value) {
+                Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>(*decl->Value);
         
+                if (IsLValue(decl->Value)) {
+                    NodeStringCopyConstructExpr* construct = m_Context->GetAllocator()->AllocateNamed<NodeStringCopyConstructExpr>();
+                    construct->Source = newNode;
+                    decl->Value->Type = NodeType::StringCopyConstructExpr;
+                    decl->Value->Data = construct;
+                } else {
+                    NodeStringConstructLiteralExpr* construct = m_Context->GetAllocator()->AllocateNamed<NodeStringConstructLiteralExpr>();
+                    construct->Literal = newNode;
+                    decl->Value->Type = NodeType::StringConstructLiteralExpr;
+                    decl->Value->Data = construct;
+                }
+            } else {
+                decl->Value = m_Context->GetAllocator()->AllocateNamed<Node>();
+                decl->Value->Type = NodeType::StringConstructExpr;
+            }
+        }
+
         decl->ResolvedType = type;
     }
 
@@ -79,17 +100,6 @@ namespace BlackLua::Internal {
         
         VariableType* type = GetVarTypeFromString(StringView(decl->Type.Data(), decl->Type.Size()));
         m_CurrentScope->DeclaredSymbols[fmt::format("{}", decl->Identifier)] = { type, node };
-        
-        decl->ResolvedType = type;
-    }
-
-    void TypeChecker::CheckNodeFunctionDecl(Node* node) {
-        NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
-        
-        std::string name = fmt::format("{}", decl->Name);
-        
-        VariableType* type = GetVarTypeFromString(StringView(decl->ReturnType.Data(), decl->ReturnType.Size()));
-        m_DeclaredSymbols[name] = { type, node, decl->Extern };
         
         decl->ResolvedType = type;
     }
@@ -149,37 +159,49 @@ namespace BlackLua::Internal {
         m_DeclaredStructs[name] = sd;
     }
 
-    void TypeChecker::CheckNodeFunctionImpl(Node* node) {
-        NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(node->Data);
+    void TypeChecker::CheckNodeFunctionDecl(Node* node) {
+        NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
         
-        std::string name = fmt::format("{}", impl->Name);
+        std::string name = fmt::format("{}", decl->Name);
         if (m_DeclaredSymbols.contains(name)) {
             if (m_DeclaredSymbols.at(name).Extern) {
-                m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Defining function marked extern: {}", impl->Name));
+                m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Defining function marked extern: {}", decl->Name));
+                m_Error = true;
+            }
+
+            if (m_DeclaredSymbols.at(name).Decl->Type == NodeType::FunctionDecl) {
+                if (std::get<NodeFunctionDecl*>(m_DeclaredSymbols.at(name).Decl->Data)->Body) {
+                    m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Redefining function body: {}", decl->Name));
+                    m_Error = true;
+                }
+            } else {
+                m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Redefining identifier as a different type: {}", decl->Name));
                 m_Error = true;
             }
         }
         
-        VariableType* type = GetVarTypeFromString(StringView(impl->ReturnType.Data(), impl->ReturnType.Size()));
+        VariableType* type = GetVarTypeFromString(StringView(decl->ReturnType.Data(), decl->ReturnType.Size()));
         m_DeclaredSymbols[name] = { type, node };
-        impl->ResolvedType = type;
+        decl->ResolvedType = type;
         
-        NodeScope* scope = std::get<NodeScope*>(impl->Body->Data);
+        if (decl->Body) {
+            NodeScope* scope = std::get<NodeScope*>(decl->Body->Data);
         
-        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-        newScope->Parent = m_CurrentScope;
-        newScope->ReturnType = type;
-        m_CurrentScope = newScope;
-        
-        for (size_t i = 0; i < impl->Parameters.Size; i++) {
-            CheckNode(impl->Parameters.Items[i]);
+            Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
+            newScope->Parent = m_CurrentScope;
+            newScope->ReturnType = type;
+            m_CurrentScope = newScope;
+            
+            for (size_t i = 0; i < decl->Parameters.Size; i++) {
+                CheckNode(decl->Parameters.Items[i]);
+            }
+            
+            for (size_t i = 0; i < scope->Nodes.Size; i++) {
+                CheckNode(scope->Nodes.Items[i]);
+            }
+            
+            m_CurrentScope = m_CurrentScope->Parent;
         }
-        
-        for (size_t i = 0; i < scope->Nodes.Size; i++) {
-            CheckNode(scope->Nodes.Items[i]);
-        }
-        
-        m_CurrentScope = m_CurrentScope->Parent;
     }
 
     void TypeChecker::CheckNodeWhile(Node* node) {
@@ -378,12 +400,10 @@ namespace BlackLua::Internal {
                     
                             break;
                         }
-                
-                        case NodeType::FunctionImpl: {
-                            NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(m_DeclaredSymbols.at(name).Decl->Data);
-                            params = impl->Parameters;
-                
-                            break;
+
+                        default: {
+                            ErrorNoMatchingFunction(expr->Name, node);
+                            return CreateVarType(m_Context, PrimitiveType::Invalid);
                         }
                     }
                 
@@ -487,6 +507,7 @@ namespace BlackLua::Internal {
                         }
                         resolved = typeLHS; break;
                     }
+
                     case BinExprType::Add:
                     case BinExprType::AddInPlace:
                     case BinExprType::AddOne:
@@ -535,8 +556,6 @@ namespace BlackLua::Internal {
             CheckNodeParamDecl(node);
         } else if (t == NodeType::FunctionDecl) {
             CheckNodeFunctionDecl(node);
-        } else if (t == NodeType::FunctionImpl) {
-            CheckNodeFunctionImpl(node);
         } else if (t == NodeType::StructDecl) {
             CheckNodeStructDecl(node);
         } else if (t == NodeType::While) {

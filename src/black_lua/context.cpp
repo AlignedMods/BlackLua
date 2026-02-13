@@ -5,7 +5,9 @@
 #include "internal/compiler/emitter.hpp"
 #include "internal/compiler/disassembler.hpp"
 #include "internal/compiler/ast_dumper.hpp"
+#include "internal/compiler/reflection/compiler_reflection.hpp"
 #include "internal/stdlib/array.hpp"
+#include "internal/stdlib/string.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -19,6 +21,8 @@ namespace BlackLua {
         std::string SourceCode;
 
         std::string Module;
+
+        Internal::CompilerReflectionData ReflectionData;
     };
 
     Context::Context()
@@ -30,6 +34,10 @@ namespace BlackLua {
         ctx.m_VM.AddExtern("bl__array__destruct__", BlackLua::Internal::bl__array__destruct__);
         ctx.m_VM.AddExtern("bl__array__copy__", BlackLua::Internal::bl__array__copy__);
         ctx.m_VM.AddExtern("bl__array__index__", BlackLua::Internal::bl__array__index__);
+
+        ctx.m_VM.AddExtern("bl__string__construct__", BlackLua::Internal::bl__string__construct__);
+        ctx.m_VM.AddExtern("bl__string__construct_from_literal__", BlackLua::Internal::bl__string__construct_from_literal__);
+        ctx.m_VM.AddExtern("bl__string__copy__", BlackLua::Internal::bl__string__copy__);
         
         return ctx;
     }
@@ -70,16 +78,14 @@ namespace BlackLua {
         if (!valid) { delete src->Allocator; return; }
 
         Internal::Emitter e = Internal::Emitter::Emit(p.GetNodes(), this);
+        src->ReflectionData = e.GetReflectionData();
         src->OpCodes = e.GetOpCodes();
 
         m_Modules[module] = src;
     }
 
     void Context::FreeModule(const std::string& module) {
-        if (!m_Modules.contains(module)) {
-            fmt::print("Module {} does not exist in the current context!", module);
-            return;
-        }
+        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
 
         CompiledSource* src = m_Modules.at(module);
         delete src->Allocator;
@@ -88,10 +94,7 @@ namespace BlackLua {
     }
 
     void Context::Run(const std::string& module) {
-        if (!m_Modules.contains(module)) {
-            fmt::print("Module {} does not exist in the current context!", module);
-            return;
-        }
+        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
 
         CompiledSource* src = m_Modules.at(module);
         m_CurrentCompiledSource = src;
@@ -99,10 +102,7 @@ namespace BlackLua {
     }
 
     std::string Context::DumpAST(const std::string& module) {
-        if (!m_Modules.contains(module)) {
-            fmt::print("Module {} does not exist in the current context!", module);
-            return {};
-        }
+        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
 
         CompiledSource* src = m_Modules.at(module);
         Internal::ASTDumper d = Internal::ASTDumper::DumpAST(&src->ASTNodes);
@@ -110,14 +110,20 @@ namespace BlackLua {
     }
 
     std::string Context::Disassemble(const std::string& module) {
-        if (!m_Modules.contains(module)) {
-            fmt::print("Module {} does not exist in the current context!", module);
-            return {};
-        }
+        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
 
         CompiledSource* src = m_Modules.at(module);
         Internal::Disassembler d = Internal::Disassembler::Disassemble(&src->OpCodes);
         return d.GetDisassembly();
+    }
+
+    void Context::Call(const std::string& str, const std::string& module) {
+        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
+        CompiledSource* src = m_Modules.at(module);
+
+        BLUA_ASSERT(src->ReflectionData.Declarations.contains(str), "Trying to call an unknown function");
+        BLUA_ASSERT(src->ReflectionData.Declarations.at(str).Type == Internal::ReflectionType::Function, "Trying to call an non-function");
+        m_VM.Call(std::get<int32_t>(src->ReflectionData.Declarations.at(str).Data));
     }
 
     void Context::SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn) {

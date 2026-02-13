@@ -13,6 +13,10 @@ namespace BlackLua::Internal {
         return e;
     }
 
+    const CompilerReflectionData& Emitter::GetReflectionData() const {
+        return m_ReflectionData;
+    }
+
     const Emitter::OpCodes& Emitter::GetOpCodes() const {
         return m_OpCodes;
     }
@@ -104,15 +108,15 @@ namespace BlackLua::Internal {
                         break;
                     }
 
-                    // case NodeType::String: {
-                    //     NodeString* s = std::get<NodeString*>(std::get<NodeConstant*>(node->Data)->Data);
-                    // 
-                    //     m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(s->String.size()));
-                    //     m_SlotCount++;
-                    //     m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, s->String.size(), s->String.data(), true));
-                    // 
-                    //     break;
-                    // }
+                    case NodeType::String: {
+                        NodeString* s = std::get<NodeString*>(std::get<NodeConstant*>(node->Data)->Data);
+                    
+                        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(s->String.Size()));
+                        m_SlotCount++;
+                        m_OpCodes.emplace_back(OpCodeType::StoreString, OpCodeStore(-1, s->String.Size(), s->String.Data(), true));
+                    
+                        break;
+                    }
                 }
 
                 m_ConstantMap[node] = CompileStackSlot(m_SlotCount, false);
@@ -154,13 +158,16 @@ namespace BlackLua::Internal {
                 break;
             }
 
-            case NodeType::FunctionImpl: {
-                NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(node->Data);
+            case NodeType::FunctionDecl: {
+                NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
 
-                for (size_t i = 0; i < impl->Parameters.Size; i++) {
-                    EmitConstant(impl->Parameters.Items[i]);
+                for (size_t i = 0; i < decl->Parameters.Size; i++) {
+                    EmitConstant(decl->Parameters.Items[i]);
                 }
-                EmitConstant(impl->Body);
+
+                if (decl->Body) {
+                    EmitConstant(decl->Body);
+                }
 
                 break;
             }
@@ -192,6 +199,13 @@ namespace BlackLua::Internal {
 
                 EmitConstant(ret->Value);
 
+                break;
+            }
+
+            case NodeType::StringConstructLiteralExpr: {
+                NodeStringConstructLiteralExpr* expr = std::get<NodeStringConstructLiteralExpr*>(node->Data);
+
+                EmitConstant(expr->Literal);
                 break;
             }
 
@@ -282,15 +296,19 @@ namespace BlackLua::Internal {
         if (m_CurrentScope) {
             d.Index = m_CurrentScope->SlotCount;
         } else {
-            d.Index = m_SlotCount;   
+            d.Index = m_SlotCount;
+
+            CompilerReflectionDeclaration dd;
+            dd.Type = ReflectionType::Variable;
+            dd.Data = d.Index;
+            dd.ResolvedType = decl->ResolvedType;
+            m_ReflectionData.Declarations[fmt::format("{}", decl->Identifier)] = dd;
         }
         d.Size = GetTypeSize(decl->ResolvedType);
         d.Type = decl->ResolvedType;
         
         map[fmt::format("{}", decl->Identifier)] = d;
-        
-        CallConstructor(decl->ResolvedType);
-        
+
         // We convert int var = 5 to
         // int var;
         // var = 5;
@@ -333,55 +351,55 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeFunctionDecl(Node* node) {
         NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
         
-        if (decl->Extern) {
-            std::string ident = fmt::format("{}", decl->Name);
-            Declaration d;
-            d.Size = GetTypeSize(decl->ResolvedType);
-            d.Extern = true;
-            d.Type = decl->ResolvedType;
-            m_DeclaredSymbols[ident] = d;
-        }
-    }
+        if (!decl->Extern && !decl->Body) { return; }
 
-    void Emitter::EmitNodeFunctionImpl(Node* node) {
-        NodeFunctionImpl* impl = std::get<NodeFunctionImpl*>(node->Data);
-        
-        std::string ident = fmt::format("{}", impl->Name);
-        Declaration decl;
-        decl.Index = CreateLabel(fmt::format("function {}", impl->Name));
-        decl.Size = GetTypeSize(impl->ResolvedType);
-        decl.Type = impl->ResolvedType;
-        m_DeclaredSymbols[ident] = decl;
-        
-        // We don't want to create a new scope
-        // The VM creates one for us at the call site
-        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-        newScope->Parent = m_CurrentScope;
-        newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
-        m_CurrentScope = newScope;
-        
-        size_t returnSlot = (impl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
-        size_t varsPushed = 0;
-        
-        // Inject function parameters into the scope
-        for (size_t i = 0; i < impl->Parameters.Size; i++) {
-            EmitNodeParamDecl(impl->Parameters.Items[i]);
-        
-            // Copy the arguments into the parameters
-            m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(impl->Parameters.Size + 1 + returnSlot)));
-            varsPushed++;
+        std::string ident = fmt::format("{}", decl->Name);
+        Declaration d;
+        d.Size = GetTypeSize(decl->ResolvedType);
+        d.Extern = decl->Extern;
+        d.Type = decl->ResolvedType;
+        m_DeclaredSymbols[ident] = d;
+
+        if (decl->Body) {
+            int32_t label = CreateLabel();
+
+            CompilerReflectionDeclaration dd;
+            dd.Type = ReflectionType::Function;
+            dd.Data = label;
+            dd.ResolvedType = decl->ResolvedType;
+            m_ReflectionData.Declarations[ident] = dd;
+
+            // We don't want to create a new scope
+            // The VM creates one for us at the call site
+            Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
+            newScope->Parent = m_CurrentScope;
+            newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
+            m_CurrentScope = newScope;
+            
+            size_t returnSlot = (decl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
+            size_t varsPushed = 0;
+            
+            // Inject function parameters into the scope
+            for (size_t i = 0; i < decl->Parameters.Size; i++) {
+                EmitNodeParamDecl(decl->Parameters.Items[i]);
+            
+                // Copy the arguments into the parameters
+                m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(decl->Parameters.Size + 1 + returnSlot)));
+                varsPushed++;
+            }
+            
+            NodeScope* body = std::get<NodeScope*>(decl->Body->Data);
+            
+            for (size_t i = 0; i < body->Nodes.Size; i++) {
+                EmitNode(body->Nodes.Items[i]);
+            }
+            
+            if (m_OpCodes.back().Type != OpCodeType::Ret) {
+                m_OpCodes.emplace_back(OpCodeType::Ret);
+            }
+            
+            m_CurrentScope = m_CurrentScope->Parent;
         }
-        
-        NodeScope* body = std::get<NodeScope*>(impl->Body->Data);
-        
-        for (size_t i = 0; i < body->Nodes.Size; i++) {
-            EmitNode(body->Nodes.Items[i]);
-        }
-        
-        // Just in case
-        m_OpCodes.emplace_back(OpCodeType::Ret);
-        
-        m_CurrentScope = m_CurrentScope->Parent;
     }
 
     void Emitter::EmitNodeStructDecl(Node* node) {
@@ -504,7 +522,8 @@ namespace BlackLua::Internal {
 
         CompileStackSlot slot = EmitNodeExpression(ret->Value);
 
-        m_OpCodes.emplace_back(OpCodeType::RetValue, CompileToRuntimeStackSlot(slot));
+        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(CompileStackSlot(-(m_CurrentScope->SlotCount + 1))), CompileToRuntimeStackSlot(slot)), "return");
+        m_OpCodes.emplace_back(OpCodeType::Ret);
     }
 
     CompileStackSlot Emitter::EmitNodeExpression(Node* node) {
@@ -535,6 +554,41 @@ namespace BlackLua::Internal {
         
                 BLUA_ASSERT(false, "Unreachable!");
                 return {};
+                break;
+            }
+
+            case NodeType::StringConstructExpr: {
+                m_OpCodes.emplace_back(OpCodeType::PushBytes, sizeof(void*));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__construct__");
+
+                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+                break;
+            }
+
+            case NodeType::StringConstructLiteralExpr: {
+                NodeStringConstructLiteralExpr* expr = std::get<NodeStringConstructLiteralExpr*>(node->Data);
+                
+                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(EmitNodeExpression(expr->Literal)));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::PushBytes, sizeof(void*));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__construct_from_literal__");
+
+                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+                break;
+            }
+
+            case NodeType::StringCopyConstructExpr: {
+                NodeStringCopyConstructExpr* expr = std::get<NodeStringCopyConstructExpr*>(node->Data);
+                
+                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(EmitNodeExpression(expr->Source)));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::PushBytes, sizeof(void*));
+                IncrementStackSlotCount();
+                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__copy__");
+
+                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
                 break;
             }
         
@@ -810,8 +864,8 @@ namespace BlackLua::Internal {
                     
                     case BinExprType::Eq: {
                         m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
+
                         return lhs;
-        
                     }
                 }
         
@@ -866,6 +920,10 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::CallConstructor(VariableType* type) {
+        if (type->Type == PrimitiveType::String) {
+            m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__init__");
+        }
+
         if (type->Type == PrimitiveType::Structure) {
             StructDeclaration& decl = std::get<StructDeclaration>(type->Data);
 
@@ -882,14 +940,14 @@ namespace BlackLua::Internal {
             EmitNodeVarDecl(node);
         } else if (t == NodeType::FunctionDecl) {
             EmitNodeFunctionDecl(node);
-        } else if (t == NodeType::FunctionImpl) {
-            EmitNodeFunctionImpl(node);
         } else if (t == NodeType::StructDecl) {
             EmitNodeStructDecl(node);
         } else if (t == NodeType::While) {
             EmitNodeWhile(node);
         } else if (t == NodeType::If) {
             EmitNodeIf(node);
+        } else if (t == NodeType::StringConstructLiteralExpr) {
+            EmitNodeExpression(node);
         } else if (t == NodeType::ArrayAccessExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::MemberExpr) {

@@ -425,6 +425,7 @@ namespace BlackLua::Internal {
                     break;
                 }
 
+                case OpCodeType::StoreString:
                 case OpCodeType::Store: {
                     OpCodeStore store = std::get<OpCodeStore>(op.Data);
                     StackSlot s = GetStackSlot(store.SlotIndex);
@@ -549,26 +550,6 @@ namespace BlackLua::Internal {
 
                 case OpCodeType::Ret: {
                     BLUA_ASSERT(m_StackFrames.size() > 0, "Trying to return out of no stack frame!");
-
-                    // Keep popping stack frames until we find the function scope
-                    while (m_StackFrames.back().ReturnAddress == SIZE_MAX) {
-                        BLUA_ASSERT(m_StackFrames.size() > 0, "Trying return out of non function stack frame!");
-
-                        PopStackFrame();
-                    }
-
-                    m_ProgramCounter = m_StackFrames.back().ReturnAddress;
-                    PopStackFrame();
-
-                    break;
-                }
-
-                case OpCodeType::RetValue: {
-                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
-
-                    BLUA_ASSERT(m_StackFrames.size() > 0, "Trying to return out of no stack frame!");
-
-                    Copy(m_StackFrames.back().ReturnSlot, slot);
 
                     // Keep popping stack frames until we find the function scope
                     while (m_StackFrames.back().ReturnAddress == SIZE_MAX) {

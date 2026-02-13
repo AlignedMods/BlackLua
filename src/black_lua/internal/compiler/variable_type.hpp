@@ -77,9 +77,9 @@ namespace BlackLua::Internal {
             case PrimitiveType::Short:   str += "short"; break;
             case PrimitiveType::Int:     str += "int"; break;
             case PrimitiveType::Long:    str += "long"; break;
-            case PrimitiveType::Float:   str += "float"; break;
-            case PrimitiveType::Double:  str += "double"; break;
-            case PrimitiveType::String:  str += "string"; break;
+            case PrimitiveType::Float:   str = "float"; break;
+            case PrimitiveType::Double:  str = "double"; break;
+            case PrimitiveType::String:  str = "string"; break;
 
             case PrimitiveType::Array: {
                 str = fmt::format("{}[]", VariableTypeToString(std::get<VariableType*>(type->Data)));

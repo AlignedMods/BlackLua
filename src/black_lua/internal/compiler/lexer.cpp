@@ -234,7 +234,7 @@ namespace BlackLua::Internal {
                             }
                         }
 
-                        AddToken(TokenType::StrLit, StringView(m_Source.Data() + startIndex, m_Index - startIndex));
+                        AddToken(TokenType::StrLit, StringView(m_Source.Data() + startIndex, m_Index - startIndex - 1));
                         break;
                     }
                 }

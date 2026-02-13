@@ -125,25 +125,18 @@ namespace BlackLua::Internal {
                 params = ParseFunctionParameters();
                 TryConsume(TokenType::RightParen, "')'");
 
+                NodeFunctionDecl* node = Allocate<NodeFunctionDecl>();
+                node->Name = ident->Data;
+                node->ReturnType = returnType;
+                node->Parameters = params;
+                node->Extern = external;
+
                 if (Match(TokenType::LeftCurly)) {
-                    NodeFunctionImpl* node = Allocate<NodeFunctionImpl>();
-                    node->Name = ident->Data;
-                    node->ReturnType = returnType;
-                    node->Parameters = params;
-
                     node->Body = ParseScope();
-
-                    finalNode = CreateNode(NodeType::FunctionImpl, node, ident->Line, ident->Column);
                     m_NeedsSemi = false;
-                } else {
-                    NodeFunctionDecl* node = Allocate<NodeFunctionDecl>();
-                    node->Name = ident->Data;
-                    node->ReturnType = returnType;
-                    node->Parameters = params;
-                    node->Extern = external;
-
-                    finalNode = CreateNode(NodeType::FunctionDecl, node, ident->Line, ident->Column);
                 }
+
+                finalNode = CreateNode(NodeType::FunctionDecl, node, ident->Line, ident->Column);
             } else {
                 ErrorExpected("'('");
             }

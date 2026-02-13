@@ -32,6 +32,8 @@ namespace BlackLua {
         // Returns a string containing the disassembled byte code
         std::string Disassemble(const std::string& module);
 
+        void Call(const std::string& str, const std::string& module);
+
         void SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn);
         void SetCompilerErrorHandler(CompilerErrorHandlerFn fn);
 

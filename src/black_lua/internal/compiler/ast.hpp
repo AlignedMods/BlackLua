@@ -46,9 +46,6 @@ namespace BlackLua::Internal {
         Continue,
         Return,
     
-        StringConstructExpr,
-        StringConstructLiteralExpr,
-        StringCopyConstructExpr,
         ArrayAccessExpr,
         MemberExpr,
         MethodCallExpr,
@@ -241,7 +238,7 @@ namespace BlackLua::Internal {
         VariableType* ResolvedType = nullptr;
 
         Node* Body = nullptr; // Type is always NodeScope
-    };\
+    };
 
     struct NodeWhile {
         Node* Condition = nullptr;
@@ -268,14 +265,6 @@ namespace BlackLua::Internal {
     
     struct NodeReturn {
         Node* Value = nullptr;
-    };
-    
-    struct NodeStringConstructLiteralExpr {
-        Node* Literal = nullptr;
-    };
-
-    struct NodeStringCopyConstructExpr {
-        Node* Source = nullptr;
     };
 
     struct NodeArrayAccessExpr {
@@ -306,6 +295,10 @@ namespace BlackLua::Internal {
     struct NodeFunctionCallExpr {
         StringView Name;
         NodeList Arguments;
+
+        bool Extern = false;
+
+        VariableType* ResolvedReturnType = nullptr;
     };
     
     struct NodeParenExpr {
@@ -347,7 +340,7 @@ namespace BlackLua::Internal {
                      NodeWhile*, NodeDoWhile*, NodeFor*,
                      NodeIf*,
                      NodeReturn*,
-                     NodeStringConstructLiteralExpr*, NodeStringCopyConstructExpr*, NodeArrayAccessExpr*, NodeMemberExpr*, NodeMethodCallExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
+                     NodeArrayAccessExpr*, NodeMemberExpr*, NodeMethodCallExpr*, NodeFunctionCallExpr*, NodeParenExpr*, NodeCastExpr*, NodeUnaryExpr*, NodeBinExpr*> Data;
 
         size_t Line = 0;
         size_t Column = 0;

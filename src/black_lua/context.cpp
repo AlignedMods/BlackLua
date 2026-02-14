@@ -37,7 +37,9 @@ namespace BlackLua {
 
         ctx.m_VM.AddExtern("bl__string__construct__", BlackLua::Internal::bl__string__construct__);
         ctx.m_VM.AddExtern("bl__string__construct_from_literal__", BlackLua::Internal::bl__string__construct_from_literal__);
+
         ctx.m_VM.AddExtern("bl__string__copy__", BlackLua::Internal::bl__string__copy__);
+        ctx.m_VM.AddExtern("bl__string__assign__", BlackLua::Internal::bl__string__assign__);
         
         return ctx;
     }

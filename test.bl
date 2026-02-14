@@ -1,5 +1,13 @@
 int foo = 0;
 
+string bar(string str) {
+    return str;
+}
+
 void main() {
-    foo = 4 + 4;
+    // string s;
+    string s = "hello world";
+    string str = s;
+    str = s;
+    s = bar(s);
 }

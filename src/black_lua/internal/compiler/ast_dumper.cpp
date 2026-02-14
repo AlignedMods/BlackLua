@@ -178,7 +178,7 @@ namespace BlackLua::Internal {
                 case NodeType::FunctionDecl: {
                     NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(n->Data);
 
-                    m_Output += fmt::format("FunctionDecl, Name: {}, Return type: {}\n", decl->Name, VariableTypeToString(decl->ResolvedType));
+                    m_Output += fmt::format("FunctionDecl, Name: {}, Return type: {}, Extern: {}\n", decl->Name, VariableTypeToString(decl->ResolvedType), decl->Extern);
                     for (size_t i = 0; i < decl->Parameters.Size; i++) {
                         DumpASTNode(decl->Parameters.Items[i], indentation + 4);
                     }
@@ -246,27 +246,6 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                case NodeType::StringConstructExpr: {
-                    m_Output += "StringConstructExpr\n";
-                    break;
-                }
-
-                case NodeType::StringConstructLiteralExpr: {
-                    NodeStringConstructLiteralExpr* expr = std::get<NodeStringConstructLiteralExpr*>(n->Data);
-                    
-                    m_Output += "StringConstructLiteralExpr\n";
-                    DumpASTNode(expr->Literal, indentation + 4);
-                    break;
-                }
-
-                case NodeType::StringCopyConstructExpr: {
-                    NodeStringCopyConstructExpr* expr = std::get<NodeStringCopyConstructExpr*>(n->Data);
-                    
-                    m_Output += "StringCopyConstructExpr\n";
-                    DumpASTNode(expr->Source, indentation + 4);
-                    break;
-                }
-
                 case NodeType::ArrayAccessExpr: {
                     NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(n->Data);
 
@@ -299,7 +278,7 @@ namespace BlackLua::Internal {
                 case NodeType::FunctionCallExpr: {
                     NodeFunctionCallExpr* call = std::get<NodeFunctionCallExpr*>(n->Data);
 
-                    m_Output += fmt::format("FunctionCallExpr, Name: {}\n", call->Name);
+                    m_Output += fmt::format("FunctionCallExpr, Name: {}, Extern: {}\n", call->Name, call->Extern);
                     for (size_t i = 0; i < call->Arguments.Size; i++) {
                         DumpASTNode(call->Arguments.Items[i], indentation + 4);
                     }

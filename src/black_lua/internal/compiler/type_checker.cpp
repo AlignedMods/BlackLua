@@ -76,19 +76,39 @@ namespace BlackLua::Internal {
                 Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>(*decl->Value);
         
                 if (IsLValue(decl->Value)) {
-                    NodeStringCopyConstructExpr* construct = m_Context->GetAllocator()->AllocateNamed<NodeStringCopyConstructExpr>();
-                    construct->Source = newNode;
-                    decl->Value->Type = NodeType::StringCopyConstructExpr;
-                    decl->Value->Data = construct;
+                    NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                    call->Name = "bl__string__copy__";
+                    call->Arguments.Append(m_Context, newNode);
+                    call->Extern = true;
+                    call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
+                    decl->Value->Type = NodeType::FunctionCallExpr;
+                    decl->Value->Data = call;
+                    decl->Value->Line = newNode->Line;
+                    decl->Value->Column = newNode->Column;
                 } else {
-                    NodeStringConstructLiteralExpr* construct = m_Context->GetAllocator()->AllocateNamed<NodeStringConstructLiteralExpr>();
-                    construct->Literal = newNode;
-                    decl->Value->Type = NodeType::StringConstructLiteralExpr;
-                    decl->Value->Data = construct;
+                    NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                    call->Name = "bl__string__construct_from_literal__";
+                    call->Arguments.Append(m_Context, newNode);
+                    call->Extern = true;
+                    call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
+                    decl->Value->Type = NodeType::FunctionCallExpr;
+                    decl->Value->Data = call;
+                    decl->Value->Line = newNode->Line;
+                    decl->Value->Column = newNode->Column;
                 }
             } else {
+                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                call->Name = "bl__string__construct__";
+                call->Extern = true;
+                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
                 decl->Value = m_Context->GetAllocator()->AllocateNamed<Node>();
-                decl->Value->Type = NodeType::StringConstructExpr;
+                decl->Value->Type = NodeType::FunctionCallExpr;
+                decl->Value->Data = call;
+                decl->Value->Line = node->Line;
+                decl->Value->Column = node->Column;
             }
         }
 
@@ -255,6 +275,34 @@ namespace BlackLua::Internal {
                 m_Error = true;
             }
         }
+
+        if (exprType->Type == PrimitiveType::String) {
+            Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>((*ret->Value));
+
+            if (IsLValue(ret->Value)) {
+                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                call->Name = "bl__string__copy__";
+                call->Arguments.Append(m_Context, newNode);
+                call->Extern = true;
+                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
+                ret->Value->Type = NodeType::FunctionCallExpr;
+                ret->Value->Data = call;
+                ret->Value->Line = newNode->Line;
+                ret->Value->Column = newNode->Column;
+            } else {
+                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                call->Name = "bl__string__construct_from_literal__";
+                call->Arguments.Append(m_Context, newNode);
+                call->Extern = true;
+                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
+                ret->Value->Type = NodeType::FunctionCallExpr;
+                ret->Value->Data = call;
+                ret->Value->Line = newNode->Line;
+                ret->Value->Column = newNode->Column;
+            }
+        }
     }
 
     VariableType* TypeChecker::CheckNodeExpression(Node* node) {
@@ -397,6 +445,7 @@ namespace BlackLua::Internal {
                         case NodeType::FunctionDecl: {
                             NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(m_DeclaredSymbols.at(name).Decl->Data);
                             params = decl->Parameters;
+                            expr->Extern = decl->Extern;
                     
                             break;
                         }
@@ -429,9 +478,38 @@ namespace BlackLua::Internal {
                                 m_Error = true;
                             }
                         }
+
+                        if (typeParam->Type == PrimitiveType::String) {
+                            Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>(*arg);
+
+                            if (IsLValue(arg)) {
+                                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                                call->Name = "bl__string__copy__";
+                                call->Arguments.Append(m_Context, newNode);
+                                call->Extern = true;
+                                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
+                                arg->Type = NodeType::FunctionCallExpr;
+                                arg->Data = call;
+                                arg->Line = newNode->Line;
+                                arg->Column = newNode->Column;
+                            } else {
+                                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                                call->Name = "bl__string__construct_from_literal__";
+                                call->Arguments.Append(m_Context, newNode);
+                                call->Extern = true;
+                                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
+                                arg->Type = NodeType::FunctionCallExpr;
+                                arg->Data = call;
+                                arg->Line = newNode->Line;
+                                arg->Column = newNode->Column;
+                            }
+                        }
                     }
                 
-                    return m_DeclaredSymbols.at(name).Type;
+                    expr->ResolvedReturnType = m_DeclaredSymbols.at(name).Type;
+                    return expr->ResolvedReturnType;
                 }
                 
                 ErrorUndeclaredIdentifier(expr->Name, node);
@@ -504,6 +582,22 @@ namespace BlackLua::Internal {
                         if (!IsLValue(expr->LHS)) {
                             m_Context->ReportCompilerError(expr->LHS->Line, expr->LHS->Column, "Expression must be a modifiable lvalue");
                             m_Error = true;
+                        } else {
+                            if (typeRHS->Type == PrimitiveType::String) {
+                                Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>(*expr->RHS);
+
+                                if (IsLValue(expr->RHS)) {
+                                    NodeFunctionCallExpr* assignExpr = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
+                                    assignExpr->Name = "bl__string__assign__";
+                                    assignExpr->Arguments.Append(m_Context, expr->LHS);
+                                    assignExpr->Arguments.Append(m_Context, newNode);
+                                    assignExpr->Extern = true;
+                                    assignExpr->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
+
+                                    expr->RHS->Type = NodeType::FunctionCallExpr;
+                                    expr->RHS->Data = assignExpr;
+                                }
+                            }
                         }
                         resolved = typeLHS; break;
                     }

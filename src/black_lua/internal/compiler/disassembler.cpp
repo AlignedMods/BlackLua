@@ -321,9 +321,9 @@ namespace BlackLua::Internal {
 
     void Disassembler::DisassembleStackSlotIndex(const StackSlotIndex& i) {
         if (i.Offset == 0 && i.Size == 0) {
-            m_Output += "%";
+            m_Output += "%(";
             m_Output += std::to_string(i.Slot);
-            m_Output += "";
+            m_Output += ")";
         } else {
             m_Output += "(";
             m_Output += std::to_string(i.Slot);

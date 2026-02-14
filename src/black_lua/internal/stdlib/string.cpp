@@ -44,9 +44,22 @@ namespace BlackLua::Internal {
         ctx->GetVM().StorePointer(-1, newStr);
     }
 
+    void bl__string__assign__(Context* ctx) {
+        String* str = reinterpret_cast<String*>(ctx->GetVM().GetPointer(-3));
+        String* other = reinterpret_cast<String*>(ctx->GetVM().GetPointer(-2));
+        delete[] str->DynamicBuffer;
+
+        str->Capacity = other->Capacity;
+        str->Size = other->Size;
+        str->DynamicBuffer = new int8_t[str->Capacity];
+        
+        memcpy(str->DynamicBuffer, other->DynamicBuffer, other->Size);
+
+        ctx->GetVM().StorePointer(-1, str);
+    }
+
     void bl__string__destruct__(Context* ctx) {
         String* str = reinterpret_cast<String*>(ctx->GetVM().GetPointer(-1));
-
         delete[] str->DynamicBuffer;
 
         str->Size = 0;

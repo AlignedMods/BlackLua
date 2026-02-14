@@ -202,13 +202,6 @@ namespace BlackLua::Internal {
                 break;
             }
 
-            case NodeType::StringConstructLiteralExpr: {
-                NodeStringConstructLiteralExpr* expr = std::get<NodeStringConstructLiteralExpr*>(node->Data);
-
-                EmitConstant(expr->Literal);
-                break;
-            }
-
             case NodeType::ArrayAccessExpr: {
                 NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(node->Data);
 
@@ -344,8 +337,6 @@ namespace BlackLua::Internal {
         d.Type = decl->ResolvedType;
         
         map[fmt::format("{}", decl->Identifier)] = d;
-        
-        CallConstructor(decl->ResolvedType);
     }
 
     void Emitter::EmitNodeFunctionDecl(Node* node) {
@@ -556,41 +547,6 @@ namespace BlackLua::Internal {
                 return {};
                 break;
             }
-
-            case NodeType::StringConstructExpr: {
-                m_OpCodes.emplace_back(OpCodeType::PushBytes, sizeof(void*));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__construct__");
-
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-
-            case NodeType::StringConstructLiteralExpr: {
-                NodeStringConstructLiteralExpr* expr = std::get<NodeStringConstructLiteralExpr*>(node->Data);
-                
-                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(EmitNodeExpression(expr->Literal)));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::PushBytes, sizeof(void*));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__construct_from_literal__");
-
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-
-            case NodeType::StringCopyConstructExpr: {
-                NodeStringCopyConstructExpr* expr = std::get<NodeStringCopyConstructExpr*>(node->Data);
-                
-                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(EmitNodeExpression(expr->Source)));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::PushBytes, sizeof(void*));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__copy__");
-
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
         
             case NodeType::ArrayAccessExpr: {
                 NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(node->Data);
@@ -662,29 +618,45 @@ namespace BlackLua::Internal {
         
             case NodeType::FunctionCallExpr: {
                 NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
-                Declaration decl = m_DeclaredSymbols.at(fmt::format("{}", expr->Name));
+                if (expr->Extern) {
+                    std::vector<CompileStackSlot> parameters; 
         
-                std::vector<CompileStackSlot> parameters; 
+                    for (size_t i = 0; i < expr->Arguments.Size; i++) {
+                        CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
+                        parameters.push_back(slot);
+                    }
         
-                for (size_t i = 0; i < expr->Arguments.Size; i++) {
-                    CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
+                    for (const auto& p : parameters) {
+                        m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
+                        IncrementStackSlotCount();
+                    }
         
-                    parameters.push_back(slot);
-                }
-        
-                for (const auto& p : parameters) {
-                    m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
-                    IncrementStackSlotCount();
-                }
-        
-                if (decl.Size != 0) {
-                    PushBytes(decl.Size, "return slot");
-                    IncrementStackSlotCount();
-                }
-        
-                if (decl.Extern) {
+                    if (expr->ResolvedReturnType->Type != PrimitiveType::Void) {
+                        PushBytes(GetTypeSize(expr->ResolvedReturnType), "return slot");
+                        IncrementStackSlotCount();
+                    }
+
                     m_OpCodes.emplace_back(OpCodeType::CallExtern, fmt::format("{}", expr->Name));
                 } else {
+                    Declaration decl = m_DeclaredSymbols.at(fmt::format("{}", expr->Name));
+        
+                    std::vector<CompileStackSlot> parameters; 
+        
+                    for (size_t i = 0; i < expr->Arguments.Size; i++) {
+                        CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
+                        parameters.push_back(slot);
+                    }
+        
+                    for (const auto& p : parameters) {
+                        m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
+                        IncrementStackSlotCount();
+                    }
+        
+                    if (expr->ResolvedReturnType->Type != PrimitiveType::Void) {
+                        PushBytes(GetTypeSize(expr->ResolvedReturnType), "return slot");
+                        IncrementStackSlotCount();
+                    }
+
                     m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
                 }
                 
@@ -946,8 +918,6 @@ namespace BlackLua::Internal {
             EmitNodeWhile(node);
         } else if (t == NodeType::If) {
             EmitNodeIf(node);
-        } else if (t == NodeType::StringConstructLiteralExpr) {
-            EmitNodeExpression(node);
         } else if (t == NodeType::ArrayAccessExpr) {
             EmitNodeExpression(node);
         } else if (t == NodeType::MemberExpr) {

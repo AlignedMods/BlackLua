@@ -24,6 +24,8 @@ namespace BlackLua::Internal {
     template <typename T>
     T Cmp(T lhs, T rhs) { return lhs == rhs; }
     template <typename T>
+    T Ncmp(T lhs, T rhs) { return lhs != rhs; }
+    template <typename T>
     T Lt(T lhs, T rhs) { return lhs < rhs; }
     template <typename T>
     T Lte(T lhs, T rhs) { return lhs <= rhs; }
@@ -573,6 +575,7 @@ namespace BlackLua::Internal {
                 CASE_BINEXPR_GROUP(Mod, Mod)
 
                 CASE_BINEXPR_BOOL_GROUP(Cmp, Cmp)
+                CASE_BINEXPR_BOOL_GROUP(Ncmp, Ncmp)
                 CASE_BINEXPR_BOOL_GROUP(Lt, Lt)
                 CASE_BINEXPR_BOOL_GROUP(Lte, Lte)
                 CASE_BINEXPR_BOOL_GROUP(Gt, Gt)

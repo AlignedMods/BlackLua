@@ -37,9 +37,14 @@ namespace BlackLua::Internal {
             void PushBytes(size_t bytes, const std::string& debugData = {});
             void IncrementStackSlotCount();
 
+            void PushStackFrame();
+            void PushCompilerStackFrame();
+            void PopStackFrame();
+            void PopCompilerStackFrame();
+
             CompileStackSlot EmitNodeExpression(NodeExpr* expr);
 
-            void EmitNodeScope(NodeStmt* stmt);
+            void EmitNodeCompound(NodeStmt* stmt);
     
             void EmitNodeVarDecl(NodeStmt* stmt);
             void EmitNodeParamDecl(NodeStmt* stmt);
@@ -77,14 +82,13 @@ namespace BlackLua::Internal {
     
             std::unordered_map<std::string, Declaration> m_DeclaredSymbols;
     
-            struct Scope {
-                Scope* Parent = nullptr;
+            struct StackFrame {
+                StackFrame* Parent = nullptr;
                 size_t SlotCount = 0;
-                CompileStackSlot ReturnSlot;
                 std::unordered_map<std::string, Declaration> DeclaredSymbols;
             };
     
-            Scope* m_CurrentScope = nullptr;
+            StackFrame* m_CurrentStackFrame = nullptr;
 
             CompilerReflectionData m_ReflectionData;
             Context* m_Context = nullptr;

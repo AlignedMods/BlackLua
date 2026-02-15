@@ -521,8 +521,8 @@ namespace BlackLua::Internal {
         return lhsExpr;
     }
 
-    NodeStmt* Parser::ParseScope() {
-        StmtScope* node = Allocate<StmtScope>();
+    NodeStmt* Parser::ParseCompound() {
+        StmtCompound* node = Allocate<StmtCompound>();
 
         Token* l = TryConsume(TokenType::LeftCurly, "'{'");
 
@@ -534,6 +534,18 @@ namespace BlackLua::Internal {
         TryConsume(TokenType::RightCurly, "'}'");
 
         return Allocate<NodeStmt>(node, l->Line, l->Column);
+    }
+
+    NodeStmt* Parser::ParseCompoundInline() {
+        if (Match(TokenType::LeftCurly)) {
+            return ParseCompound();
+        } else {
+            StmtCompound* node = Allocate<StmtCompound>();
+
+            node->Nodes.Append(m_Context, ParseToken());
+
+            return Allocate<NodeStmt>(node);
+        }
     }
 
     NodeStmt* Parser::ParseType(bool external) {
@@ -585,7 +597,7 @@ namespace BlackLua::Internal {
                 node->Extern = external;
 
                 if (Match(TokenType::LeftCurly)) {
-                    node->Body = ParseScope();
+                    node->Body = ParseCompound();
                     m_NeedsSemi = false;
                 }
 
@@ -637,7 +649,7 @@ namespace BlackLua::Internal {
                     TryConsume(TokenType::RightParen, "')'");
 
                     decl->Parameters = params;
-                    decl->Body = ParseScope();
+                    decl->Body = ParseCompound();
 
                     node->Fields.Append(m_Context, Allocate<Node>(Allocate<NodeStmt>(decl, fieldName->Line, fieldName->Column)));
                 } else {
@@ -665,7 +677,7 @@ namespace BlackLua::Internal {
         TryConsume(TokenType::LeftParen, "'('");
         node->Condition = ParseExpression();
         TryConsume(TokenType::RightParen, "')'");
-        node->Body = ParseScope();
+        node->Body = ParseCompoundInline();
 
         m_NeedsSemi = false;
 
@@ -676,7 +688,7 @@ namespace BlackLua::Internal {
         Token d = Consume(); // Consume "do"
 
         StmtDoWhile* node = Allocate<StmtDoWhile>();
-        node->Body = ParseScope();
+        node->Body = ParseCompoundInline();
 
         TryConsume(TokenType::While, "while");
         TryConsume(TokenType::LeftParen, "'('");
@@ -701,7 +713,7 @@ namespace BlackLua::Internal {
 
         node->Epilogue = ParseExpression();
         TryConsume(TokenType::RightParen, "')'");
-        node->Body = ParseScope();
+        node->Body = ParseCompoundInline();
 
         m_NeedsSemi = false;
 
@@ -717,20 +729,12 @@ namespace BlackLua::Internal {
         node->Condition = ParseExpression();
 
         TryConsume(TokenType::RightParen, "')'");
-        if (Match(TokenType::LeftCurly)) {
-            node->Body = ParseScope();
-        } else {
-            node->Body = ParseStatement();
-        }
+        node->Body = ParseCompoundInline();
 
         if (Match(TokenType::Else)) {
             Consume();
 
-            if (Match(TokenType::LeftCurly)) {
-                node->ElseBody = ParseScope();
-            } else {
-                node->ElseBody = ParseStatement();
-            }
+            node->ElseBody = ParseCompoundInline();
         }
 
         m_NeedsSemi = false;
@@ -771,7 +775,7 @@ namespace BlackLua::Internal {
         } else if (t == TokenType::Struct) {
             node = ParseStructDecl();
         } else if (t == TokenType::LeftCurly) {
-            node = ParseScope();
+            node = ParseCompound();
         } else if (t == TokenType::While) {
             node = ParseWhile();
         } else if (t == TokenType::Do) {

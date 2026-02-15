@@ -36,7 +36,8 @@ namespace BlackLua::Internal {
         NodeExpr* ParseValue();
         NodeExpr* ParseExpression(size_t minbp = 0);
 
-        NodeStmt* ParseScope();
+        NodeStmt* ParseCompound();
+        NodeStmt* ParseCompoundInline();
 
         NodeStmt* ParseType(bool external = false);
 

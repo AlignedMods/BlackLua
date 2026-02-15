@@ -71,6 +71,7 @@ namespace BlackLua::Internal {
         TYPED_OP(Mod)
 
         TYPED_OP(Cmp)
+        TYPED_OP(Ncmp)
         TYPED_OP(Lt)
         TYPED_OP(Lte)
         TYPED_OP(Gt)

@@ -214,10 +214,8 @@ namespace BlackLua::Internal {
             case OpCodeType::Label: {
                 StackSlotIndex i = std::get<StackSlotIndex>(op.Data);
 
-                m_Output += '\n';
-                m_Output += std::to_string(i.Slot);
-                m_Output += ":\n";
-
+                m_Output += fmt::format("\n{}:    {}\n", std::get<StackSlotIndex>(op.Data).Slot, op.DebugData);
+                
                 m_Indentation.clear();
                 m_Indentation.append(4, ' ');
 
@@ -294,6 +292,7 @@ namespace BlackLua::Internal {
             CASE_BINEXPR_GROUP(Mod, "mod")
 
             CASE_BINEXPR_GROUP(Cmp, "cmp")
+            CASE_BINEXPR_GROUP(Ncmp, "ncmp")
             CASE_BINEXPR_GROUP(Lt, "lt")
             CASE_BINEXPR_GROUP(Lte, "lte")
             CASE_BINEXPR_GROUP(Gt, "gt")

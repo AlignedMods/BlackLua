@@ -132,7 +132,7 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::EmitConstantStatement(NodeStmt* stmt) {
-        if (StmtScope* scope = GetNode<StmtScope>(stmt)) {
+        if (StmtCompound* scope = GetNode<StmtCompound>(stmt)) {
             for (size_t i = 0; i < scope->Nodes.Size; i++) {
                 EmitConstant(scope->Nodes.Items[i]);
             }
@@ -204,8 +204,8 @@ namespace BlackLua::Internal {
 
     StackSlotIndex Emitter::CompileToRuntimeStackSlot(CompileStackSlot slot) {
         if (slot.Relative) {
-            if (m_CurrentScope) {
-                return StackSlotIndex(slot.Slot.Slot - static_cast<int32_t>(m_CurrentScope->SlotCount) - 1, slot.Slot.Offset, slot.Slot.Size);
+            if (m_CurrentStackFrame) {
+                return StackSlotIndex(slot.Slot.Slot - static_cast<int32_t>(m_CurrentStackFrame->SlotCount) - 1, slot.Slot.Offset, slot.Slot.Size);
             } else {
                 return StackSlotIndex(slot.Slot.Slot - m_SlotCount - 1, slot.Slot.Offset, slot.Slot.Size);
             }
@@ -227,7 +227,32 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::IncrementStackSlotCount() {
-        (m_CurrentScope) ? m_CurrentScope->SlotCount++ : m_SlotCount++;
+        (m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount++ : m_SlotCount++;
+    }
+
+    void Emitter::PushStackFrame() {
+        m_OpCodes.emplace_back(OpCodeType::PushStackFrame);
+
+        StackFrame* newStackFrame = m_Context->GetAllocator()->AllocateNamed<StackFrame>();
+        newStackFrame->Parent = m_CurrentStackFrame;
+        newStackFrame->SlotCount = (newStackFrame->Parent) ? newStackFrame->Parent->SlotCount : 0;
+        m_CurrentStackFrame = newStackFrame;
+    }
+
+    void Emitter::PushCompilerStackFrame() {
+        StackFrame* newStackFrame = m_Context->GetAllocator()->AllocateNamed<StackFrame>();
+        newStackFrame->Parent = m_CurrentStackFrame;
+        newStackFrame->SlotCount = (newStackFrame->Parent) ? newStackFrame->Parent->SlotCount : 0;
+        m_CurrentStackFrame = newStackFrame;
+    }
+
+    void Emitter::PopStackFrame() {
+        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
+        m_CurrentStackFrame = m_CurrentStackFrame->Parent;
+    }
+
+    void Emitter::PopCompilerStackFrame() {
+        m_CurrentStackFrame = m_CurrentStackFrame->Parent;
     }
 
     CompileStackSlot Emitter::EmitNodeExpression(NodeExpr* expr) {
@@ -239,13 +264,13 @@ namespace BlackLua::Internal {
             std::string ident = fmt::format("{}", ref->Identifier);
         
             // Loop backward through all the scopes
-            Scope* currentScope = m_CurrentScope;
-            while (currentScope) {
-                if (currentScope->DeclaredSymbols.contains(ident)) {
-                    return CompileStackSlot(currentScope->DeclaredSymbols.at(ident).Index, true);
+            StackFrame* currentStackFrame = m_CurrentStackFrame;
+            while (currentStackFrame) {
+                if (currentStackFrame->DeclaredSymbols.contains(ident)) {
+                    return CompileStackSlot(currentStackFrame->DeclaredSymbols.at(ident).Index, true);
                 }
         
-                currentScope = currentScope->Parent;
+                currentStackFrame = currentStackFrame->Parent;
             }
         
             // Check global symbols
@@ -269,7 +294,7 @@ namespace BlackLua::Internal {
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
         
-            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
 
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
@@ -315,7 +340,7 @@ namespace BlackLua::Internal {
         
             m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
             
-            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
 
         if (ExprCall* call = GetNode<ExprCall>(expr)) {
@@ -361,7 +386,7 @@ namespace BlackLua::Internal {
                 m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
             }
             
-            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
         
         if (ExprParen* paren = GetNode<ExprParen>(expr)) {
@@ -434,7 +459,7 @@ namespace BlackLua::Internal {
             #undef CASE_INNER
             #undef CASE_OUTER
             
-            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
        
         if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
@@ -473,7 +498,7 @@ namespace BlackLua::Internal {
             #undef MATH_OP
             #undef MATH_OP_GROUP
             
-            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
         
         if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
@@ -523,6 +548,7 @@ namespace BlackLua::Internal {
                 MATH_OP_GROUP(Greater, Gt);
                 MATH_OP_GROUP(GreaterOrEq, Gte);
                 MATH_OP_GROUP(IsEq, Cmp);
+                MATH_OP_GROUP(IsNotEq, Ncmp);
                 
                 case BinaryOperatorType::Eq: {
                     m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
@@ -545,26 +571,16 @@ namespace BlackLua::Internal {
             #undef MATH_OP
             #undef MATH_OP_GROUP
             
-            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
     }
 
-    void Emitter::EmitNodeScope(NodeStmt* stmt) {
-        StmtScope* scope = GetNode<StmtScope>(stmt);
+    void Emitter::EmitNodeCompound(NodeStmt* stmt) {
+        StmtCompound* compound = GetNode<StmtCompound>(stmt);
 
-        m_OpCodes.emplace_back(OpCodeType::PushStackFrame);
-
-        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-        newScope->Parent = m_CurrentScope;
-        newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
-        m_CurrentScope = newScope;
-
-        for (size_t i = 0; i < scope->Nodes.Size; i++) {
-            EmitNode(scope->Nodes.Items[i]);
+        for (size_t i = 0; i < compound->Nodes.Size; i++) {
+            EmitNode(compound->Nodes.Items[i]);
         }
-
-        m_CurrentScope = m_CurrentScope->Parent;
-        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
     }
 
     void Emitter::EmitNodeVarDecl(NodeStmt* stmt) {
@@ -572,12 +588,12 @@ namespace BlackLua::Internal {
         
         PushBytes(GetTypeSize(decl->ResolvedType), fmt::format("Declaration of {}", decl->Identifier));
         
-        auto& map = (m_CurrentScope != 0) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
+        auto& map = (m_CurrentStackFrame != 0) ? m_CurrentStackFrame->DeclaredSymbols : m_DeclaredSymbols;
         
         Declaration d;
         IncrementStackSlotCount();
-        if (m_CurrentScope) {
-            d.Index = m_CurrentScope->SlotCount;
+        if (m_CurrentStackFrame) {
+            d.Index = m_CurrentStackFrame->SlotCount;
         } else {
             d.Index = m_SlotCount;
 
@@ -614,12 +630,12 @@ namespace BlackLua::Internal {
         StmtParamDecl* decl = GetNode<StmtParamDecl>(stmt);
         
         PushBytes(GetTypeSize(decl->ResolvedType), fmt::format("Declaration of {}", decl->Identifier));
-        auto& map = (m_CurrentScope != 0) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
+        auto& map = (m_CurrentStackFrame != 0) ? m_CurrentStackFrame->DeclaredSymbols : m_DeclaredSymbols;
         
         Declaration d;
         IncrementStackSlotCount();
-        if (m_CurrentScope) {
-            d.Index = m_CurrentScope->SlotCount;
+        if (m_CurrentStackFrame) {
+            d.Index = m_CurrentStackFrame->SlotCount;
         } else {
             d.Index = m_SlotCount;   
         }
@@ -650,12 +666,7 @@ namespace BlackLua::Internal {
             dd.ResolvedType = decl->ResolvedType;
             m_ReflectionData.Declarations[ident] = dd;
 
-            // We don't want to create a new scope
-            // The VM creates one for us at the call site
-            Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-            newScope->Parent = m_CurrentScope;
-            newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
-            m_CurrentScope = newScope;
+            PushCompilerStackFrame();
             
             size_t returnSlot = (decl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
             size_t varsPushed = 0;
@@ -669,17 +680,13 @@ namespace BlackLua::Internal {
                 varsPushed++;
             }
             
-            StmtScope* body = GetNode<StmtScope>(decl->Body);
-            
-            for (size_t i = 0; i < body->Nodes.Size; i++) {
-                EmitNode(body->Nodes.Items[i]);
-            }
-            
+            EmitNodeCompound(decl->Body);
+
             if (m_OpCodes.back().Type != OpCodeType::Ret) {
                 m_OpCodes.emplace_back(OpCodeType::Ret);
             }
             
-            m_CurrentScope = m_CurrentScope->Parent;
+            PopCompilerStackFrame();
         }
     }
 
@@ -695,12 +702,7 @@ namespace BlackLua::Internal {
                 decl.Type = mdecl->ResolvedType;
                 m_DeclaredSymbols[ident] = decl;
                 
-                // We don't want to create a new scope
-                // The VM creates one for us at the call site
-                Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-                newScope->Parent = m_CurrentScope;
-                newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
-                m_CurrentScope = newScope;
+                PushCompilerStackFrame();
                 
                 size_t returnSlot = (mdecl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
                 size_t varsPushed = 0;
@@ -714,16 +716,13 @@ namespace BlackLua::Internal {
                     varsPushed++;
                 }
                 
-                StmtScope* body = GetNode<StmtScope>(mdecl->Body);
+                EmitNodeCompound(mdecl->Body);
                 
-                for (size_t i = 0; i < body->Nodes.Size; i++) {
-                    EmitNode(body->Nodes.Items[i]);
+                if (m_OpCodes.back().Type != OpCodeType::Ret) {
+                    m_OpCodes.emplace_back(OpCodeType::Ret);
                 }
                 
-                // Just in case
-                m_OpCodes.emplace_back(OpCodeType::Ret);
-                
-                m_CurrentScope = m_CurrentScope->Parent;
+                PopCompilerStackFrame();
             }
         }
     }
@@ -738,29 +737,17 @@ namespace BlackLua::Internal {
         m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "while loop condition");
         m_OpCodes.emplace_back(OpCodeType::Label, loop, "while loop condition");
 
-        m_OpCodes.emplace_back(OpCodeType::PushStackFrame);
-
-        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-        newScope->Parent = m_CurrentScope;
-        newScope->SlotCount = (newScope->Parent) ? newScope->Parent->SlotCount : 0;
-        m_CurrentScope = newScope;
+        PushStackFrame();
 
         CompileStackSlot slot = EmitNodeExpression(wh->Condition);
         m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(slot), loopEnd), "while loop end");
 
-        StmtScope* scope = GetNode<StmtScope>(wh->Body);
+        EmitNodeCompound(wh->Body);
 
-        for (size_t i = 0; i < scope->Nodes.Size; i++) {
-            EmitNode(scope->Nodes.Items[i]);
-        }
-
-        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
+        PopStackFrame();
 
         m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "while loop condition");
-
         m_OpCodes.emplace_back(OpCodeType::Label, loopEnd, "while loop end");
-        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
-        m_CurrentScope = m_CurrentScope->Parent;
     }
 
     void Emitter::EmitNodeDoWhile(NodeStmt* stmt) {
@@ -770,34 +757,38 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeIf(NodeStmt* stmt) {
         StmtIf* nif = GetNode<StmtIf>(stmt);
 
+        PushStackFrame();
+
         CompileStackSlot slot = EmitNodeExpression(nif->Condition);
         int32_t ifLabel = m_LabelCount;
         int32_t elseLabel = m_LabelCount + 1;
         int32_t afterIfLabel = (nif->ElseBody) ? m_LabelCount + 2 : m_LabelCount + 1;
+        m_LabelCount += 2;
 
         m_OpCodes.emplace_back(OpCodeType::Jt, OpCodeJump(CompileToRuntimeStackSlot(slot), ifLabel));
 
         if (nif->ElseBody) {
             m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(slot), elseLabel));
+            m_LabelCount += 1;
         }
 
         m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
 
-        // If label
-        CreateLabel();
+        m_OpCodes.emplace_back(OpCodeType::Label, ifLabel, "if");
 
-        EmitNodeStatement(nif->Body);
+        EmitNodeCompound(nif->Body);
         m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
 
         if (nif->ElseBody) {
-            // Else label
-            CreateLabel();
-            EmitNodeStatement(nif->ElseBody);
+            m_OpCodes.emplace_back(OpCodeType::Label, elseLabel, "else");
+
+            EmitNodeCompound(nif->ElseBody);
+
             m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
         }
 
-        // After if label
-        CreateLabel();
+        m_OpCodes.emplace_back(OpCodeType::Label, afterIfLabel, "after if");
+        PopStackFrame();
     }
 
     void Emitter::EmitNodeReturn(NodeStmt* stmt) {
@@ -805,13 +796,15 @@ namespace BlackLua::Internal {
 
         CompileStackSlot slot = EmitNodeExpression(ret->Value);
 
-        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(CompileStackSlot(-(m_CurrentScope->SlotCount + 1))), CompileToRuntimeStackSlot(slot)), "return");
+        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(CompileStackSlot(-(m_CurrentStackFrame->SlotCount + 1))), CompileToRuntimeStackSlot(slot)), "return");
         m_OpCodes.emplace_back(OpCodeType::Ret);
     }
 
     void Emitter::EmitNodeStatement(NodeStmt* stmt) {
-        if (GetNode<StmtScope>(stmt)) {
-            EmitNodeScope(stmt);
+        if (GetNode<StmtCompound>(stmt)) {
+            PushStackFrame();
+            EmitNodeCompound(stmt);
+            PopStackFrame();
         } else if (GetNode<StmtVarDecl>(stmt)) {
             EmitNodeVarDecl(stmt);
         } else if (GetNode<StmtFunctionDecl>(stmt)) {

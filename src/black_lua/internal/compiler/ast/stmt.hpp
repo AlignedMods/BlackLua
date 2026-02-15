@@ -11,7 +11,7 @@ namespace BlackLua::Internal {
 
     struct NodeStmt;
 
-    struct StmtScope {
+    struct StmtCompound {
         NodeList Nodes{};
     };
     
@@ -96,7 +96,7 @@ namespace BlackLua::Internal {
     };
 
     struct NodeStmt {
-        std::variant<StmtScope*,
+        std::variant<StmtCompound*,
                      StmtVarDecl*, StmtParamDecl*, StmtFunctionDecl*,
                      StmtStructDecl*, StmtFieldDecl*, StmtMethodDecl*,
                      StmtWhile*, StmtDoWhile*, StmtFor*, StmtIf*,

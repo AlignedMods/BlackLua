@@ -264,21 +264,12 @@ namespace BlackLua::Internal {
         return CreateVarType(m_Context, PrimitiveType::Invalid);
     }
 
-    void TypeChecker::CheckNodeScope(NodeStmt* stmt) {
-        StmtScope* scope = GetNode<StmtScope>(stmt);
+    void TypeChecker::CheckNodeCompound(NodeStmt* stmt) {
+        StmtCompound* compound = GetNode<StmtCompound>(stmt);
 
-        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-        newScope->Parent = m_CurrentScope;
-        if (m_CurrentScope) {
-            newScope->ReturnType = m_CurrentScope->ReturnType;
+        for (size_t i = 0; i < compound->Nodes.Size; i++) {
+            CheckNode(compound->Nodes.Items[i]);
         }
-        m_CurrentScope = newScope;
-
-        for (size_t i = 0; i < scope->Nodes.Size; i++) {
-            CheckNode(scope->Nodes.Items[i]);
-        }
-
-        m_CurrentScope = m_CurrentScope->Parent;
     }
 
     void TypeChecker::CheckNodeVarDecl(NodeStmt* stmt) {
@@ -333,22 +324,15 @@ namespace BlackLua::Internal {
                 m_DeclaredSymbols[fmt::format("{}__{}", name, mdecl->Name)] = { type, GetNode<NodeStmt>(decl->Fields.Items[i]) };
                 mdecl->ResolvedType = type;
                 
-                StmtScope* scope = GetNode<StmtScope>(mdecl->Body);
-                
-                Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-                newScope->Parent = m_CurrentScope;
-                newScope->ReturnType = type;
-                m_CurrentScope = newScope;
+                PushScope(type);
                 
                 for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
                     CheckNode(mdecl->Parameters.Items[i]);
                 }
                 
-                for (size_t i = 0; i < scope->Nodes.Size; i++) {
-                    CheckNode(scope->Nodes.Items[i]);
-                }
+                CheckNodeCompound(mdecl->Body);
                 
-                m_CurrentScope = m_CurrentScope->Parent;
+                PopScope();
             }
         }
         
@@ -381,47 +365,52 @@ namespace BlackLua::Internal {
         decl->ResolvedType = type;
         
         if (decl->Body) {
-            StmtScope* scope = GetNode<StmtScope>(decl->Body);
-        
-            Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-            newScope->Parent = m_CurrentScope;
-            newScope->ReturnType = type;
-            m_CurrentScope = newScope;
+            PushScope(type);
             
             for (size_t i = 0; i < decl->Parameters.Size; i++) {
                 CheckNode(decl->Parameters.Items[i]);
             }
             
-            for (size_t i = 0; i < scope->Nodes.Size; i++) {
-                CheckNode(scope->Nodes.Items[i]);
-            }
+            CheckNodeCompound(decl->Body);
             
-            m_CurrentScope = m_CurrentScope->Parent;
+            PopScope();
         }
     }
 
     void TypeChecker::CheckNodeWhile(NodeStmt* stmt) {
         StmtWhile* wh = GetNode<StmtWhile>(stmt);
         
+        PushScope();
         CheckNodeExpression(wh->Condition);
-        CheckNodeScope(wh->Body);
+        CheckNodeCompound(wh->Body);
+        PopScope();
     }
 
     void TypeChecker::CheckNodeDoWhile(NodeStmt* stmt) {
         StmtDoWhile* dowh = GetNode<StmtDoWhile>(stmt);
 
-        CheckNodeScope(dowh->Body);
+        PushScope();
+
+        CheckNodeCompound(dowh->Body);
         CheckNodeExpression(dowh->Condition);
+
+        PopScope();
     }
 
     void TypeChecker::CheckNodeIf(NodeStmt* stmt) {
         StmtIf* nif = GetNode<StmtIf>(stmt);
 
+        PushScope();
+
         CheckNodeExpression(nif->Condition);
-        CheckNodeStatement(nif->Body);
+        CheckNodeCompound(nif->Body);
         if (nif->ElseBody) {
-            CheckNodeStatement(nif->ElseBody);
+            PushScope();
+            CheckNodeCompound(nif->ElseBody);
+            PopScope();
         }
+
+        PopScope();
     }
 
     void TypeChecker::CheckNodeReturn(NodeStmt* stmt) {
@@ -454,8 +443,10 @@ namespace BlackLua::Internal {
     }
 
     void TypeChecker::CheckNodeStatement(NodeStmt* stmt) {
-        if (GetNode<StmtScope>(stmt)) {
-            CheckNodeScope(stmt);
+        if (GetNode<StmtCompound>(stmt)) {
+            PushScope();
+            CheckNodeCompound(stmt);
+            PopScope();
         } else if (GetNode<StmtVarDecl>(stmt)) {
             CheckNodeVarDecl(stmt);
         } else if (GetNode<StmtParamDecl>(stmt)) {
@@ -606,6 +597,24 @@ namespace BlackLua::Internal {
         }
 
         return type;
+    }
+
+    void TypeChecker::PushScope(VariableType* returnType) {
+        Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
+        newScope->Parent = m_CurrentScope;
+        if (returnType) {
+            newScope->ReturnType = returnType;
+        } else {
+            if (m_CurrentScope) {
+                newScope->ReturnType = m_CurrentScope->ReturnType;
+            }
+        }
+
+        m_CurrentScope = newScope;
+    }
+
+    void TypeChecker::PopScope() {
+        m_CurrentScope = m_CurrentScope->Parent;
     }
 
     bool TypeChecker::IsLValue(NodeExpr* expr) {

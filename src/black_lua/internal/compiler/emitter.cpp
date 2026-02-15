@@ -35,8 +35,8 @@ namespace BlackLua::Internal {
         }
     }
 
-    Node* Emitter::Peek(size_t count) {
-        if (m_Index + count < m_Nodes->size()) {
+    Node* Emitter::Peek() {
+        if (m_Index < m_Nodes->size()) {
             return m_Nodes->at(m_Index);
         } else {
             return nullptr;
@@ -49,218 +49,508 @@ namespace BlackLua::Internal {
         return m_Nodes->at(m_Index++);
     }
 
-    void Emitter::EmitConstant(Node* node) {
-        switch (node->Type) {
-            case NodeType::Constant: {
-                NodeConstant* constant = std::get<NodeConstant*>(node->Data);
-
-                if (constant->Type != NodeType::String) {
-                    m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(constant->ResolvedType)));
-                    m_SlotCount++;
-                }
-
-                switch (constant->Type) {
-                    case NodeType::Bool: {
-                        NodeBool* b = std::get<NodeBool*>(std::get<NodeConstant*>(node->Data)->Data);
-                    
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 1, &b->Value, true));
-                    
-                        break;
-                    }
-                    
-                    case NodeType::Char: {
-                        NodeChar* c = std::get<NodeChar*>(std::get<NodeConstant*>(node->Data)->Data);
-                    
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 1, &c->Char, true));
-                    
-                        break;
-                    }
-                    
-                    case NodeType::Int: {
-                        NodeInt* i = std::get<NodeInt*>(std::get<NodeConstant*>(node->Data)->Data);
-                    
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 4, &i->Int, true));
-                    
-                        break;
-                    }
-                    
-                    case NodeType::Long: {
-                        NodeLong* l = std::get<NodeLong*>(std::get<NodeConstant*>(node->Data)->Data);
-                    
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 8, &l->Long, true));
-                    
-                        break;
-                    }
-                    
-                    case NodeType::Float: {
-                        NodeFloat* f = std::get<NodeFloat*>(std::get<NodeConstant*>(node->Data)->Data);
-                    
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 4, &f->Float, true));
-                    
-                        break;
-                    }
-                    
-                    case NodeType::Double: {
-                        NodeDouble* d = std::get<NodeDouble*>(std::get<NodeConstant*>(node->Data)->Data);
-                    
-                        m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 8, &d->Double, true));
-                    
-                        break;
-                    }
-
-                    case NodeType::String: {
-                        NodeString* s = std::get<NodeString*>(std::get<NodeConstant*>(node->Data)->Data);
-                    
-                        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(s->String.Size()));
-                        m_SlotCount++;
-                        m_OpCodes.emplace_back(OpCodeType::StoreString, OpCodeStore(-1, s->String.Size(), s->String.Data(), true));
-                    
-                        break;
-                    }
-                }
-
-                m_ConstantMap[node] = CompileStackSlot(m_SlotCount, false);
-
-                break;
+    void Emitter::EmitConstantExpr(NodeExpr* expr) {
+        if (ExprConstant* constant = GetNode<ExprConstant>(expr)) {
+            if (!GetNode<ConstantString>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(constant->ResolvedType)));
+                m_SlotCount++;
             }
 
-            case NodeType::Scope: {
-                NodeScope* scope = std::get<NodeScope*>(node->Data);
-
-                for (size_t i = 0; i < scope->Nodes.Size; i++) {
-                    EmitConstant(scope->Nodes.Items[i]);
-                }
-
-                break;
+            if (ConstantBool* b = GetNode<ConstantBool>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 1, &b->Value, true));
             }
 
-            case NodeType::VarDecl: {
-                NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
-
-                if (decl->Value) {
-                    EmitConstant(decl->Value);
-                }
-
-                break;
+            if (ConstantChar* c = GetNode<ConstantChar>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 1, &c->Char, true));
             }
 
-            case NodeType::StructDecl: {
-                auto decl = GetNode<NodeStructDecl>(node);
-
-                for (size_t i = 0; i < decl->Fields.Size; i++) {
-                    if (decl->Fields.Items[i]->Type == NodeType::MethodDecl) {
-                        auto mdecl = GetNode<NodeMethodDecl>(decl->Fields.Items[i]);
-
-                        EmitConstant(mdecl->Body);
-                    }
-                }
-
-                break;
+            if (ConstantInt* i = GetNode<ConstantInt>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 4, &i->Int, true));
             }
 
-            case NodeType::FunctionDecl: {
-                NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
-
-                for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                    EmitConstant(decl->Parameters.Items[i]);
-                }
-
-                if (decl->Body) {
-                    EmitConstant(decl->Body);
-                }
-
-                break;
+            if (ConstantLong* l = GetNode<ConstantLong>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 8, &l->Long, true));
             }
 
-            case NodeType::While: {
-                NodeWhile* wh = std::get<NodeWhile*>(node->Data);
-
-                EmitConstant(wh->Condition);
-                EmitConstant(wh->Body);
-
-                break;
-            } 
-
-            case NodeType::If: {
-                NodeIf* nif = std::get<NodeIf*>(node->Data);
-
-                EmitConstant(nif->Condition);
-                EmitConstant(nif->Body);
-
-                if (nif->ElseBody) {
-                    EmitConstant(nif->ElseBody);
-                }
-
-                break;
+            if (ConstantFloat* f = GetNode<ConstantFloat>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 4, &f->Float, true));
             }
 
-            case NodeType::Return: {
-                NodeReturn* ret = std::get<NodeReturn*>(node->Data);
-
-                EmitConstant(ret->Value);
-
-                break;
+            if (ConstantDouble* d = GetNode<ConstantDouble>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 8, &d->Double, true));
             }
 
-            case NodeType::ArrayAccessExpr: {
-                NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(node->Data);
-
-                EmitConstant(expr->Index);
-                break;
+            if (ConstantString* s = GetNode<ConstantString>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(s->String.Size()));
+                m_SlotCount++;
+                m_OpCodes.emplace_back(OpCodeType::StoreString, OpCodeStore(-1, s->String.Size(), s->String.Data(), true));
             }
 
-            case NodeType::ParenExpr: {
-                NodeParenExpr* expr = std::get<NodeParenExpr*>(node->Data);
+            m_ConstantMap[expr] = CompileStackSlot(m_SlotCount, false);
+            return;
+        }
 
-                EmitConstant(expr->Expression);
-                break;
+        if (ExprArrayAccess* arrAccess = GetNode<ExprArrayAccess>(expr)) {
+            EmitConstantExpr(arrAccess->Index);
+            return;
+        }
+
+        if (ExprParen* paren = GetNode<ExprParen>(expr)) {
+            EmitConstantExpr(paren->Expression);
+            return;
+        }
+
+        if (ExprCast* cast = GetNode<ExprCast>(expr)) {
+            EmitConstantExpr(cast->Expression);
+            return;
+        }
+
+        if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
+            for (size_t i = 0; i < call->Arguments.Size; i++) {
+                EmitConstantExpr(GetNode<NodeExpr>(call->Arguments.Items[i]));
             }
+            return;
+        }
 
-            case NodeType::CastExpr: {
-                NodeCastExpr* expr = std::get<NodeCastExpr*>(node->Data);
-
-                EmitConstant(expr->Expression);
-                break;
+        if (ExprCall* call = GetNode<ExprCall>(expr)) {
+            for (size_t i = 0; i < call->Arguments.Size; i++) {
+                EmitConstantExpr(GetNode<NodeExpr>(call->Arguments.Items[i]));
             }
+            return;
+        }
 
-            case NodeType::MethodCallExpr: {
-                auto expr = GetNode<NodeMethodCallExpr>(node);
+        if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
+            EmitConstantExpr(unOp->Expression);
+            return;
+        }
 
-                for (size_t i = 0; i < expr->Arguments.Size; i++) {
-                    EmitConstant(expr->Arguments.Items[i]);
-                }
-
-                break;
-            }
-
-            case NodeType::FunctionCallExpr: {
-                NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
-
-                for (size_t i = 0; i < expr->Arguments.Size; i++) {
-                    EmitConstant(expr->Arguments.Items[i]);
-                }
-                break;
-            }
-
-            case NodeType::UnaryExpr: {
-                NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(node->Data);
-
-                EmitConstant(expr->Expression);
-                break;
-            }
-
-            case NodeType::BinExpr: {
-                NodeBinExpr* expr = std::get<NodeBinExpr*>(node->Data);
-
-                EmitConstant(expr->LHS);
-                EmitConstant(expr->RHS);
-                break;
-            }
+        if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
+            EmitConstantExpr(binOp->LHS);
+            EmitConstantExpr(binOp->RHS);
+            return;
         }
     }
 
-    void Emitter::EmitNodeScope(Node* node) {
-        NodeScope* scope = std::get<NodeScope*>(node->Data);
+    void Emitter::EmitConstantStatement(NodeStmt* stmt) {
+        if (StmtScope* scope = GetNode<StmtScope>(stmt)) {
+            for (size_t i = 0; i < scope->Nodes.Size; i++) {
+                EmitConstant(scope->Nodes.Items[i]);
+            }
+            return;
+        }
+
+        if (StmtVarDecl* decl = GetNode<StmtVarDecl>(stmt)) {
+            if (decl->Value) {
+                EmitConstantExpr(decl->Value);
+            }
+            return;
+        }
+
+        if (StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(stmt)) {
+            for (size_t i = 0; i < decl->Parameters.Size; i++) {
+                EmitConstant(decl->Parameters.Items[i]);
+            }
+
+            if (decl->Body) {
+                EmitConstantStatement(decl->Body);
+            }
+            return;
+        }
+
+        if (StmtStructDecl* decl = GetNode<StmtStructDecl>(stmt)) {
+            for (size_t i = 0; i < decl->Fields.Size; i++) {
+                if (StmtMethodDecl* mdecl = GetNode<StmtMethodDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
+                    EmitConstantStatement(mdecl->Body);
+                }
+            }
+            return;
+        }
+
+        if (StmtWhile* wh = GetNode<StmtWhile>(stmt)) {
+            EmitConstantExpr(wh->Condition);
+            EmitConstantStatement(wh->Body);
+            return;
+        }
+
+        if (StmtDoWhile* doWh = GetNode<StmtDoWhile>(stmt)) {
+            EmitConstantExpr(doWh->Condition);
+            EmitConstantStatement(doWh->Body);
+            return;
+        }
+
+        if (StmtIf* nif = GetNode<StmtIf>(stmt)) {
+            EmitConstantExpr(nif->Condition);
+            EmitConstantStatement(nif->Body);
+
+            if (nif->ElseBody) {
+                EmitConstantStatement(nif->ElseBody);
+            }
+            return;
+        }
+
+        if (StmtReturn* ret = GetNode<StmtReturn>(stmt)) {
+            EmitConstantExpr(ret->Value);
+            return;
+        }
+    }
+
+    void Emitter::EmitConstant(Node* node) {
+        if (NodeExpr* expr = GetNode<NodeExpr>(node)) {
+            EmitConstantExpr(expr);
+        } else if (NodeStmt* stmt = GetNode<NodeStmt>(node)) {
+            EmitConstantStatement(stmt);
+        }
+    }
+
+    StackSlotIndex Emitter::CompileToRuntimeStackSlot(CompileStackSlot slot) {
+        if (slot.Relative) {
+            if (m_CurrentScope) {
+                return StackSlotIndex(slot.Slot.Slot - static_cast<int32_t>(m_CurrentScope->SlotCount) - 1, slot.Slot.Offset, slot.Slot.Size);
+            } else {
+                return StackSlotIndex(slot.Slot.Slot - m_SlotCount - 1, slot.Slot.Offset, slot.Slot.Size);
+            }
+        } else {
+            return slot.Slot;
+        }
+        
+        BLUA_ASSERT(false, "Unreachable!");
+    }
+
+    int32_t Emitter::CreateLabel(const std::string& debugData) {
+        m_OpCodes.emplace_back(OpCodeType::Label, static_cast<int32_t>(m_LabelCount), debugData);
+        m_LabelCount++;
+        return static_cast<int32_t>(m_LabelCount - 1);
+    }
+
+    void Emitter::PushBytes(size_t bytes, const std::string& debugData) {
+        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(bytes), debugData);
+    }
+
+    void Emitter::IncrementStackSlotCount() {
+        (m_CurrentScope) ? m_CurrentScope->SlotCount++ : m_SlotCount++;
+    }
+
+    CompileStackSlot Emitter::EmitNodeExpression(NodeExpr* expr) {
+        if (GetNode<ExprConstant>(expr)) {
+            return m_ConstantMap.at(expr);
+        }
+
+        if (ExprVarRef* ref = GetNode<ExprVarRef>(expr)) {
+            std::string ident = fmt::format("{}", ref->Identifier);
+        
+            // Loop backward through all the scopes
+            Scope* currentScope = m_CurrentScope;
+            while (currentScope) {
+                if (currentScope->DeclaredSymbols.contains(ident)) {
+                    return CompileStackSlot(currentScope->DeclaredSymbols.at(ident).Index, true);
+                }
+        
+                currentScope = currentScope->Parent;
+            }
+        
+            // Check global symbols
+            if (m_DeclaredSymbols.contains(fmt::format("{}", ref->Identifier))) {
+                return CompileStackSlot(m_DeclaredSymbols.at(fmt::format("{}", ref->Identifier)).Index, false);
+            }
+        
+            BLUA_ASSERT(false, "Unreachable!");
+            return {};
+        }
+
+        if (ExprArrayAccess* arrAccess = GetNode<ExprArrayAccess>(expr)) {
+            CompileStackSlot slot = EmitNodeExpression(arrAccess->Parent);
+            CompileStackSlot index = EmitNodeExpression(arrAccess->Index);
+        
+            m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(slot));
+            IncrementStackSlotCount();
+            m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(index));
+            IncrementStackSlotCount();
+            m_OpCodes.emplace_back(OpCodeType::PushBytes, GetTypeSize(arrAccess->ResolvedType));
+            IncrementStackSlotCount();
+            m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
+        
+            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+        }
+
+        if (ExprMember* mem = GetNode<ExprMember>(expr)) {
+            CompileStackSlot slot = EmitNodeExpression(mem->Parent);
+        
+            VariableType* structType = mem->ResolvedParentType;
+            for (const auto& field : std::get<StructDeclaration>(structType->Data).Fields) {
+                if (field.Identifier == mem->Member) {
+                    CompileStackSlot s = slot;
+                    s.Slot.Offset += field.Offset;
+                    s.Slot.Size = GetTypeSize(field.ResolvedType);
+                    return s;
+                }
+            }
+        
+            BLUA_ASSERT(false, "Unreachable!");
+        
+            return {};
+        }
+
+        if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
+            VariableType* structType = call->ResolvedParentType;
+        
+            Declaration decl = m_DeclaredSymbols.at(fmt::format("{}__{}", std::get<StructDeclaration>(structType->Data).Identifier, call->Member));
+        
+            std::vector<CompileStackSlot> parameters; 
+        
+            for (size_t i = 0; i < call->Arguments.Size; i++) {
+                CompileStackSlot slot = EmitNodeExpression(GetNode<NodeExpr>(call->Arguments.Items[i]));
+        
+                parameters.push_back(slot);
+            }
+        
+            for (const auto& p : parameters) {
+                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
+                IncrementStackSlotCount();
+            }
+        
+            if (decl.Size != 0) {
+                PushBytes(decl.Size, "return slot");
+                IncrementStackSlotCount();
+            }
+        
+            m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
+            
+            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+        }
+
+        if (ExprCall* call = GetNode<ExprCall>(expr)) {
+            if (call->Extern) {
+                std::vector<CompileStackSlot> parameters; 
+        
+                for (size_t i = 0; i < call->Arguments.Size; i++) {
+                    CompileStackSlot slot = EmitNodeExpression(GetNode<NodeExpr>(call->Arguments.Items[i]));
+                    parameters.push_back(slot);
+                }
+        
+                for (const auto& p : parameters) {
+                    m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
+                    IncrementStackSlotCount();
+                }
+        
+                if (call->ResolvedReturnType->Type != PrimitiveType::Void) {
+                    PushBytes(GetTypeSize(call->ResolvedReturnType), "return slot");
+                    IncrementStackSlotCount();
+                }
+
+                m_OpCodes.emplace_back(OpCodeType::CallExtern, fmt::format("{}", call->Name));
+            } else {
+                Declaration decl = m_DeclaredSymbols.at(fmt::format("{}", call->Name));
+        
+                std::vector<CompileStackSlot> parameters; 
+        
+                for (size_t i = 0; i < call->Arguments.Size; i++) {
+                    CompileStackSlot slot = EmitNodeExpression(GetNode<NodeExpr>(call->Arguments.Items[i]));
+                    parameters.push_back(slot);
+                }
+        
+                for (const auto& p : parameters) {
+                    m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
+                    IncrementStackSlotCount();
+                }
+        
+                if (call->ResolvedReturnType->Type != PrimitiveType::Void) {
+                    PushBytes(GetTypeSize(call->ResolvedReturnType), "return slot");
+                    IncrementStackSlotCount();
+                }
+
+                m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
+            }
+            
+            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+        }
+        
+        if (ExprParen* paren = GetNode<ExprParen>(expr)) {
+            return EmitNodeExpression(paren->Expression);
+        }
+        
+        if (ExprCast* cast = GetNode<ExprCast>(expr)) {
+            CompileStackSlot slot = EmitNodeExpression(cast->Expression);
+        
+            #define CASE_INNER(primType, op) case PrimitiveType::primType: m_OpCodes.emplace_back(OpCodeType::op, CompileToRuntimeStackSlot(slot)); break
+        
+            #define CASE_OUTER(primType, op, prefix) case PrimitiveType::primType: { \
+                switch (cast->ResolvedDstType->Type) { \
+                    CASE_INNER(Bool, Cast##op##To##prefix##8); \
+                    CASE_INNER(Char, Cast##op##To##prefix##8); \
+                    CASE_INNER(Short, Cast##op##To##prefix##16); \
+                    CASE_INNER(Int, Cast##op##To##prefix##32); \
+                    CASE_INNER(Float, Cast##op##ToF32); \
+                    CASE_INNER(Double, Cast##op##ToF64); \
+                } \
+                break; \
+            }
+        
+            if (cast->ResolvedSrcType->Signed) {
+                if (cast->ResolvedDstType->Signed) {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_OUTER(Bool,   I8,  I)
+                        CASE_OUTER(Char,   I8,  I)
+                        CASE_OUTER(Short,  I16, I)
+                        CASE_OUTER(Int,    I32, I)
+                        CASE_OUTER(Long,   I64, I)
+                        CASE_OUTER(Float,  F32, I)
+                        CASE_OUTER(Double, F64, I)
+                    }
+                } else {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_OUTER(Bool,   I8,  U)
+                        CASE_OUTER(Char,   I8,  U)
+                        CASE_OUTER(Short,  I16, U)
+                        CASE_OUTER(Int,    I32, U)
+                        CASE_OUTER(Long,   I64, U)
+                        CASE_OUTER(Float,  F32, U)
+                        CASE_OUTER(Double, F64, U)
+                    }
+                }
+            } else {
+                if (cast->ResolvedDstType->Signed) {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_OUTER(Bool,   U8,  I)
+                        CASE_OUTER(Char,   U8,  I)
+                        CASE_OUTER(Short,  U16, I)
+                        CASE_OUTER(Int,    U32, I)
+                        CASE_OUTER(Long,   U64, I)
+                        CASE_OUTER(Float,  F32, I)
+                        CASE_OUTER(Double, F64, I)
+                    }
+                } else {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_OUTER(Bool,   U8,  U)
+                        CASE_OUTER(Char,   U8,  U)
+                        CASE_OUTER(Short,  U16, U)
+                        CASE_OUTER(Int,    U32, U)
+                        CASE_OUTER(Long,   U64, U)
+                        CASE_OUTER(Float,  F32, U)
+                        CASE_OUTER(Double, F64, U)
+                    }
+                }
+            }
+        
+            #undef CASE_INNER
+            #undef CASE_OUTER
+            
+            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+        }
+       
+        if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
+            CompileStackSlot slot = EmitNodeExpression(unOp->Expression);
+                
+            #define MATH_OP(baseOp, type, _enum) \
+                if (unOp->ResolvedType->Type == PrimitiveType::_enum) { \
+                    m_OpCodes.emplace_back(OpCodeType::baseOp##type, CompileToRuntimeStackSlot(slot)); \
+                    IncrementStackSlotCount(); \
+                }
+            
+            #define MATH_OP_GROUP(unaryExpr, op) case UnaryOperatorType::unaryExpr: { \
+                if (unOp->ResolvedType->Signed) { \
+                    MATH_OP(op, I8, Bool) \
+                    MATH_OP(op, I8, Char) \
+                    MATH_OP(op, I16, Short) \
+                    MATH_OP(op, I32, Int) \
+                    MATH_OP(op, I64, Long) \
+                } else { \
+                    MATH_OP(op, U8, Bool) \
+                    MATH_OP(op, U8, Char) \
+                    MATH_OP(op, U16, Short) \
+                    MATH_OP(op, U32, Int) \
+                    MATH_OP(op, U64, Long) \
+                } \
+                \
+                MATH_OP(op, F32, Float) \
+                MATH_OP(op, F64, Double) \
+                break; \
+            }
+            
+            switch (unOp->Type) {
+                MATH_OP_GROUP(Negate, Negate)
+            }
+            
+            #undef MATH_OP
+            #undef MATH_OP_GROUP
+            
+            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+        }
+        
+        if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
+            CompileStackSlot rhs = EmitNodeExpression(binOp->RHS);
+            CompileStackSlot lhs = EmitNodeExpression(binOp->LHS);
+            
+            #define MATH_OP(baseOp, type, _enum) \
+                if (binOp->ResolvedSourceType->Type == PrimitiveType::_enum) { \
+                    m_OpCodes.emplace_back(OpCodeType::baseOp##type, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs))); \
+                    IncrementStackSlotCount(); \
+                }
+            
+            #define MATH_OP_GROUP(binExpr, op) case BinaryOperatorType::binExpr: { \
+                if (binOp->ResolvedSourceType->Signed) { \
+                    MATH_OP(op, I8, Bool) \
+                    MATH_OP(op, I8, Char) \
+                    MATH_OP(op, I16, Short) \
+                    MATH_OP(op, I32, Int) \
+                    MATH_OP(op, I64, Long) \
+                } else { \
+                    MATH_OP(op, U8, Bool) \
+                    MATH_OP(op, U8, Char) \
+                    MATH_OP(op, U16, Short) \
+                    MATH_OP(op, U32, Int) \
+                    MATH_OP(op, U64, Long) \
+                } \
+                \
+                MATH_OP(op, F32, Float) \
+                MATH_OP(op, F64, Double) \
+                break; \
+            }
+            
+            switch (binOp->Type) {
+                MATH_OP_GROUP(Add, Add)
+                MATH_OP_GROUP(AddInPlace, Add)
+                MATH_OP_GROUP(Sub, Sub);
+                MATH_OP_GROUP(SubInPlace, Sub);
+                MATH_OP_GROUP(Mul, Mul);
+                MATH_OP_GROUP(MulInPlace, Mul);
+                MATH_OP_GROUP(Div, Div);
+                MATH_OP_GROUP(DivInPlace, Div);
+                MATH_OP_GROUP(Mod, Mod);
+                MATH_OP_GROUP(ModInPlace, Mod);
+            
+                MATH_OP_GROUP(Less, Lt);
+                MATH_OP_GROUP(LessOrEq, Lte);
+                MATH_OP_GROUP(Greater, Gt);
+                MATH_OP_GROUP(GreaterOrEq, Gte);
+                MATH_OP_GROUP(IsEq, Cmp);
+                
+                case BinaryOperatorType::Eq: {
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
+
+                    return lhs;
+                }
+            }
+            
+            switch (binOp->Type) {
+                case BinaryOperatorType::AddInPlace:
+                case BinaryOperatorType::SubInPlace:
+                case BinaryOperatorType::MulInPlace:
+                case BinaryOperatorType::DivInPlace:
+                case BinaryOperatorType::ModInPlace: {
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), -1));
+                    return lhs;
+                }
+            }
+            
+            #undef MATH_OP
+            #undef MATH_OP_GROUP
+            
+            return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
+        }
+    }
+
+    void Emitter::EmitNodeScope(NodeStmt* stmt) {
+        StmtScope* scope = GetNode<StmtScope>(stmt);
 
         m_OpCodes.emplace_back(OpCodeType::PushStackFrame);
 
@@ -277,8 +567,8 @@ namespace BlackLua::Internal {
         m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
     }
 
-    void Emitter::EmitNodeVarDecl(Node* node) {
-        NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
+    void Emitter::EmitNodeVarDecl(NodeStmt* stmt) {
+        StmtVarDecl* decl = GetNode<StmtVarDecl>(stmt);
         
         PushBytes(GetTypeSize(decl->ResolvedType), fmt::format("Declaration of {}", decl->Identifier));
         
@@ -306,22 +596,22 @@ namespace BlackLua::Internal {
         // int var;
         // var = 5;
         if (decl->Value) {
-            NodeBinExpr* expr = m_Context->GetAllocator()->AllocateNamed<NodeBinExpr>();
-            NodeVarRef* ref = m_Context->GetAllocator()->AllocateNamed<NodeVarRef>();
+            ExprBinaryOperator* expr = m_Context->GetAllocator()->AllocateNamed<ExprBinaryOperator>();
+            ExprVarRef* ref = m_Context->GetAllocator()->AllocateNamed<ExprVarRef>();
         
             ref->Identifier = decl->Identifier;
         
-            expr->Type = BinExprType::Eq;
+            expr->Type = BinaryOperatorType::Eq;
             expr->ResolvedType = decl->ResolvedType;
-            expr->LHS = m_Context->GetAllocator()->AllocateNamed<Node>(NodeType::VarRef, ref);
+            expr->LHS = m_Context->GetAllocator()->AllocateNamed<NodeExpr>(ref);
             expr->RHS = decl->Value;
         
-            EmitNodeExpression(m_Context->GetAllocator()->AllocateNamed<Node>(NodeType::BinExpr, expr));
+            EmitNodeExpression(m_Context->GetAllocator()->AllocateNamed<NodeExpr>(expr));
         }
     }
 
-    void Emitter::EmitNodeParamDecl(Node* node) {
-        NodeParamDecl* decl = std::get<NodeParamDecl*>(node->Data);
+    void Emitter::EmitNodeParamDecl(NodeStmt* stmt) {
+        StmtParamDecl* decl = GetNode<StmtParamDecl>(stmt);
         
         PushBytes(GetTypeSize(decl->ResolvedType), fmt::format("Declaration of {}", decl->Identifier));
         auto& map = (m_CurrentScope != 0) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
@@ -339,8 +629,8 @@ namespace BlackLua::Internal {
         map[fmt::format("{}", decl->Identifier)] = d;
     }
 
-    void Emitter::EmitNodeFunctionDecl(Node* node) {
-        NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
+    void Emitter::EmitNodeFunctionDecl(NodeStmt* stmt) {
+        StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(stmt);
         
         if (!decl->Extern && !decl->Body) { return; }
 
@@ -372,14 +662,14 @@ namespace BlackLua::Internal {
             
             // Inject function parameters into the scope
             for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                EmitNodeParamDecl(decl->Parameters.Items[i]);
+                EmitNodeParamDecl(GetNode<NodeStmt>(decl->Parameters.Items[i]));
             
                 // Copy the arguments into the parameters
                 m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(decl->Parameters.Size + 1 + returnSlot)));
                 varsPushed++;
             }
             
-            NodeScope* body = std::get<NodeScope*>(decl->Body->Data);
+            StmtScope* body = GetNode<StmtScope>(decl->Body);
             
             for (size_t i = 0; i < body->Nodes.Size; i++) {
                 EmitNode(body->Nodes.Items[i]);
@@ -393,13 +683,11 @@ namespace BlackLua::Internal {
         }
     }
 
-    void Emitter::EmitNodeStructDecl(Node* node) {
-        NodeStructDecl* decl = std::get<NodeStructDecl*>(node->Data);
+    void Emitter::EmitNodeStructDecl(NodeStmt* stmt) {
+        StmtStructDecl* decl = GetNode<StmtStructDecl>(stmt);
         
         for (size_t i = 0; i < decl->Fields.Size; i++) {
-            if (decl->Fields.Items[i]->Type == NodeType::MethodDecl) {
-                NodeMethodDecl* mdecl = std::get<NodeMethodDecl*>(decl->Fields.Items[i]->Data);
-        
+            if (StmtMethodDecl* mdecl = GetNode<StmtMethodDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
                 std::string ident = fmt::format("{}__{}", decl->Identifier, mdecl->Name);
                 Declaration decl;
                 decl.Index = CreateLabel(fmt::format("method {}", mdecl->Name));
@@ -419,14 +707,14 @@ namespace BlackLua::Internal {
                 
                 // Inject function parameters into the scope
                 for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
-                    EmitNodeParamDecl(mdecl->Parameters.Items[i]);
+                    EmitNodeParamDecl(GetNode<NodeStmt>(mdecl->Parameters.Items[i]));
                 
                     // Copy the arguments into the parameters
                     m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(mdecl->Parameters.Size + 1 + returnSlot)));
                     varsPushed++;
                 }
                 
-                NodeScope* body = std::get<NodeScope*>(mdecl->Body->Data);
+                StmtScope* body = GetNode<StmtScope>(mdecl->Body);
                 
                 for (size_t i = 0; i < body->Nodes.Size; i++) {
                     EmitNode(body->Nodes.Items[i]);
@@ -440,8 +728,8 @@ namespace BlackLua::Internal {
         }
     }
 
-    void Emitter::EmitNodeWhile(Node* node) {
-        NodeWhile* wh = std::get<NodeWhile*>(node->Data);
+    void Emitter::EmitNodeWhile(NodeStmt* stmt) {
+        StmtWhile* wh = GetNode<StmtWhile>(stmt);
 
         int32_t loop = m_LabelCount;
         m_LabelCount++;
@@ -460,7 +748,7 @@ namespace BlackLua::Internal {
         CompileStackSlot slot = EmitNodeExpression(wh->Condition);
         m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(slot), loopEnd), "while loop end");
 
-        NodeScope* scope = std::get<NodeScope*>(wh->Body->Data);
+        StmtScope* scope = GetNode<StmtScope>(wh->Body);
 
         for (size_t i = 0; i < scope->Nodes.Size; i++) {
             EmitNode(scope->Nodes.Items[i]);
@@ -475,8 +763,12 @@ namespace BlackLua::Internal {
         m_CurrentScope = m_CurrentScope->Parent;
     }
 
-    void Emitter::EmitNodeIf(Node* node) {
-        NodeIf* nif = std::get<NodeIf*>(node->Data);
+    void Emitter::EmitNodeDoWhile(NodeStmt* stmt) {
+        BLUA_ASSERT(false, "TODO");
+    }
+
+    void Emitter::EmitNodeIf(NodeStmt* stmt) {
+        StmtIf* nif = GetNode<StmtIf>(stmt);
 
         CompileStackSlot slot = EmitNodeExpression(nif->Condition);
         int32_t ifLabel = m_LabelCount;
@@ -494,13 +786,13 @@ namespace BlackLua::Internal {
         // If label
         CreateLabel();
 
-        EmitNode(nif->Body);
+        EmitNodeStatement(nif->Body);
         m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
 
         if (nif->ElseBody) {
             // Else label
             CreateLabel();
-            EmitNode(nif->ElseBody);
+            EmitNodeStatement(nif->ElseBody);
             m_OpCodes.emplace_back(OpCodeType::Jmp, afterIfLabel);
         }
 
@@ -508,8 +800,8 @@ namespace BlackLua::Internal {
         CreateLabel();
     }
 
-    void Emitter::EmitNodeReturn(Node* node) {
-        NodeReturn* ret = std::get<NodeReturn*>(node->Data);
+    void Emitter::EmitNodeReturn(NodeStmt* stmt) {
+        StmtReturn* ret = GetNode<StmtReturn>(stmt);
 
         CompileStackSlot slot = EmitNodeExpression(ret->Value);
 
@@ -517,425 +809,31 @@ namespace BlackLua::Internal {
         m_OpCodes.emplace_back(OpCodeType::Ret);
     }
 
-    CompileStackSlot Emitter::EmitNodeExpression(Node* node) {
-        switch (node->Type) {
-            case NodeType::Constant: {
-                return m_ConstantMap.at(node);
-                break;
-            }
-        
-            case NodeType::VarRef: {
-                NodeVarRef* ref = std::get<NodeVarRef*>(node->Data);
-                std::string ident = fmt::format("{}", ref->Identifier);
-        
-                // Loop backward through all the scopes
-                Scope* currentScope = m_CurrentScope;
-                while (currentScope) {
-                    if (currentScope->DeclaredSymbols.contains(ident)) {
-                        return CompileStackSlot(currentScope->DeclaredSymbols.at(ident).Index, true);
-                    }
-        
-                    currentScope = currentScope->Parent;
-                }
-        
-                // Check global symbols
-                if (m_DeclaredSymbols.contains(fmt::format("{}", ref->Identifier))) {
-                    return CompileStackSlot(m_DeclaredSymbols.at(fmt::format("{}", ref->Identifier)).Index, false);
-                }
-        
-                BLUA_ASSERT(false, "Unreachable!");
-                return {};
-                break;
-            }
-        
-            case NodeType::ArrayAccessExpr: {
-                NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(node->Data);
-        
-                CompileStackSlot slot = EmitNodeExpression(expr->Parent);
-                CompileStackSlot index = EmitNodeExpression(expr->Index);
-        
-                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(slot));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(index));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::PushBytes, GetTypeSize(expr->ResolvedType));
-                IncrementStackSlotCount();
-                m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
-        
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-        
-            case NodeType::MemberExpr: {
-                NodeMemberExpr* expr = std::get<NodeMemberExpr*>(node->Data);
-                CompileStackSlot slot = EmitNodeExpression(expr->Parent);
-        
-                VariableType* structType = expr->ResolvedParentType;
-                for (const auto& field : std::get<StructDeclaration>(structType->Data).Fields) {
-                    if (field.Identifier == expr->Member) {
-                        CompileStackSlot s = slot;
-                        s.Slot.Offset += field.Offset;
-                        s.Slot.Size = GetTypeSize(field.ResolvedType);
-                        return s;
-                    }
-                }
-        
-                BLUA_ASSERT(false, "Unreachable!");
-        
-                return {};
-                break;
-            }
-        
-            case NodeType::MethodCallExpr: {
-                NodeMethodCallExpr* expr = std::get<NodeMethodCallExpr*>(node->Data);
-                VariableType* structType = expr->ResolvedParentType;
-        
-                Declaration decl = m_DeclaredSymbols.at(fmt::format("{}__{}", std::get<StructDeclaration>(structType->Data).Identifier, expr->Member));
-        
-                std::vector<CompileStackSlot> parameters; 
-        
-                for (size_t i = 0; i < expr->Arguments.Size; i++) {
-                    CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
-        
-                    parameters.push_back(slot);
-                }
-        
-                for (const auto& p : parameters) {
-                    m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
-                    IncrementStackSlotCount();
-                }
-        
-                if (decl.Size != 0) {
-                    PushBytes(decl.Size, "return slot");
-                    IncrementStackSlotCount();
-                }
-        
-                m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
-                
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-        
-            case NodeType::FunctionCallExpr: {
-                NodeFunctionCallExpr* expr = std::get<NodeFunctionCallExpr*>(node->Data);
-                if (expr->Extern) {
-                    std::vector<CompileStackSlot> parameters; 
-        
-                    for (size_t i = 0; i < expr->Arguments.Size; i++) {
-                        CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
-                        parameters.push_back(slot);
-                    }
-        
-                    for (const auto& p : parameters) {
-                        m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
-                        IncrementStackSlotCount();
-                    }
-        
-                    if (expr->ResolvedReturnType->Type != PrimitiveType::Void) {
-                        PushBytes(GetTypeSize(expr->ResolvedReturnType), "return slot");
-                        IncrementStackSlotCount();
-                    }
-
-                    m_OpCodes.emplace_back(OpCodeType::CallExtern, fmt::format("{}", expr->Name));
-                } else {
-                    Declaration decl = m_DeclaredSymbols.at(fmt::format("{}", expr->Name));
-        
-                    std::vector<CompileStackSlot> parameters; 
-        
-                    for (size_t i = 0; i < expr->Arguments.Size; i++) {
-                        CompileStackSlot slot = EmitNodeExpression(expr->Arguments.Items[i]);
-                        parameters.push_back(slot);
-                    }
-        
-                    for (const auto& p : parameters) {
-                        m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
-                        IncrementStackSlotCount();
-                    }
-        
-                    if (expr->ResolvedReturnType->Type != PrimitiveType::Void) {
-                        PushBytes(GetTypeSize(expr->ResolvedReturnType), "return slot");
-                        IncrementStackSlotCount();
-                    }
-
-                    m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
-                }
-                
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-        
-            case NodeType::ParenExpr: {
-                NodeParenExpr* expr = std::get<NodeParenExpr*>(node->Data);
-        
-                return EmitNodeExpression(expr->Expression);
-                break;
-            }
-        
-            case NodeType::CastExpr: {
-                NodeCastExpr* expr = std::get<NodeCastExpr*>(node->Data);
-                
-                CompileStackSlot slot = EmitNodeExpression(expr->Expression);
-        
-                #define CASE_INNER(primType, op) case PrimitiveType::primType: m_OpCodes.emplace_back(OpCodeType::op, CompileToRuntimeStackSlot(slot)); break
-        
-                #define CASE_OUTER(primType, op, prefix) case PrimitiveType::primType: { \
-                    switch (expr->ResolvedDstType->Type) { \
-                        CASE_INNER(Bool, Cast##op##To##prefix##8); \
-                        CASE_INNER(Char, Cast##op##To##prefix##8); \
-                        CASE_INNER(Short, Cast##op##To##prefix##16); \
-                        CASE_INNER(Int, Cast##op##To##prefix##32); \
-                        CASE_INNER(Float, Cast##op##ToF32); \
-                        CASE_INNER(Double, Cast##op##ToF64); \
-                    } \
-                    break; \
-                }
-        
-                if (expr->ResolvedSrcType->Signed) {
-                    if (expr->ResolvedDstType->Signed) {
-                        switch (expr->ResolvedSrcType->Type) {
-                            CASE_OUTER(Bool,   I8,  I)
-                            CASE_OUTER(Char,   I8,  I)
-                            CASE_OUTER(Short,  I16, I)
-                            CASE_OUTER(Int,    I32, I)
-                            CASE_OUTER(Long,   I64, I)
-                            CASE_OUTER(Float,  F32, I)
-                            CASE_OUTER(Double, F64, I)
-                        }
-                    } else {
-                        switch (expr->ResolvedSrcType->Type) {
-                            CASE_OUTER(Bool,   I8,  U)
-                            CASE_OUTER(Char,   I8,  U)
-                            CASE_OUTER(Short,  I16, U)
-                            CASE_OUTER(Int,    I32, U)
-                            CASE_OUTER(Long,   I64, U)
-                            CASE_OUTER(Float,  F32, U)
-                            CASE_OUTER(Double, F64, U)
-                        }
-                    }
-                } else {
-                    if (expr->ResolvedDstType->Signed) {
-                        switch (expr->ResolvedSrcType->Type) {
-                            CASE_OUTER(Bool,   U8,  I)
-                            CASE_OUTER(Char,   U8,  I)
-                            CASE_OUTER(Short,  U16, I)
-                            CASE_OUTER(Int,    U32, I)
-                            CASE_OUTER(Long,   U64, I)
-                            CASE_OUTER(Float,  F32, I)
-                            CASE_OUTER(Double, F64, I)
-                        }
-                    } else {
-                        switch (expr->ResolvedSrcType->Type) {
-                            CASE_OUTER(Bool,   U8,  U)
-                            CASE_OUTER(Char,   U8,  U)
-                            CASE_OUTER(Short,  U16, U)
-                            CASE_OUTER(Int,    U32, U)
-                            CASE_OUTER(Long,   U64, U)
-                            CASE_OUTER(Float,  F32, U)
-                            CASE_OUTER(Double, F64, U)
-                        }
-                    }
-                }
-        
-                #undef CASE_INNER
-                #undef CASE_OUTER
-                
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-        
-            case NodeType::UnaryExpr: {
-                NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(node->Data);
-                CompileStackSlot slot = EmitNodeExpression(expr->Expression);
-                
-                #define MATH_OP(baseOp, type, _enum) \
-                    if (expr->ResolvedType->Type == PrimitiveType::_enum) { \
-                        m_OpCodes.emplace_back(OpCodeType::baseOp##type, CompileToRuntimeStackSlot(slot)); \
-                        IncrementStackSlotCount(); \
-                    }
-        
-                #define MATH_OP_GROUP(binExpr, op) case UnaryExprType::binExpr: { \
-                    if (expr->ResolvedType->Signed) { \
-                        MATH_OP(op, I8, Bool) \
-                        MATH_OP(op, I8, Char) \
-                        MATH_OP(op, I16, Short) \
-                        MATH_OP(op, I32, Int) \
-                        MATH_OP(op, I64, Long) \
-                    } else { \
-                        MATH_OP(op, U8, Bool) \
-                        MATH_OP(op, U8, Char) \
-                        MATH_OP(op, U16, Short) \
-                        MATH_OP(op, U32, Int) \
-                        MATH_OP(op, U64, Long) \
-                    } \
-                    \
-                    MATH_OP(op, F32, Float) \
-                    MATH_OP(op, F64, Double) \
-                    break; \
-                }
-        
-                switch (expr->Type) {
-                    MATH_OP_GROUP(Negate, Negate)
-                }
-        
-                #undef MATH_OP
-                #undef MATH_OP_GROUP
-                
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-        
-            case NodeType::BinExpr: {
-                NodeBinExpr* expr = std::get<NodeBinExpr*>(node->Data);
-        
-                CompileStackSlot rhs = EmitNodeExpression(expr->RHS);
-                CompileStackSlot lhs = EmitNodeExpression(expr->LHS);
-        
-                #define MATH_OP(baseOp, type, _enum) \
-                    if (expr->ResolvedSourceType->Type == PrimitiveType::_enum) { \
-                        m_OpCodes.emplace_back(OpCodeType::baseOp##type, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs))); \
-                        IncrementStackSlotCount(); \
-                    }
-        
-                #define MATH_OP_GROUP(binExpr, op) case BinExprType::binExpr: { \
-                    if (expr->ResolvedSourceType->Signed) { \
-                        MATH_OP(op, I8, Bool) \
-                        MATH_OP(op, I8, Char) \
-                        MATH_OP(op, I16, Short) \
-                        MATH_OP(op, I32, Int) \
-                        MATH_OP(op, I64, Long) \
-                    } else { \
-                        MATH_OP(op, U8, Bool) \
-                        MATH_OP(op, U8, Char) \
-                        MATH_OP(op, U16, Short) \
-                        MATH_OP(op, U32, Int) \
-                        MATH_OP(op, U64, Long) \
-                    } \
-                    \
-                    MATH_OP(op, F32, Float) \
-                    MATH_OP(op, F64, Double) \
-                    break; \
-                }
-        
-                switch (expr->Type) {
-                    MATH_OP_GROUP(Add, Add)
-                    MATH_OP_GROUP(AddInPlace, Add)
-                    MATH_OP_GROUP(Sub, Sub);
-                    MATH_OP_GROUP(SubInPlace, Sub);
-                    MATH_OP_GROUP(Mul, Mul);
-                    MATH_OP_GROUP(MulInPlace, Mul);
-                    MATH_OP_GROUP(Div, Div);
-                    MATH_OP_GROUP(DivInPlace, Div);
-                    MATH_OP_GROUP(Mod, Mod);
-                    MATH_OP_GROUP(ModInPlace, Mod);
-        
-                    MATH_OP_GROUP(Less, Lt);
-                    MATH_OP_GROUP(LessOrEq, Lte);
-                    MATH_OP_GROUP(Greater, Gt);
-                    MATH_OP_GROUP(GreaterOrEq, Gte);
-                    MATH_OP_GROUP(IsEq, Cmp);
-                    
-                    case BinExprType::Eq: {
-                        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
-
-                        return lhs;
-                    }
-                }
-        
-                switch (expr->Type) {
-                    case BinExprType::AddInPlace:
-                    case BinExprType::SubInPlace:
-                    case BinExprType::MulInPlace:
-                    case BinExprType::DivInPlace:
-                    case BinExprType::ModInPlace: {
-                        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), -1));
-                        return lhs;
-                    }
-                }
-        
-                #undef MATH_OP
-                #undef MATH_OP_GROUP
-                
-                return CompileStackSlot((m_CurrentScope) ? m_CurrentScope->SlotCount : m_SlotCount, (m_CurrentScope) ? true : false);
-                break;
-            }
-        }
-
-        return {};
-    }
-
-    StackSlotIndex Emitter::CompileToRuntimeStackSlot(CompileStackSlot slot) {
-        if (slot.Relative) {
-            if (m_CurrentScope) {
-                return StackSlotIndex(slot.Slot.Slot - static_cast<int32_t>(m_CurrentScope->SlotCount) - 1, slot.Slot.Offset, slot.Slot.Size);
-            } else {
-                return StackSlotIndex(slot.Slot.Slot - m_SlotCount - 1, slot.Slot.Offset, slot.Slot.Size);
-            }
-        } else {
-            return slot.Slot;
-        }
-        
-        BLUA_ASSERT(false, "Unreachable!");
-    }
-
-    int32_t Emitter::CreateLabel(const std::string& debugData) {
-        m_OpCodes.emplace_back(OpCodeType::Label, static_cast<int32_t>(m_LabelCount), debugData);
-        m_LabelCount++;
-        return static_cast<int32_t>(m_LabelCount - 1);
-    }
-
-    void Emitter::PushBytes(size_t bytes, const std::string& debugData) {
-        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(bytes), debugData);
-    }
-
-    void Emitter::IncrementStackSlotCount() {
-        (m_CurrentScope) ? m_CurrentScope->SlotCount++ : m_SlotCount++;
-    }
-
-    void Emitter::CallConstructor(VariableType* type) {
-        if (type->Type == PrimitiveType::String) {
-            m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__string__init__");
-        }
-
-        if (type->Type == PrimitiveType::Structure) {
-            StructDeclaration& decl = std::get<StructDeclaration>(type->Data);
-
-            // if (!decl.Constructor.empty()) {
-            //     // m_OpCodes.emplace_back(OpCodeType::Call, m_DeclaredSymbols.at(decl.Constructor));
-            // }
+    void Emitter::EmitNodeStatement(NodeStmt* stmt) {
+        if (GetNode<StmtScope>(stmt)) {
+            EmitNodeScope(stmt);
+        } else if (GetNode<StmtVarDecl>(stmt)) {
+            EmitNodeVarDecl(stmt);
+        } else if (GetNode<StmtFunctionDecl>(stmt)) {
+            EmitNodeFunctionDecl(stmt);
+        } else if (GetNode<StmtStructDecl>(stmt)) {
+            EmitNodeStructDecl(stmt);
+        } else if (GetNode<StmtWhile>(stmt)) {
+            EmitNodeWhile(stmt);
+        } else if (GetNode<StmtDoWhile>(stmt)) {
+            EmitNodeDoWhile(stmt);
+        } else if (GetNode<StmtIf>(stmt)) {
+            EmitNodeIf(stmt);
+        } else if (GetNode<StmtReturn>(stmt)) {
+            EmitNodeReturn(stmt);
         }
     }
 
     void Emitter::EmitNode(Node* node) {
-        NodeType t = node->Type;
-
-        if (t == NodeType::VarDecl) {
-            EmitNodeVarDecl(node);
-        } else if (t == NodeType::FunctionDecl) {
-            EmitNodeFunctionDecl(node);
-        } else if (t == NodeType::StructDecl) {
-            EmitNodeStructDecl(node);
-        } else if (t == NodeType::While) {
-            EmitNodeWhile(node);
-        } else if (t == NodeType::If) {
-            EmitNodeIf(node);
-        } else if (t == NodeType::ArrayAccessExpr) {
-            EmitNodeExpression(node);
-        } else if (t == NodeType::MemberExpr) {
-            EmitNodeExpression(node);
-        } else if (t == NodeType::MethodCallExpr) {
-            EmitNodeExpression(node);
-        } else if (t == NodeType::FunctionCallExpr) {
-            EmitNodeExpression(node);
-        } else if (t == NodeType::CastExpr) {
-            EmitNodeExpression(node);
-        } else if (t == NodeType::BinExpr) {
-            EmitNodeExpression(node);
-        } else if (t == NodeType::Scope) {
-            EmitNodeScope(node);
-        } else if (t == NodeType::Return) {
-            EmitNodeReturn(node);
-        } else {
-            BLUA_ASSERT(false, "Unreachable!");
+        if (NodeExpr* expr = GetNode<NodeExpr>(node)) {
+            EmitNodeExpression(expr);
+        } else if (NodeStmt* stmt = GetNode<NodeStmt>(node)) {
+            EmitNodeStatement(stmt);
         }
     }
 

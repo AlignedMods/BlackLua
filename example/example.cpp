@@ -12,10 +12,6 @@ int main(int argc, char** argv) {
     
     fmt::println("{}", vm.GetInt(-1));
 
-    int* mem = new int();
-    void* a = mem;
-    delete a;
-
     context.FreeModule("test.bl");
 
     return 0;

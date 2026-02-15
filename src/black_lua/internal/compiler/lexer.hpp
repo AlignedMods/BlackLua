@@ -173,8 +173,8 @@ namespace BlackLua::Internal {
     struct Token {
         TokenType Type = TokenType::Semi;
         StringView Data;
-        int Line = 0;
-        int Column = 0;
+        size_t Line = 0;
+        size_t Column = 0;
     };
 
     class Lexer {

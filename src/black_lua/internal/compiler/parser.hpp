@@ -1,14 +1,10 @@
 #pragma once
 
-#include "allocator.hpp"
-#include "internal/compiler/variable_type.hpp"
-#include "internal/compiler/ast.hpp"
 #include "internal/compiler/lexer.hpp"
+#include "internal/compiler/ast/expr.hpp"
+#include "internal/compiler/ast/stmt.hpp"
+#include "allocator.hpp"
 #include "context.hpp"
-
-namespace BlackLua {
-    struct Context;
-}
 
 namespace BlackLua::Internal {
 
@@ -30,41 +26,39 @@ namespace BlackLua::Internal {
         // This function cannot fail
         bool Match(TokenType type);
 
-        Node* ParseType(bool external = false);
-
-        Node* ParseVariableDecl(StringBuilder type); // This function expects the first token to be the identifier!
-        Node* ParseFunctionDecl(StringBuilder returnType, bool external = false);
-        Node* ParseExtern();
-
-        Node* ParseStructDecl();
-
-        Node* ParseWhile();
-        Node* ParseDoWhile();
-        Node* ParseFor();
-
-        Node* ParseIf();
-
-        Node* ParseBreak();
-        Node* ParseContinue();
-        Node* ParseReturn();
-
-        // Parses either an rvalue (70, "hello world", { 7, 4, 23 }, ...) or an lvalue (variables)
-        Node* ParseValue();
-        BinExprType ParseOperator();
         StringBuilder ParseVariableType();
         NodeList ParseFunctionParameters();
         bool IsPrimitiveType();
         bool IsVariableType();
-        size_t GetBinaryPrecedence(BinExprType type);
 
-        Node* ParseScope();
+        BinaryOperatorType ParseOperator();
+        size_t GetBinaryPrecedence(BinaryOperatorType type);
+        NodeExpr* ParseValue();
+        NodeExpr* ParseExpression(size_t minbp = 0);
 
-        // Parses an expression (8 + 4, 6.3 - 4, "hello " + "world", ...)
-        // NOTE: For certain reasons a varaible assignment is NOT considered an expression
-        // So int var = 6; is not an expression (6 technically does count as an expression)
-        Node* ParseExpression(size_t minbp = 0);
+        NodeStmt* ParseScope();
 
-        Node* ParseStatement();
+        NodeStmt* ParseType(bool external = false);
+
+        NodeStmt* ParseVariableDecl(StringBuilder type); // This function expects the first token to be the identifier!
+        NodeStmt* ParseFunctionDecl(StringBuilder returnType, bool external = false);
+        NodeStmt* ParseExtern();
+
+        NodeStmt* ParseStructDecl();
+
+        NodeStmt* ParseWhile();
+        NodeStmt* ParseDoWhile();
+        NodeStmt* ParseFor();
+
+        NodeStmt* ParseIf();
+
+        NodeStmt* ParseBreak();
+        NodeStmt* ParseContinue();
+        NodeStmt* ParseReturn();
+
+        NodeStmt* ParseStatement();
+
+        Node* ParseToken();
 
         void ErrorExpected(const StringView msg);
         void ErrorTooLarge(const StringView value);
@@ -80,12 +74,9 @@ namespace BlackLua::Internal {
         }
 
         template <typename T>
-        Node* CreateNode(NodeType type, T* node, size_t line, size_t column) {
-            Node* newNode = new Node();
-            newNode->Type = type;
+        Node* CreateNode(T* node) {
+            Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>();
             newNode->Data = node;
-            newNode->Line = line;
-            newNode->Column = column;
             return newNode;
         }
 

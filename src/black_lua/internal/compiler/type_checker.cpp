@@ -38,8 +38,234 @@ namespace BlackLua::Internal {
         return m_Nodes->at(m_Index++);
     }
 
-    void TypeChecker::CheckNodeScope(Node* node) {
-        NodeScope* scope = std::get<NodeScope*>(node->Data);
+    VariableType* TypeChecker::CheckNodeExpression(NodeExpr* expr) {
+        if (ExprConstant* con = GetNode<ExprConstant>(expr)) {
+            VariableType* type = nullptr;
+        
+            if (GetNode<ConstantBool>(con)) {
+                type = CreateVarType(m_Context, PrimitiveType::Bool);
+            } else if (GetNode<ConstantChar>(con)) {
+                type = CreateVarType(m_Context, PrimitiveType::Char);
+            } else if (ConstantInt* ci = GetNode<ConstantInt>(con)) {
+                type = CreateVarType(m_Context, PrimitiveType::Int, !ci->Unsigned);
+            } else if (ConstantLong* cl = GetNode<ConstantLong>(con)) {
+                type = CreateVarType(m_Context, PrimitiveType::Int, !cl->Unsigned);
+            } else if (GetNode<ConstantFloat>(con)) {
+                type = CreateVarType(m_Context, PrimitiveType::Float);
+            } else if (GetNode<ConstantDouble>(con)) {
+                type = CreateVarType(m_Context, PrimitiveType::Double);
+            } else if (GetNode<ConstantString>(con)) {
+                type = CreateVarType(m_Context, PrimitiveType::String);
+            }
+        
+            con->ResolvedType = type;
+        
+            return type;
+        }
+
+        if (ExprVarRef* ref = GetNode<ExprVarRef>(expr)) {
+            std::string ident = fmt::format("{}", ref->Identifier);
+        
+            // Loop backward through all the scopes
+            Scope* currentScope = m_CurrentScope;
+            while (currentScope) {
+                if (currentScope->DeclaredSymbols.contains(ident)) {
+                    return currentScope->DeclaredSymbols.at(ident).Type;
+                }
+            
+                currentScope = currentScope->Parent;
+            }
+            
+            // Check global symbols
+            if (m_DeclaredSymbols.contains(fmt::format("{}", (ref->Identifier)))) {
+                return m_DeclaredSymbols.at(fmt::format("{}", ref->Identifier)).Type;
+            }
+            
+            // We haven't found a variable
+            ErrorUndeclaredIdentifier(ref->Identifier, expr->Line, expr->Column);
+            return CreateVarType(m_Context, PrimitiveType::Invalid);
+        }
+        
+        if (ExprArrayAccess* arrAccess = GetNode<ExprArrayAccess>(expr)) {
+            VariableType* arrType = CheckNodeExpression(arrAccess->Parent);
+            if (arrType->Type != PrimitiveType::Array) {
+                std::cerr << "Error!\n";
+            }
+        
+            CheckNodeExpression(arrAccess->Index);
+            arrAccess->ResolvedType = std::get<VariableType*>(arrType->Data);
+        
+            return arrAccess->ResolvedType;
+        }
+
+        if (ExprMember* mem = GetNode<ExprMember>(expr)) {
+            VariableType* structType = CheckNodeExpression(mem->Parent);
+            if (structType->Type != PrimitiveType::Structure) {
+                std::cerr << "Error!\n";
+            }
+        
+            mem->ResolvedParentType = structType;
+        
+            StructDeclaration decl = std::get<StructDeclaration>(structType->Data);
+            for (const auto& field : decl.Fields) {
+                if (field.Identifier == mem->Member) {
+                    mem->ResolvedMemberType = field.ResolvedType;
+                    return mem->ResolvedMemberType;
+                }
+            }
+
+            m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Unknown field \"{}\"", mem->Member));
+            return nullptr;
+        }
+
+        if (ExprCall* call = GetNode<ExprCall>(expr)) {
+            std::string name = fmt::format("{}", call->Name);
+            if (m_DeclaredSymbols.contains(name)) {
+                NodeList params;
+            
+                if (StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(m_DeclaredSymbols.at(name).Decl)) {
+                    params = decl->Parameters;
+                    call->Extern = decl->Extern;
+                } else {
+                    ErrorNoMatchingFunction(call->Name, expr->Line, expr->Column);
+                    return CreateVarType(m_Context, PrimitiveType::Invalid);
+                }
+        
+                if (params.Size != call->Arguments.Size) {
+                    ErrorNoMatchingFunction(call->Name, expr->Line, expr->Column);
+                    return CreateVarType(m_Context, PrimitiveType::Invalid);
+                }
+        
+                for (size_t i = 0; i < params.Size; i++) {
+                    Node* param = params.Items[i];
+                    NodeExpr* arg = GetNode<NodeExpr>(call->Arguments.Items[i]);
+        
+                    VariableType* typeParam = GetNode<StmtParamDecl>(GetNode<NodeStmt>((param)))->ResolvedType;
+                    VariableType* typeArg = CheckNodeExpression(arg);
+        
+                    ConversionCost cost = GetConversionCost(typeParam, typeArg);
+                    if (cost.CastNeeded) {
+                        // Perform an implicit cast (if possible)
+                        if (cost.ImplicitCastPossible) {
+                            InsertImplicitCast(arg, typeParam, typeArg);
+                        } else {
+                            m_Context->ReportCompilerError(arg->Line, arg->Column, fmt::format("Mismatched function argument types, parameter type is {}, while argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
+                            m_Error = true;
+                        }
+                    }
+                }
+        
+                call->ResolvedReturnType = m_DeclaredSymbols.at(name).Type;
+                return call->ResolvedReturnType; 
+            }
+
+            ErrorUndeclaredIdentifier(call->Name, expr->Line, expr->Column);
+            return CreateVarType(m_Context, PrimitiveType::Invalid);
+        }
+        
+        if (ExprParen* paren = GetNode<ExprParen>(expr)) {
+            VariableType* type = CheckNodeExpression(paren->Expression);
+        
+            return type; 
+        }
+
+        if (ExprCast* cast = GetNode<ExprCast>(expr)) {
+            if (!cast->ResolvedSrcType) {
+                cast->ResolvedSrcType = CheckNodeExpression(cast->Expression);
+            }
+            
+            if (!cast->ResolvedDstType) {
+                cast->ResolvedDstType = GetVarTypeFromString(cast->Type);
+            }
+            
+            ConversionCost cost = GetConversionCost(cast->ResolvedDstType, cast->ResolvedSrcType);
+            
+            if (!cost.ExplicitCastPossible) {
+                m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Cannot cast from {} to {}", VariableTypeToString(cast->ResolvedSrcType), VariableTypeToString(cast->ResolvedDstType)));
+                m_Error = true;
+            }
+            
+            return cast->ResolvedDstType;
+        }
+        
+        if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
+            VariableType* type = CheckNodeExpression(unOp->Expression);
+        
+            unOp->ResolvedType = type;
+        
+            return type;
+        }
+
+        if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
+            VariableType* typeLHS = CheckNodeExpression(binOp->LHS);
+            VariableType* typeRHS = CheckNodeExpression(binOp->RHS);
+        
+            ConversionCost cost = GetConversionCost(typeLHS, typeRHS);
+            if (cost.CastNeeded) {
+                // Perform an implicit cast (if possible)
+                if (cost.ImplicitCastPossible) {
+                    // We always want to cast to a wider type
+                    // This will check which side of the binary expression we should cast
+                    // One thing to note though, if we have an assignment we cannot cast the left side
+                    if (GetTypeSize(typeLHS) > GetTypeSize(typeRHS) || binOp->Type == BinaryOperatorType::Eq) {
+                        InsertImplicitCast(binOp->RHS, typeLHS, typeRHS);
+                    } else {
+                        InsertImplicitCast(binOp->LHS, typeRHS, typeLHS);
+                    }
+                } else {
+                    m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Mismatched types, have {} and {}", VariableTypeToString(typeLHS), VariableTypeToString(typeRHS)));
+                    m_Error = true;
+                }
+            }
+        
+            VariableType* resolved = nullptr;
+        
+            switch (binOp->Type) {
+                case BinaryOperatorType::Eq: {
+                    if (!IsLValue(binOp->LHS)) {
+                        m_Context->ReportCompilerError(binOp->LHS->Line, binOp->LHS->Column, "Expression must be a modifiable lvalue");
+                        m_Error = true;
+                    }
+
+                    resolved = typeLHS; break;
+                }
+
+                case BinaryOperatorType::Add:
+                case BinaryOperatorType::AddInPlace:
+                case BinaryOperatorType::AddOne:
+                case BinaryOperatorType::Sub:
+                case BinaryOperatorType::SubInPlace:
+                case BinaryOperatorType::SubOne:
+                case BinaryOperatorType::Mul:
+                case BinaryOperatorType::MulInPlace:
+                case BinaryOperatorType::Div:
+                case BinaryOperatorType::DivInPlace:
+                case BinaryOperatorType::Mod:
+                case BinaryOperatorType::ModInPlace:
+                    resolved = typeLHS; break;
+                
+                case BinaryOperatorType::IsEq:
+                case BinaryOperatorType::IsNotEq:
+                case BinaryOperatorType::Less:
+                case BinaryOperatorType::LessOrEq:
+                case BinaryOperatorType::Greater:
+                case BinaryOperatorType::GreaterOrEq:
+                    resolved = CreateVarType(m_Context, PrimitiveType::Bool); break;
+        
+                default: return nullptr;
+            }
+        
+            binOp->ResolvedType = resolved;
+            binOp->ResolvedSourceType = typeLHS;
+            return resolved;
+        }
+        
+        BLUA_ASSERT(false, "Unreachable!");
+        return CreateVarType(m_Context, PrimitiveType::Invalid);
+    }
+
+    void TypeChecker::CheckNodeScope(NodeStmt* stmt) {
+        StmtScope* scope = GetNode<StmtScope>(stmt);
 
         Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
         newScope->Parent = m_CurrentScope;
@@ -55,77 +281,36 @@ namespace BlackLua::Internal {
         m_CurrentScope = m_CurrentScope->Parent;
     }
 
-    void TypeChecker::CheckNodeVarDecl(Node* node) {
-        NodeVarDecl* decl = std::get<NodeVarDecl*>(node->Data);
+    void TypeChecker::CheckNodeVarDecl(NodeStmt* stmt) {
+        StmtVarDecl* decl = GetNode<StmtVarDecl>(stmt);
         
         std::unordered_map<std::string, Declaration>& symbolMap = (m_CurrentScope) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
         if (symbolMap.contains(fmt::format("{}", decl->Identifier))) {
-            m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Redeclaring identifier {}", decl->Identifier));
+            m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redeclaring identifier {}", decl->Identifier));
             m_Error = true;
         }
         
         VariableType* type = GetVarTypeFromString(StringView(decl->Type.Data(), decl->Type.Size()));
-        symbolMap[fmt::format("{}", decl->Identifier)] = { type, node };
+        symbolMap[fmt::format("{}", decl->Identifier)] = { type, stmt };
         
         if (decl->Value) {
             CheckNodeExpression(decl->Value);
         }
 
-        if (type->Type == PrimitiveType::String) {
-            if (decl->Value) {
-                Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>(*decl->Value);
-        
-                if (IsLValue(decl->Value)) {
-                    NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                    call->Name = "bl__string__copy__";
-                    call->Arguments.Append(m_Context, newNode);
-                    call->Extern = true;
-                    call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                    decl->Value->Type = NodeType::FunctionCallExpr;
-                    decl->Value->Data = call;
-                    decl->Value->Line = newNode->Line;
-                    decl->Value->Column = newNode->Column;
-                } else {
-                    NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                    call->Name = "bl__string__construct_from_literal__";
-                    call->Arguments.Append(m_Context, newNode);
-                    call->Extern = true;
-                    call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                    decl->Value->Type = NodeType::FunctionCallExpr;
-                    decl->Value->Data = call;
-                    decl->Value->Line = newNode->Line;
-                    decl->Value->Column = newNode->Column;
-                }
-            } else {
-                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                call->Name = "bl__string__construct__";
-                call->Extern = true;
-                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                decl->Value = m_Context->GetAllocator()->AllocateNamed<Node>();
-                decl->Value->Type = NodeType::FunctionCallExpr;
-                decl->Value->Data = call;
-                decl->Value->Line = node->Line;
-                decl->Value->Column = node->Column;
-            }
-        }
-
         decl->ResolvedType = type;
     }
 
-    void TypeChecker::CheckNodeParamDecl(Node* node) {
-        NodeParamDecl* decl = std::get<NodeParamDecl*>(node->Data);
+    void TypeChecker::CheckNodeParamDecl(NodeStmt* stmt) {
+        StmtParamDecl* decl = GetNode<StmtParamDecl>(stmt);
         
         VariableType* type = GetVarTypeFromString(StringView(decl->Type.Data(), decl->Type.Size()));
-        m_CurrentScope->DeclaredSymbols[fmt::format("{}", decl->Identifier)] = { type, node };
+        m_CurrentScope->DeclaredSymbols[fmt::format("{}", decl->Identifier)] = { type, stmt };
         
         decl->ResolvedType = type;
     }
 
-    void TypeChecker::CheckNodeStructDecl(Node* node) {
-        NodeStructDecl* decl = std::get<NodeStructDecl*>(node->Data);
+    void TypeChecker::CheckNodeStructDecl(NodeStmt* stmt) {
+        StmtStructDecl* decl = GetNode<StmtStructDecl>(stmt);
         
         std::string name = fmt::format("{}", decl->Identifier);
         
@@ -133,79 +318,70 @@ namespace BlackLua::Internal {
         sd.Identifier = decl->Identifier;
         
         for (size_t i = 0; i < decl->Fields.Size; i++) {
-            switch (decl->Fields.Items[i]->Type) {
-                case NodeType::FieldDecl: {
-                    NodeFieldDecl* fdecl = std::get<NodeFieldDecl*>(decl->Fields.Items[i]->Data);
-                    StructFieldDeclaration field;
+            if (StmtFieldDecl* fdecl = GetNode<StmtFieldDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
+                StructFieldDeclaration field;
                 
-                    field.Identifier = fdecl->Identifier;
-                    field.Offset = sd.Size;
-                    field.ResolvedType = GetVarTypeFromString(StringView(fdecl->Type.Data(), fdecl->Type.Size()));
+                field.Identifier = fdecl->Identifier;
+                field.Offset = sd.Size;
+                field.ResolvedType = GetVarTypeFromString(StringView(fdecl->Type.Data(), fdecl->Type.Size()));
         
-                    sd.Size += GetTypeSize(field.ResolvedType);
+                sd.Size += GetTypeSize(field.ResolvedType);
         
-                    sd.Fields.push_back(field);
-        
-                    break;
+                sd.Fields.push_back(field);
+            } else if (StmtMethodDecl* mdecl = GetNode<StmtMethodDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
+                VariableType* type = GetVarTypeFromString(StringView(mdecl->ReturnType.Data(), mdecl->ReturnType.Size()));
+                m_DeclaredSymbols[fmt::format("{}__{}", name, mdecl->Name)] = { type, GetNode<NodeStmt>(decl->Fields.Items[i]) };
+                mdecl->ResolvedType = type;
+                
+                StmtScope* scope = GetNode<StmtScope>(mdecl->Body);
+                
+                Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
+                newScope->Parent = m_CurrentScope;
+                newScope->ReturnType = type;
+                m_CurrentScope = newScope;
+                
+                for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
+                    CheckNode(mdecl->Parameters.Items[i]);
                 }
-        
-                case NodeType::MethodDecl: {
-                    auto mdecl = GetNode<NodeMethodDecl>(decl->Fields.Items[i]);
-                    VariableType* type = GetVarTypeFromString(StringView(mdecl->ReturnType.Data(), mdecl->ReturnType.Size()));
-                    m_DeclaredSymbols[fmt::format("{}__{}", name, mdecl->Name)] = { type, decl->Fields.Items[i] };
-                    mdecl->ResolvedType = type;
-                    
-                    NodeScope* scope = std::get<NodeScope*>(mdecl->Body->Data);
-                    
-                    Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
-                    newScope->Parent = m_CurrentScope;
-                    newScope->ReturnType = type;
-                    m_CurrentScope = newScope;
-                    
-                    for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
-                        CheckNode(mdecl->Parameters.Items[i]);
-                    }
-                    
-                    for (size_t i = 0; i < scope->Nodes.Size; i++) {
-                        CheckNode(scope->Nodes.Items[i]);
-                    }
-                    
-                    m_CurrentScope = m_CurrentScope->Parent;
-                    break;
+                
+                for (size_t i = 0; i < scope->Nodes.Size; i++) {
+                    CheckNode(scope->Nodes.Items[i]);
                 }
+                
+                m_CurrentScope = m_CurrentScope->Parent;
             }
         }
         
         m_DeclaredStructs[name] = sd;
     }
 
-    void TypeChecker::CheckNodeFunctionDecl(Node* node) {
-        NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(node->Data);
+    void TypeChecker::CheckNodeFunctionDecl(NodeStmt* stmt) {
+        StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(stmt);
         
         std::string name = fmt::format("{}", decl->Name);
         if (m_DeclaredSymbols.contains(name)) {
             if (m_DeclaredSymbols.at(name).Extern) {
-                m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Defining function marked extern: {}", decl->Name));
+                m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Defining function marked extern: {}", decl->Name));
                 m_Error = true;
             }
 
-            if (m_DeclaredSymbols.at(name).Decl->Type == NodeType::FunctionDecl) {
-                if (std::get<NodeFunctionDecl*>(m_DeclaredSymbols.at(name).Decl->Data)->Body) {
-                    m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Redefining function body: {}", decl->Name));
+            if (StmtFunctionDecl* fdecl = GetNode<StmtFunctionDecl>(m_DeclaredSymbols.at(name).Decl)) {
+                if (fdecl->Body) {
+                    m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redefining function body: {}", fdecl->Name));
                     m_Error = true;
                 }
             } else {
-                m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Redefining identifier as a different type: {}", decl->Name));
+                m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redefining identifier as a different type: {}", decl->Name));
                 m_Error = true;
             }
         }
         
         VariableType* type = GetVarTypeFromString(StringView(decl->ReturnType.Data(), decl->ReturnType.Size()));
-        m_DeclaredSymbols[name] = { type, node };
+        m_DeclaredSymbols[name] = { type, stmt };
         decl->ResolvedType = type;
         
         if (decl->Body) {
-            NodeScope* scope = std::get<NodeScope*>(decl->Body->Data);
+            StmtScope* scope = GetNode<StmtScope>(decl->Body);
         
             Scope* newScope = m_Context->GetAllocator()->AllocateNamed<Scope>();
             newScope->Parent = m_CurrentScope;
@@ -224,32 +400,32 @@ namespace BlackLua::Internal {
         }
     }
 
-    void TypeChecker::CheckNodeWhile(Node* node) {
-        NodeWhile* wh = std::get<NodeWhile*>(node->Data);
+    void TypeChecker::CheckNodeWhile(NodeStmt* stmt) {
+        StmtWhile* wh = GetNode<StmtWhile>(stmt);
         
         CheckNodeExpression(wh->Condition);
         CheckNodeScope(wh->Body);
     }
 
-    void TypeChecker::CheckNodeDoWhile(Node* node) {
-        NodeDoWhile* dowh = std::get<NodeDoWhile*>(node->Data);
+    void TypeChecker::CheckNodeDoWhile(NodeStmt* stmt) {
+        StmtDoWhile* dowh = GetNode<StmtDoWhile>(stmt);
 
         CheckNodeScope(dowh->Body);
         CheckNodeExpression(dowh->Condition);
     }
 
-    void TypeChecker::CheckNodeIf(Node* node) {
-        NodeIf* nif = std::get<NodeIf*>(node->Data);
+    void TypeChecker::CheckNodeIf(NodeStmt* stmt) {
+        StmtIf* nif = GetNode<StmtIf>(stmt);
 
         CheckNodeExpression(nif->Condition);
-        CheckNode(nif->Body);
+        CheckNodeStatement(nif->Body);
         if (nif->ElseBody) {
-            CheckNode(nif->ElseBody);
+            CheckNodeStatement(nif->ElseBody);
         }
     }
 
-    void TypeChecker::CheckNodeReturn(Node* node) {
-        NodeReturn* ret = std::get<NodeReturn*>(node->Data);
+    void TypeChecker::CheckNodeReturn(NodeStmt* stmt) {
+        StmtReturn* ret = GetNode<StmtReturn>(stmt);
 
         bool canReturn = true;
         if (!m_CurrentScope) {
@@ -259,7 +435,7 @@ namespace BlackLua::Internal {
         }
 
         if (!canReturn) {
-            m_Context->ReportCompilerError(node->Line, node->Column, "Cannot return from a non-function scope");
+            m_Context->ReportCompilerError(stmt->Line, stmt->Column, "Cannot return from a non-function scope");
             m_Error = true;
             return;
         }
@@ -271,401 +447,37 @@ namespace BlackLua::Internal {
             if (cost.ImplicitCastPossible) {
                 InsertImplicitCast(ret->Value, m_CurrentScope->ReturnType, exprType);
             } else {
-                m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Cannot implicitly cast from {} to {}", VariableTypeToString(exprType), VariableTypeToString(m_CurrentScope->ReturnType)));
+                m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Cannot implicitly cast from {} to {}", VariableTypeToString(exprType), VariableTypeToString(m_CurrentScope->ReturnType)));
                 m_Error = true;
             }
         }
-
-        if (exprType->Type == PrimitiveType::String) {
-            Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>((*ret->Value));
-
-            if (IsLValue(ret->Value)) {
-                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                call->Name = "bl__string__copy__";
-                call->Arguments.Append(m_Context, newNode);
-                call->Extern = true;
-                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                ret->Value->Type = NodeType::FunctionCallExpr;
-                ret->Value->Data = call;
-                ret->Value->Line = newNode->Line;
-                ret->Value->Column = newNode->Column;
-            } else {
-                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                call->Name = "bl__string__construct_from_literal__";
-                call->Arguments.Append(m_Context, newNode);
-                call->Extern = true;
-                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                ret->Value->Type = NodeType::FunctionCallExpr;
-                ret->Value->Data = call;
-                ret->Value->Line = newNode->Line;
-                ret->Value->Column = newNode->Column;
-            }
-        }
     }
 
-    VariableType* TypeChecker::CheckNodeExpression(Node* node) {
-        switch (node->Type) {
-            case NodeType::Constant: {
-                auto constant = GetNode<NodeConstant>(node);
-                VariableType* type = nullptr;
-        
-                switch (constant->Type) {
-                    case NodeType::Bool:   type = CreateVarType(m_Context, PrimitiveType::Bool); break;
-                    case NodeType::Char:   type = CreateVarType(m_Context, PrimitiveType::Char); break;
-        
-                    case NodeType::Int: {
-                        auto i = std::get<NodeInt*>(constant->Data);
-                        type = CreateVarType(m_Context, PrimitiveType::Int, !i->Unsigned);
-                        break;
-                    }
-        
-                    case NodeType::Long: {
-                        auto l = std::get<NodeLong*>(constant->Data);
-                        type = CreateVarType(m_Context, PrimitiveType::Long, !l->Unsigned);
-                        break;
-                    }
-        
-                    case NodeType::Float:  type = CreateVarType(m_Context, PrimitiveType::Float); break;
-                    case NodeType::Double: type = CreateVarType(m_Context, PrimitiveType::Double); break;
-                    case NodeType::String: type = CreateVarType(m_Context, PrimitiveType::String); break;
-                }
-        
-                constant->ResolvedType = type;
-        
-                return type;
-            }
-        
-            case NodeType::VarRef: {
-                auto ref = GetNode<NodeVarRef>(node);
-        
-                std::string ident = fmt::format("{}", ref->Identifier);
-        
-                // Loop backward through all the scopes
-                Scope* currentScope = m_CurrentScope;
-                while (currentScope) {
-                    if (currentScope->DeclaredSymbols.contains(ident)) {
-                        return currentScope->DeclaredSymbols.at(ident).Type;
-                    }
-        
-                    currentScope = currentScope->Parent;
-                }
-        
-                // Check global symbols
-                if (m_DeclaredSymbols.contains(fmt::format("{}", (ref->Identifier)))) {
-                    return m_DeclaredSymbols.at(fmt::format("{}", ref->Identifier)).Type;
-                }
-        
-                // We haven't found a variable
-                ErrorUndeclaredIdentifier(ref->Identifier, node);
-                return CreateVarType(m_Context, PrimitiveType::Invalid);
-            }
-        
-            case NodeType::ArrayAccessExpr: {
-                auto expr = GetNode<NodeArrayAccessExpr>(node);
-                
-                VariableType* arrType = CheckNodeExpression(expr->Parent);
-                if (arrType->Type != PrimitiveType::Array) {
-                    std::cerr << "Error!\n";
-                }
-        
-                CheckNodeExpression(expr->Index);
-                expr->ResolvedType = std::get<VariableType*>(arrType->Data);
-        
-                return expr->ResolvedType;
-            }
-        
-            case NodeType::MemberExpr: {
-                auto expr = GetNode<NodeMemberExpr>(node);
-        
-                VariableType* structType = CheckNodeExpression(expr->Parent);
-                if (structType->Type != PrimitiveType::Structure) {
-                    std::cerr << "Error!\n";
-                }
-        
-                expr->ResolvedParentType = structType;
-        
-                StructDeclaration decl = std::get<StructDeclaration>(structType->Data);
-                for (const auto& field : decl.Fields) {
-                    if (field.Identifier == expr->Member) {
-                        expr->ResolvedMemberType = field.ResolvedType;
-                        return expr->ResolvedMemberType;
-                    }
-                }
-        
-                std::cerr << "Unknown field!\n";
-        
-                return nullptr;
-            }
-        
-            case NodeType::MethodCallExpr: {
-                auto expr = GetNode<NodeMethodCallExpr>(node);
-                VariableType* structType = CheckNodeExpression(expr->Parent);
-                if (structType->Type != PrimitiveType::Structure) {
-                    std::cerr << "Error!\n";
-                }
-        
-                expr->ResolvedParentType = structType;
-                
-                StructDeclaration decl = std::get<StructDeclaration>(structType->Data);
-                std::string sig = fmt::format("{}__{}", decl.Identifier, expr->Member);
-        
-                if (m_DeclaredSymbols.contains(sig)) {
-                    Declaration decl = m_DeclaredSymbols.at(sig);
-                    auto mdecl = GetNode<NodeMethodDecl>(decl.Decl);
-        
-                    if (mdecl->Parameters.Size != expr->Arguments.Size) {
-                        ErrorNoMatchingFunction(expr->Member, node);
-                        return CreateVarType(m_Context, PrimitiveType::Invalid);
-                    }
-                
-                    for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
-                        if (GetNode<NodeParamDecl>(mdecl->Parameters.Items[i])->ResolvedType->Type != CheckNodeExpression(expr->Arguments.Items[i])->Type) {
-                            ErrorNoMatchingFunction(expr->Member, node);
-                            return CreateVarType(m_Context, PrimitiveType::Invalid);
-                        }
-                    }
-                
-                    return mdecl->ResolvedType;
-                }
-        
-                std::cerr << "Unknown method!\n";
-                return nullptr;
-            }
-        
-            case NodeType::FunctionCallExpr: {
-                auto expr = GetNode<NodeFunctionCallExpr>(node);
-        
-                std::string name = fmt::format("{}", expr->Name);
-                if (m_DeclaredSymbols.contains(name)) {
-                    NodeList params;
-                    
-                    switch (m_DeclaredSymbols.at(name).Decl->Type) {
-                        case NodeType::FunctionDecl: {
-                            NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(m_DeclaredSymbols.at(name).Decl->Data);
-                            params = decl->Parameters;
-                            expr->Extern = decl->Extern;
-                    
-                            break;
-                        }
-
-                        default: {
-                            ErrorNoMatchingFunction(expr->Name, node);
-                            return CreateVarType(m_Context, PrimitiveType::Invalid);
-                        }
-                    }
-                
-                    if (params.Size != expr->Arguments.Size) {
-                        ErrorNoMatchingFunction(expr->Name, node);
-                        return CreateVarType(m_Context, PrimitiveType::Invalid);
-                    }
-                
-                    for (size_t i = 0; i < params.Size; i++) {
-                        Node* param = params.Items[i];
-                        Node* arg = expr->Arguments.Items[i];
-        
-                        VariableType* typeParam = GetNode<NodeParamDecl>(param)->ResolvedType;
-                        VariableType* typeArg = CheckNodeExpression(arg);
-        
-                        ConversionCost cost = GetConversionCost(typeParam, typeArg);
-                        if (cost.CastNeeded) {
-                            // Perform an implicit cast (if possible)
-                            if (cost.ImplicitCastPossible) {
-                                InsertImplicitCast(arg, typeParam, typeArg);
-                            } else {
-                                m_Context->ReportCompilerError(arg->Line, arg->Column, fmt::format("Mismatched function argument types, parameter type is {}, while argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
-                                m_Error = true;
-                            }
-                        }
-
-                        if (typeParam->Type == PrimitiveType::String) {
-                            Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>(*arg);
-
-                            if (IsLValue(arg)) {
-                                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                                call->Name = "bl__string__copy__";
-                                call->Arguments.Append(m_Context, newNode);
-                                call->Extern = true;
-                                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                                arg->Type = NodeType::FunctionCallExpr;
-                                arg->Data = call;
-                                arg->Line = newNode->Line;
-                                arg->Column = newNode->Column;
-                            } else {
-                                NodeFunctionCallExpr* call = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                                call->Name = "bl__string__construct_from_literal__";
-                                call->Arguments.Append(m_Context, newNode);
-                                call->Extern = true;
-                                call->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                                arg->Type = NodeType::FunctionCallExpr;
-                                arg->Data = call;
-                                arg->Line = newNode->Line;
-                                arg->Column = newNode->Column;
-                            }
-                        }
-                    }
-                
-                    expr->ResolvedReturnType = m_DeclaredSymbols.at(name).Type;
-                    return expr->ResolvedReturnType;
-                }
-                
-                ErrorUndeclaredIdentifier(expr->Name, node);
-                return CreateVarType(m_Context, PrimitiveType::Invalid);
-            }
-        
-            case NodeType::ParenExpr: {
-                auto expr = GetNode<NodeParenExpr>(node);
-                VariableType* type = CheckNodeExpression(expr->Expression);
-        
-                return type;
-            }
-        
-            case NodeType::CastExpr: {
-                auto expr = GetNode<NodeCastExpr>(node);
-                if (!expr->ResolvedSrcType) {
-                    expr->ResolvedSrcType = CheckNodeExpression(expr->Expression);
-                }
-        
-                if (!expr->ResolvedDstType) {
-                    expr->ResolvedDstType = GetVarTypeFromString(expr->Type);
-                }
-                
-                ConversionCost cost = GetConversionCost(expr->ResolvedDstType, expr->ResolvedSrcType);
-                
-                if (!cost.ExplicitCastPossible) {
-                    m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Cannot cast from {} to {}", VariableTypeToString(expr->ResolvedSrcType), VariableTypeToString(expr->ResolvedDstType)));
-                    m_Error = true;
-                }
-                
-                return expr->ResolvedDstType;
-            }
-        
-            case NodeType::UnaryExpr: {
-                auto expr = GetNode<NodeUnaryExpr>(node);
-                VariableType* type = CheckNodeExpression(expr->Expression);
-        
-                expr->ResolvedType = type;
-        
-                return type;
-            }
-        
-            case NodeType::BinExpr: {
-                auto expr = GetNode<NodeBinExpr>(node);
-                VariableType* typeLHS = CheckNodeExpression(expr->LHS);
-                VariableType* typeRHS = CheckNodeExpression(expr->RHS);
-        
-                ConversionCost cost = GetConversionCost(typeLHS, typeRHS);
-                if (cost.CastNeeded) {
-                    // Perform an implicit cast (if possible)
-                    if (cost.ImplicitCastPossible) {
-                        // We always want to cast to a wider type
-                        // This will check which side of the binary expression we should cast
-                        // One thing to note though, if we have an assignment we cannot cast the left side
-                        if (GetTypeSize(typeLHS) > GetTypeSize(typeRHS) || expr->Type == BinExprType::Eq) {
-                            InsertImplicitCast(expr->RHS, typeLHS, typeRHS);
-                        } else {
-                            InsertImplicitCast(expr->LHS, typeRHS, typeLHS);
-                        }
-                    } else {
-                        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Mismatched types, have {} and {}", VariableTypeToString(typeLHS), VariableTypeToString(typeRHS)));
-                        m_Error = true;
-                    }
-                }
-        
-                VariableType* resolved = nullptr;
-        
-                switch (expr->Type) {
-                    case BinExprType::Eq: {
-                        if (!IsLValue(expr->LHS)) {
-                            m_Context->ReportCompilerError(expr->LHS->Line, expr->LHS->Column, "Expression must be a modifiable lvalue");
-                            m_Error = true;
-                        } else {
-                            if (typeRHS->Type == PrimitiveType::String) {
-                                Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>(*expr->RHS);
-
-                                if (IsLValue(expr->RHS)) {
-                                    NodeFunctionCallExpr* assignExpr = m_Context->GetAllocator()->AllocateNamed<NodeFunctionCallExpr>();
-                                    assignExpr->Name = "bl__string__assign__";
-                                    assignExpr->Arguments.Append(m_Context, expr->LHS);
-                                    assignExpr->Arguments.Append(m_Context, newNode);
-                                    assignExpr->Extern = true;
-                                    assignExpr->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::String);
-
-                                    expr->RHS->Type = NodeType::FunctionCallExpr;
-                                    expr->RHS->Data = assignExpr;
-                                }
-                            }
-                        }
-                        resolved = typeLHS; break;
-                    }
-
-                    case BinExprType::Add:
-                    case BinExprType::AddInPlace:
-                    case BinExprType::AddOne:
-                    case BinExprType::Sub:
-                    case BinExprType::SubInPlace:
-                    case BinExprType::SubOne:
-                    case BinExprType::Mul:
-                    case BinExprType::MulInPlace:
-                    case BinExprType::Div:
-                    case BinExprType::DivInPlace:
-                    case BinExprType::Mod:
-                    case BinExprType::ModInPlace:
-                        resolved = typeLHS; break;
-                    
-                    case BinExprType::IsEq:
-                    case BinExprType::IsNotEq:
-                    case BinExprType::Less:
-                    case BinExprType::LessOrEq:
-                    case BinExprType::Greater:
-                    case BinExprType::GreaterOrEq:
-                        resolved = CreateVarType(m_Context, PrimitiveType::Bool); break;
-        
-                    default: return nullptr;
-                }
-        
-                expr->ResolvedType = resolved;
-                expr->ResolvedSourceType = typeLHS;
-                return resolved;
-            }
-        
-            default: return nullptr;
+    void TypeChecker::CheckNodeStatement(NodeStmt* stmt) {
+        if (GetNode<StmtScope>(stmt)) {
+            CheckNodeScope(stmt);
+        } else if (GetNode<StmtVarDecl>(stmt)) {
+            CheckNodeVarDecl(stmt);
+        } else if (GetNode<StmtParamDecl>(stmt)) {
+            CheckNodeParamDecl(stmt);
+        } else if (GetNode<StmtFunctionDecl>(stmt)) {
+            CheckNodeFunctionDecl(stmt);
+        } else if (GetNode<StmtWhile>(stmt)) {
+            CheckNodeStructDecl(stmt);
+        } else if (GetNode<StmtDoWhile>(stmt)) {
+            CheckNodeWhile(stmt);
+        } else if (GetNode<StmtIf>(stmt)) {
+            CheckNodeIf(stmt);
+        } else if (GetNode<StmtReturn>(stmt)) {
+            CheckNodeReturn(stmt);
         }
-        
-        BLUA_ASSERT(false, "Unreachable!");
-        return CreateVarType(m_Context, PrimitiveType::Invalid);
     }
 
     void TypeChecker::CheckNode(Node* node) {
-        NodeType t = node->Type;
-
-        if (t == NodeType::Scope) {
-            CheckNodeScope(node);
-        } else if (t == NodeType::VarDecl) {
-            CheckNodeVarDecl(node);
-        } else if (t == NodeType::ParamDecl) {
-            CheckNodeParamDecl(node);
-        } else if (t == NodeType::FunctionDecl) {
-            CheckNodeFunctionDecl(node);
-        } else if (t == NodeType::StructDecl) {
-            CheckNodeStructDecl(node);
-        } else if (t == NodeType::While) {
-            CheckNodeWhile(node);
-        } else if (t == NodeType::If) {
-            CheckNodeIf(node);
-        } else if (t == NodeType::Return) {
-            CheckNodeReturn(node);
-        } else if (t == NodeType::ArrayAccessExpr) {
-            CheckNodeExpression(node);
-        } else if (t == NodeType::MethodCallExpr) {
-            CheckNodeExpression(node);
-        } else if (t == NodeType::FunctionCallExpr) {
-            CheckNodeExpression(node);
-        } else if (t == NodeType::BinExpr) {
-            CheckNodeExpression(node);
+        if (NodeExpr* expr = GetNode<NodeExpr>(node)) {
+            CheckNodeExpression(expr);
+        } else if (NodeStmt* stmt = GetNode<NodeStmt>(node)) {
+            CheckNodeStatement(stmt);
         }
     }
 
@@ -735,16 +547,14 @@ namespace BlackLua::Internal {
         return cost;
     }
 
-    void TypeChecker::InsertImplicitCast(Node* node, VariableType* dest, VariableType* src) {
-        NodeCastExpr* cast = m_Context->GetAllocator()->AllocateNamed<NodeCastExpr>();
-        Node* newNode = m_Context->GetAllocator()->AllocateNamed<Node>();
-        memcpy(newNode, node, sizeof(Node));
-        cast->Expression = newNode;
+    void TypeChecker::InsertImplicitCast(NodeExpr* expr, VariableType* dest, VariableType* src) {
+        ExprCast* cast = m_Context->GetAllocator()->AllocateNamed<ExprCast>();
+        NodeExpr* newExpr = m_Context->GetAllocator()->AllocateNamed<NodeExpr>(*expr);
+        cast->Expression = newExpr;
         cast->ResolvedSrcType = src;
         cast->ResolvedDstType = dest;
 
-        node->Data = cast;
-        node->Type = NodeType::CastExpr;
+        expr->Data = cast;
     }
 
     VariableType* TypeChecker::GetVarTypeFromString(StringView str) {
@@ -785,7 +595,7 @@ namespace BlackLua::Internal {
                 type->Type = PrimitiveType::Structure;
                 type->Data = m_DeclaredStructs.at(isolatedType);
             } else {
-                ErrorUndeclaredIdentifier(StringView(isolatedType.c_str(), isolatedType.size()), nullptr);
+                ErrorUndeclaredIdentifier(StringView(isolatedType.c_str(), isolatedType.size()), 0, 0);
             }
         }
 
@@ -798,21 +608,21 @@ namespace BlackLua::Internal {
         return type;
     }
 
-    bool TypeChecker::IsLValue(Node* node) {
-        if (node->Type == NodeType::VarRef || node->Type == NodeType::MemberExpr || node->Type == NodeType::ArrayAccessExpr) {
+    bool TypeChecker::IsLValue(NodeExpr* expr) {
+        if (GetNode<ExprVarRef>(expr) || GetNode<ExprMember>(expr) || GetNode<ExprArrayAccess>(expr)) {
             return true;
         }
 
         return false;
     }
 
-    void TypeChecker::ErrorUndeclaredIdentifier(const StringView ident, Node* node) {
-        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("Undeclared identifier {}", ident));
+    void TypeChecker::ErrorUndeclaredIdentifier(const StringView ident, size_t line, size_t column) {
+        m_Context->ReportCompilerError(line, column, fmt::format("Undeclared identifier {}", ident));
         m_Error = true;
     }
 
-    void TypeChecker::ErrorNoMatchingFunction(const StringView func, Node* node) {
-        m_Context->ReportCompilerError(node->Line, node->Column, fmt::format("No matching function to call: {}", func));
+    void TypeChecker::ErrorNoMatchingFunction(const StringView func, size_t line, size_t column) {
+        m_Context->ReportCompilerError(line, column, fmt::format("No matching function to call: {}", func));
         m_Error = true;
     }
 

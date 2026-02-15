@@ -15,310 +15,126 @@ namespace BlackLua::Internal {
 
     void ASTDumper::DumpASTImpl() {
         for (Node* node : *m_ASTNodes) {
-            DumpASTNode(node);
+            DumpASTNode(node, 0);
         }
     }
 
-    void ASTDumper::DumpASTNode(Node* n, size_t indentation) {
+    void ASTDumper::DumpNodeList(NodeList list, size_t indentation) {
+        for (size_t i = 0; i < list.Size; i++) {
+            DumpASTNode(list.Items[i], indentation);
+        }
+    }
+
+    void ASTDumper::DumpNodeExpr(NodeExpr* expr, size_t indentation) {
+        // std::string ident;
+        // ident.append(indentation, ' ');
+        // m_Output += fmt::format("{}<{}:{}>", ident, expr->Line, expr->Column);
+        // 
+        // if (ExprConstant* con = GetNode<ExprConstant>(expr)) {
+        //     if (ConstantBool* cb = GetNode<ConstantBool>(con)) {
+        //         m_Output += fmt::format("BooleanConstantExpr, {}\n", cb->Value);
+        //         return;
+        //     }
+        // 
+        //     if (ConstantChar* cc = GetNode<ConstantChar>(con)) {
+        //         m_Output += fmt::format("CharacterConstantExpr, {}\n", cc->Char);
+        //         return;
+        //     }
+        // 
+        //     if (ConstantInt* ci = GetNode<ConstantInt>(con)) {
+        //         m_Output += fmt::format("IntegerConstantExpr, Signed: {}, {}\n", !ci->Unsigned, ci->Int);
+        //         return;
+        //     }
+        // 
+        //     if (ConstantLong* cl = GetNode<ConstantLong>(con)) {
+        //         m_Output += fmt::format("LongConstantExpr, Signed: {}, {}\n", !cl->Unsigned, cl->Long);
+        //         return;
+        //     }
+        // 
+        //     if (ConstantFloat* cf = GetNode<ConstantFloat>(con)) {
+        //         m_Output += fmt::format("FloatConstantExpr, {}\n", cf->Float);
+        //         return;
+        //     }
+        // 
+        //     if (ConstantDouble* cd = GetNode<ConstantDouble>(con)) {
+        //         m_Output += fmt::format("DoubleConstantExpr, {}\n", cd->Double);
+        //         return;
+        //     }
+        // 
+        //     if (ConstantString* cs = GetNode<ConstantString>(con)) {
+        //         m_Output += fmt::format("StringConstantExpr, {}\n", cs->String);
+        //         return;
+        //     }
+        // }
+        // 
+        // if (ExprVarRef* varRef = GetNode<ExprVarRef>(expr)) {
+        //     m_Output += fmt::format("VarRefExpr, {}\n", varRef->Identifier);
+        //     return;
+        // }
+        // 
+        // if (ExprArrayAccess* arrAccess = GetNode<ExprArrayAccess>(expr)) {
+        //     m_Output += "ArrayAccessExpr\n";
+        //     DumpNodeExpr(arrAccess->Index, indentation + 4);
+        //     DumpNodeExpr(arrAccess->Parent, indentation + 4);
+        //     return;
+        // }
+        // 
+        // if (ExprMember* mem = GetNode<ExprMember>(expr)) {
+        //     m_Output += fmt::format("MemberExpr, {}\n", mem->Member);
+        //     DumpNodeExpr(mem->Parent, indentation + 4);
+        //     return;
+        // }
+        // 
+        // if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
+        //     m_Output += fmt::format("MethodCallExpr, {}\n", call->Member);
+        //     DumpNodeList(call->Arguments, indentation + 4);
+        //     DumpNodeExpr(call->Parent, indentation + 4);
+        //     return;
+        // }
+        // 
+        // if (ExprCall* call = GetNode<ExprCall>(expr)) {
+        //     m_Output += fmt::format("CallExpr, Extern: {}, {}\n", call->Extern, call->Name);
+        //     DumpNodeList(call->Arguments, indentation + 4);
+        //     return;
+        // }
+        // 
+        // if (ExprParen* paren = GetNode<ExprParen>(expr)) {
+        //     m_Output += "ParenExpr\n";
+        //     DumpNodeExpr(paren->Expression, indentation + 4);
+        //     return;
+        // }
+        // 
+        // if (ExprCast* cast = GetNode<ExprCast>(expr)) {
+        //     m_Output += fmt::format("CastExpr '{}'\n", VariableTypeToString(cast->ResolvedDstType));
+        //     DumpNodeExpr(cast->Expression, indentation + 4);
+        //     return;
+        // }
+        // 
+        // if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
+        //     m_Output += fmt::format("UnaryOperatorExpr '{}'\n", UnaryOperatorTypeToString(unOp->Type));
+        //     DumpNodeExpr(unOp->Expression, indentation + 4);
+        //     return;
+        // }
+        // 
+        // if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
+        //     m_Output += fmt::format("BinaryOperatorExpr '{}'\n", BinaryOperatorTypeToString(binOp->Type));
+        //     DumpNodeExpr(binOp->LHS, indentation + 4);
+        //     DumpNodeExpr(binOp->RHS, indentation + 4);
+        //     return;
+        // }
+    }
+
+    void ASTDumper::DumpNodeStmt(NodeStmt* stmt, size_t indentation) {
         std::string ident;
         ident.append(indentation, ' ');
         m_Output += ident;
-
-        if (n == nullptr) {
-            m_Output += "NULL\n";
-        } else {
-            m_Output += fmt::format("{}:{} ", n->Line, n->Column);
-
-            switch (n->Type) {
-                case NodeType::Constant: {
-                    NodeConstant* constant = std::get<NodeConstant*>(n->Data);
-
-                    m_Output += "Constant, Value: \n";
-                    ident.append(4, ' ');
-                    m_Output += ident;
-
-                    switch (constant->Type) {
-                        case NodeType::Bool: {
-                            NodeBool* b = std::get<NodeBool*>(constant->Data);
-
-                            if (b->Value) {
-                                m_Output += "Bool, Value: true\n";
-                            } else {
-                                m_Output += "Bool, Value: false\n";
-                            }
-
-                            break;
-                        }
-
-                        case NodeType::Int: {
-                            NodeInt* i = std::get<NodeInt*>(constant->Data);
-
-                            if (i->Unsigned) {  
-                                m_Output += fmt::format("Int, Value: {}, Signed: false\n", static_cast<uint32_t>(i->Int));
-                            } else {
-                                m_Output += fmt::format("Int, Value: {}, Signed: true\n", static_cast<int32_t>(i->Int));
-                            }
-
-                            break;
-                        }
-
-                        case NodeType::Long: {
-                            NodeLong* l = std::get<NodeLong*>(constant->Data);
-
-                            if (l->Unsigned) {  
-                                m_Output += fmt::format("Long, Value: {}, Signed: false\n", static_cast<uint64_t>(l->Long));
-                            } else {
-                                m_Output += fmt::format("Long, Value: {}, Signed: true\n", static_cast<int64_t>(l->Long));
-                            }
-
-                            break;
-                        }
-
-                        case NodeType::Float: {
-                            NodeFloat* f = std::get<NodeFloat*>(constant->Data);
-
-                            m_Output += fmt::format("Float, Value: {:.5f}", f->Float);
-                            break;
-                        }
-
-                        case NodeType::Double: {
-                            NodeDouble* d = std::get<NodeDouble*>(constant->Data);
-
-                            m_Output += fmt::format("Double, Value: {:.15f}", d->Double);
-                            break;
-                        }
-
-                        case NodeType::String: {
-                            NodeString* str = std::get<NodeString*>(constant->Data);
-
-                            m_Output += fmt::format("String, Value: \"{}\"\n", str->String);
-                            break;
-                        }
-
-                        case NodeType::InitializerList: {
-                            NodeInitializerList* list = std::get<NodeInitializerList*>(constant->Data);
-
-                            m_Output += "InitializerList, Values: \n";
-                            for (size_t i = 0; i < list->Nodes.Size; i++) {
-                                DumpASTNode(list->Nodes.Items[i], indentation + 4);
-                            }
-
-                            break;
-                        }
-                    }
-
-                    break;
-                }
-
-                case NodeType::Scope: {
-                    NodeScope* scope = std::get<NodeScope*>(n->Data);
-
-                    m_Output += "Scope, Body: \n";
-                    for (size_t i = 0; i < scope->Nodes.Size; i++) {
-                        DumpASTNode(scope->Nodes.Items[i], indentation + 4);
-                    }
-
-                    break;
-                }
-                
-                case NodeType::VarDecl: {
-                    NodeVarDecl* decl = std::get<NodeVarDecl*>(n->Data);
-
-                    m_Output += fmt::format("VarDecl, Type: {}, Name: {}, Value:\n", VariableTypeToString(decl->ResolvedType), decl->Identifier);
-                    DumpASTNode(decl->Value, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::ParamDecl: {
-                    NodeParamDecl* decl = std::get<NodeParamDecl*>(n->Data);
-
-                    m_Output += fmt::format("ParamDecl, Type: {}, Name: {}\n", VariableTypeToString(decl->ResolvedType), decl->Identifier);
-                    break;
-                }
-
-                case NodeType::VarRef: {
-                    NodeVarRef* ref = std::get<NodeVarRef*>(n->Data);
-
-                    m_Output += fmt::format("VarRef, Name: {}\n", ref->Identifier);
-                    break;
-                }
-
-                case NodeType::StructDecl: {
-                    NodeStructDecl* decl = std::get<NodeStructDecl*>(n->Data);
-
-                    m_Output += fmt::format("StructDecl, Name: {}, Fields:\n", decl->Identifier);
-
-                    for (size_t i = 0; i < decl->Fields.Size; i++) {
-                        DumpASTNode(decl->Fields.Items[i], indentation + 4);
-                    }
-
-                    break;
-                }
-
-                case NodeType::FieldDecl: {
-                    NodeFieldDecl* decl = std::get<NodeFieldDecl*>(n->Data);
-
-                    m_Output += fmt::format("FieldDecl, Type: {}, Name: {}\n", "TODO", decl->Identifier);
-                    break;
-                }
-
-                case NodeType::MethodDecl: {
-                    NodeMethodDecl* decl = std::get<NodeMethodDecl*>(n->Data);
-
-                    m_Output += fmt::format("MethodDecl, Name: {}, Return type: {}\n", decl->Name, VariableTypeToString(decl->ResolvedType));
-                    for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                        DumpASTNode(decl->Parameters.Items[i], indentation + 4);
-                    }
-                    DumpASTNode(decl->Body, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::FunctionDecl: {
-                    NodeFunctionDecl* decl = std::get<NodeFunctionDecl*>(n->Data);
-
-                    m_Output += fmt::format("FunctionDecl, Name: {}, Return type: {}, Extern: {}\n", decl->Name, VariableTypeToString(decl->ResolvedType), decl->Extern);
-                    for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                        DumpASTNode(decl->Parameters.Items[i], indentation + 4);
-                    }
-
-                    if (decl->Body) {
-                        DumpASTNode(decl->Body, indentation + 4);
-                    }
-
-                    break;
-                }
-
-                case NodeType::While: {
-                    NodeWhile* wh = std::get<NodeWhile*>(n->Data);
-
-                    m_Output += "WhileStatement:\n";
-                    DumpASTNode(wh->Condition, indentation + 4);
-                    DumpASTNode(wh->Body, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::DoWhile: {
-                    NodeDoWhile* dowh = std::get<NodeDoWhile*>(n->Data);
-
-                    std::cout << "DoWhileStatement:\n";
-                    DumpASTNode(dowh->Body, indentation + 4);
-                    DumpASTNode(dowh->Condition, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::For: {
-                    NodeFor* nfor = std::get<NodeFor*>(n->Data);
-
-                    m_Output += "ForStatement:\n";
-                    DumpASTNode(nfor->Prologue, indentation + 4);
-                    DumpASTNode(nfor->Condition, indentation + 4);
-                    DumpASTNode(nfor->Epilogue, indentation + 4);
-                    DumpASTNode(nfor->Body, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::If: {
-                    NodeIf* nif = std::get<NodeIf*>(n->Data);
-
-                    m_Output += "IfStatement:\n";
-                    DumpASTNode(nif->Condition, indentation + 4);
-                    DumpASTNode(nif->Body, indentation + 4);
-                    DumpASTNode(nif->ElseBody, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::Break: {
-                    m_Output += "Break\n";
-                    break;
-                }
-
-                case NodeType::Return: {
-                    NodeReturn* ret = std::get<NodeReturn*>(n->Data);
-
-                    m_Output += "Return, Value:\n";
-                    DumpASTNode(ret->Value, indentation + 4);
-                    break;
-                }
-
-                case NodeType::ArrayAccessExpr: {
-                    NodeArrayAccessExpr* expr = std::get<NodeArrayAccessExpr*>(n->Data);
-
-                    m_Output += "ArrayAccessExpr:\n";
-                    DumpASTNode(expr->Parent, indentation + 4);
-                    DumpASTNode(expr->Index, indentation + 4);
-                    break;
-                }
-
-                case NodeType::MemberExpr: {
-                    NodeMemberExpr* expr = std::get<NodeMemberExpr*>(n->Data);
-
-                    m_Output += fmt::format("MemberExpr: {}\n", expr->Member);
-                    DumpASTNode(expr->Parent, indentation + 4);
-                    break;
-                }
-
-                case NodeType::MethodCallExpr: {
-                    NodeMethodCallExpr* call = std::get<NodeMethodCallExpr*>(n->Data);
-
-                    m_Output += fmt::format("MethodCallExpr, Name: {}\n", call->Member);
-                    for (size_t i = 0; i < call->Arguments.Size; i++) {
-                        DumpASTNode(call->Arguments.Items[i], indentation + 4);
-                    }
-                    DumpASTNode(call->Parent, indentation + 4);
-
-                    break;
-                }
-
-                case NodeType::FunctionCallExpr: {
-                    NodeFunctionCallExpr* call = std::get<NodeFunctionCallExpr*>(n->Data);
-
-                    m_Output += fmt::format("FunctionCallExpr, Name: {}, Extern: {}\n", call->Name, call->Extern);
-                    for (size_t i = 0; i < call->Arguments.Size; i++) {
-                        DumpASTNode(call->Arguments.Items[i], indentation + 4);
-                    }
-
-                    break;
-                }
-
-                case NodeType::ParenExpr: {
-                    NodeParenExpr* expr = std::get<NodeParenExpr*>(n->Data);
-
-                    m_Output += "ParenExpr, Expression:\n";
-                    DumpASTNode(expr->Expression, indentation + 4);
-                    break;
-                }
-
-                case NodeType::CastExpr: {
-                    NodeCastExpr* expr = std::get<NodeCastExpr*>(n->Data);
-
-                    m_Output += fmt::format("CastExpr, Type: {}\n", VariableTypeToString(expr->ResolvedDstType));
-                    DumpASTNode(expr->Expression, indentation + 4);
-                    break;
-                }
-
-                case NodeType::UnaryExpr: {
-                    NodeUnaryExpr* expr = std::get<NodeUnaryExpr*>(n->Data);
-
-                    m_Output += fmt::format("UnaryExpr, Operation: {}\n", UnaryExprTypeToString(expr->Type));
-                    DumpASTNode(expr->Expression, indentation + 4);
-                    break;
-                }
-
-                case NodeType::BinExpr: {
-                    NodeBinExpr* expr = std::get<NodeBinExpr*>(n->Data);
-
-                    m_Output += fmt::format("BinExpr, Operation: {}\n", BinExprTypeToString(expr->Type));
-                    DumpASTNode(expr->LHS, indentation + 4);
-                    DumpASTNode(expr->RHS, indentation + 4);
-                    break;
-                }
-            }
+    }
+
+    void ASTDumper::DumpASTNode(Node* n, size_t indentation) {
+        if (NodeExpr* expr = GetNode<NodeExpr>(n)) {
+            DumpNodeExpr(expr, indentation);
+        } else if (NodeStmt* stmt = GetNode<NodeStmt>(n)) {
+            DumpNodeStmt(stmt, indentation);
         }
     }
 

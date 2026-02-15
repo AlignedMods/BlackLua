@@ -1,6 +1,7 @@
 #pragma once
 
-#include "internal/compiler/ast.hpp"
+#include "internal/compiler/ast/expr.hpp"
+#include "internal/compiler/ast/stmt.hpp"
 
 namespace BlackLua::Internal {
 
@@ -11,7 +12,13 @@ namespace BlackLua::Internal {
 
     private:
         void DumpASTImpl();
-        void DumpASTNode(Node* n, size_t indentation = 0);
+
+        void DumpNodeList(NodeList list, size_t indentation);
+
+        void DumpNodeExpr(NodeExpr* expr, size_t indentation);
+        void DumpNodeStmt(NodeStmt* stmt, size_t indentation);
+
+        void DumpASTNode(Node* n, size_t indentation);
 
     private:
         ASTNodes* m_ASTNodes = nullptr;

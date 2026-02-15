@@ -1,5 +1,6 @@
-#include "internal/compiler/ast.hpp"
+#include "internal/compiler/ast/node_list.hpp"
 #include "context.hpp"
+#include "allocator.hpp"
 
 namespace BlackLua::Internal {
 

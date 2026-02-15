@@ -1,6 +1,7 @@
 #pragma once
 
-#include "internal/compiler/ast.hpp"
+#include "internal/compiler/ast/expr.hpp"
+#include "internal/compiler/ast/stmt.hpp"
 #include "internal/vm.hpp"
 #include "internal/compiler/reflection/compiler_reflection.hpp"
 
@@ -21,28 +22,14 @@ namespace BlackLua::Internal {
     
         private:
             void EmitImpl();
-    
-            Node* Peek(size_t amount = 0);
+
+            Node* Peek();
             Node* Consume();
     
+            void EmitConstantExpr(NodeExpr* expr);
+            void EmitConstantStatement(NodeStmt* stmt);
+
             void EmitConstant(Node* node);
-    
-            void EmitNodeScope(Node* node);
-    
-            void EmitNodeVarDecl(Node* node);
-            void EmitNodeParamDecl(Node* node);
-
-            void EmitNodeFunctionDecl(Node* node);
-
-            void EmitNodeStructDecl(Node* node);
-    
-            void EmitNodeWhile(Node* node);
-    
-            void EmitNodeIf(Node* node);
-    
-            void EmitNodeReturn(Node* node);
-    
-            CompileStackSlot EmitNodeExpression(Node* node);
     
             StackSlotIndex CompileToRuntimeStackSlot(CompileStackSlot slot);
     
@@ -50,8 +37,25 @@ namespace BlackLua::Internal {
             void PushBytes(size_t bytes, const std::string& debugData = {});
             void IncrementStackSlotCount();
 
-            // This function expects the object is already pushed on the stack!
-            void CallConstructor(VariableType* type);
+            CompileStackSlot EmitNodeExpression(NodeExpr* expr);
+
+            void EmitNodeScope(NodeStmt* stmt);
+    
+            void EmitNodeVarDecl(NodeStmt* stmt);
+            void EmitNodeParamDecl(NodeStmt* stmt);
+
+            void EmitNodeFunctionDecl(NodeStmt* stmt);
+
+            void EmitNodeStructDecl(NodeStmt* stmt);
+    
+            void EmitNodeWhile(NodeStmt* stmt);
+            void EmitNodeDoWhile(NodeStmt* stmt);
+    
+            void EmitNodeIf(NodeStmt* stmt);
+    
+            void EmitNodeReturn(NodeStmt* stmt);
+
+            void EmitNodeStatement(NodeStmt* stmt);
     
             void EmitNode(Node* node);
     
@@ -62,7 +66,7 @@ namespace BlackLua::Internal {
     
             size_t m_SlotCount = 0;
             size_t m_LabelCount = 0;
-            std::unordered_map<Node*, CompileStackSlot> m_ConstantMap;
+            std::unordered_map<NodeExpr*, CompileStackSlot> m_ConstantMap;
     
             struct Declaration {
                 int32_t Index = 0;

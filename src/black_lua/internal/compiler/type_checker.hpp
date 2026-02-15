@@ -1,6 +1,7 @@
 #pragma once
 
-#include "internal/compiler/ast.hpp"
+#include "internal/compiler/ast/expr.hpp"
+#include "internal/compiler/ast/stmt.hpp"
 #include "internal/vm.hpp"
 
 #include <unordered_map>
@@ -42,34 +43,36 @@ namespace BlackLua::Internal {
         Node* Peek(size_t amount = 0);
         Node* Consume();
 
-        void CheckNodeScope(Node* node);
+        VariableType* CheckNodeExpression(NodeExpr* expr);
 
-        void CheckNodeVarDecl(Node* node);
-        void CheckNodeParamDecl(Node* node);
+        void CheckNodeScope(NodeStmt* stmt);
 
-        void CheckNodeStructDecl(Node* node);
+        void CheckNodeVarDecl(NodeStmt* stmt);
+        void CheckNodeParamDecl(NodeStmt* stmt);
 
-        void CheckNodeFunctionDecl(Node* node);
+        void CheckNodeStructDecl(NodeStmt* stmt);
 
-        void CheckNodeWhile(Node* node);
-        void CheckNodeDoWhile(Node* node);
+        void CheckNodeFunctionDecl(NodeStmt* stmt);
 
-        void CheckNodeIf(Node* node);
+        void CheckNodeWhile(NodeStmt* stmt);
+        void CheckNodeDoWhile(NodeStmt* stmt);
 
-        void CheckNodeReturn(Node* node);
+        void CheckNodeIf(NodeStmt* stmt);
 
-        VariableType* CheckNodeExpression(Node* node);
+        void CheckNodeReturn(NodeStmt* stmt);
+
+        void CheckNodeStatement(NodeStmt* stmt);
 
         void CheckNode(Node* node);
 
         ConversionCost GetConversionCost(VariableType* type1, VariableType* type2);
-        void InsertImplicitCast(Node* node, VariableType* dest, VariableType* src);
+        void InsertImplicitCast(NodeExpr* expr, VariableType* dest, VariableType* src);
         VariableType* GetVarTypeFromString(StringView str);
 
-        bool IsLValue(Node* node);
+        bool IsLValue(NodeExpr* expr);
 
-        void ErrorUndeclaredIdentifier(const StringView ident, Node* node);
-        void ErrorNoMatchingFunction(const StringView func, Node* node);
+        void ErrorUndeclaredIdentifier(const StringView ident, size_t line, size_t column);
+        void ErrorNoMatchingFunction(const StringView func, size_t line, size_t column);
 
     private:
         ASTNodes* m_Nodes = nullptr; // We modify these directly
@@ -78,7 +81,7 @@ namespace BlackLua::Internal {
 
         struct Declaration {
             VariableType* Type;
-            Node* Decl = nullptr;
+            NodeStmt* Decl = nullptr;
             bool Extern = false;
         };
 

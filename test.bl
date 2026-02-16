@@ -1,4 +1,5 @@
 int foo = 0;
+foo = 9l;
 
 void main() {
     if (5 != 5) {

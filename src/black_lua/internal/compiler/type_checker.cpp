@@ -49,7 +49,7 @@ namespace BlackLua::Internal {
             } else if (ConstantInt* ci = GetNode<ConstantInt>(con)) {
                 type = CreateVarType(m_Context, PrimitiveType::Int, !ci->Unsigned);
             } else if (ConstantLong* cl = GetNode<ConstantLong>(con)) {
-                type = CreateVarType(m_Context, PrimitiveType::Int, !cl->Unsigned);
+                type = CreateVarType(m_Context, PrimitiveType::Long, !cl->Unsigned);
             } else if (GetNode<ConstantFloat>(con)) {
                 type = CreateVarType(m_Context, PrimitiveType::Float);
             } else if (GetNode<ConstantDouble>(con)) {
@@ -70,6 +70,7 @@ namespace BlackLua::Internal {
             Scope* currentScope = m_CurrentScope;
             while (currentScope) {
                 if (currentScope->DeclaredSymbols.contains(ident)) {
+                    ref->ResolvedType = currentScope->DeclaredSymbols.at(ident).Type;
                     return currentScope->DeclaredSymbols.at(ident).Type;
                 }
             
@@ -78,6 +79,7 @@ namespace BlackLua::Internal {
             
             // Check global symbols
             if (m_DeclaredSymbols.contains(fmt::format("{}", (ref->Identifier)))) {
+                ref->ResolvedType = m_DeclaredSymbols.at(fmt::format("{}", ref->Identifier)).Type;
                 return m_DeclaredSymbols.at(fmt::format("{}", ref->Identifier)).Type;
             }
             

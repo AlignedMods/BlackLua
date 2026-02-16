@@ -241,7 +241,7 @@ namespace BlackLua::Internal {
             } else {
                 if (*Peek() == '\n') {
                     m_CurrentLine++;
-                    m_CurrentLineStart = m_Index + 1;
+                    m_CurrentLineStart = m_Index;
                 }
 
                 Consume();
@@ -270,7 +270,7 @@ namespace BlackLua::Internal {
         token.Type = type;
         token.Data = data;
         token.Line = m_CurrentLine;
-        token.Column = m_Index - m_CurrentLineStart;
+        token.Column = m_Index - m_CurrentLineStart - data.Size();
         m_Tokens.push_back(token);
     }
 

@@ -1,10 +1,7 @@
-int foo = 0;
-foo = 9l;
+int foo = 4544357;
+int bar = 6;
+int baz = 58;
 
 void main() {
-    if (5 != 5) {
-        foo = 6;
-    } else if (5 == 5) {
-        foo = 69;
-    }
+    baz = -(5 + 9 * 7);
 }

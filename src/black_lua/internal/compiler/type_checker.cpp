@@ -84,7 +84,7 @@ namespace BlackLua::Internal {
             }
             
             // We haven't found a variable
-            ErrorUndeclaredIdentifier(ref->Identifier, expr->Line, expr->Column);
+            // ErrorUndeclaredIdentifier(ref->Identifier, expr->Line, expr->Column);
             return CreateVarType(m_Context, PrimitiveType::Invalid);
         }
         
@@ -116,7 +116,7 @@ namespace BlackLua::Internal {
                 }
             }
 
-            m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Unknown field \"{}\"", mem->Member));
+            // m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Unknown field \"{}\"", mem->Member));
             return nullptr;
         }
 
@@ -129,12 +129,12 @@ namespace BlackLua::Internal {
                     params = decl->Parameters;
                     call->Extern = decl->Extern;
                 } else {
-                    ErrorNoMatchingFunction(call->Name, expr->Line, expr->Column);
+                    // ErrorNoMatchingFunction(call->Name, expr->Line, expr->Column);
                     return CreateVarType(m_Context, PrimitiveType::Invalid);
                 }
         
                 if (params.Size != call->Arguments.Size) {
-                    ErrorNoMatchingFunction(call->Name, expr->Line, expr->Column);
+                    // ErrorNoMatchingFunction(call->Name, expr->Line, expr->Column);
                     return CreateVarType(m_Context, PrimitiveType::Invalid);
                 }
         
@@ -151,7 +151,7 @@ namespace BlackLua::Internal {
                         if (cost.ImplicitCastPossible) {
                             InsertImplicitCast(arg, typeParam, typeArg);
                         } else {
-                            m_Context->ReportCompilerError(arg->Line, arg->Column, fmt::format("Mismatched function argument types, parameter type is {}, while argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
+                            // m_Context->ReportCompilerError(arg->Line, arg->Column, fmt::format("Mismatched function argument types, parameter type is {}, while argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
                             m_Error = true;
                         }
                     }
@@ -161,7 +161,7 @@ namespace BlackLua::Internal {
                 return call->ResolvedReturnType; 
             }
 
-            ErrorUndeclaredIdentifier(call->Name, expr->Line, expr->Column);
+            // ErrorUndeclaredIdentifier(call->Name, expr->Line, expr->Column);
             return CreateVarType(m_Context, PrimitiveType::Invalid);
         }
         
@@ -183,7 +183,7 @@ namespace BlackLua::Internal {
             ConversionCost cost = GetConversionCost(cast->ResolvedDstType, cast->ResolvedSrcType);
             
             if (!cost.ExplicitCastPossible) {
-                m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Cannot cast from {} to {}", VariableTypeToString(cast->ResolvedSrcType), VariableTypeToString(cast->ResolvedDstType)));
+                // m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Cannot cast from {} to {}", VariableTypeToString(cast->ResolvedSrcType), VariableTypeToString(cast->ResolvedDstType)));
                 m_Error = true;
             }
             
@@ -215,7 +215,7 @@ namespace BlackLua::Internal {
                         InsertImplicitCast(binOp->LHS, typeRHS, typeLHS);
                     }
                 } else {
-                    m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Mismatched types, have {} and {}", VariableTypeToString(typeLHS), VariableTypeToString(typeRHS)));
+                    // m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Mismatched types, have {} and {}", VariableTypeToString(typeLHS), VariableTypeToString(typeRHS)));
                     m_Error = true;
                 }
             }
@@ -225,7 +225,7 @@ namespace BlackLua::Internal {
             switch (binOp->Type) {
                 case BinaryOperatorType::Eq: {
                     if (!IsLValue(binOp->LHS)) {
-                        m_Context->ReportCompilerError(binOp->LHS->Line, binOp->LHS->Column, "Expression must be a modifiable lvalue");
+                        // m_Context->ReportCompilerError(binOp->LHS->Line, binOp->LHS->Column, "Expression must be a modifiable lvalue");
                         m_Error = true;
                     }
 
@@ -279,7 +279,7 @@ namespace BlackLua::Internal {
         
         std::unordered_map<std::string, Declaration>& symbolMap = (m_CurrentScope) ? m_CurrentScope->DeclaredSymbols : m_DeclaredSymbols;
         if (symbolMap.contains(fmt::format("{}", decl->Identifier))) {
-            m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redeclaring identifier {}", decl->Identifier));
+            // m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redeclaring identifier {}", decl->Identifier));
             m_Error = true;
         }
         
@@ -347,17 +347,17 @@ namespace BlackLua::Internal {
         std::string name = fmt::format("{}", decl->Name);
         if (m_DeclaredSymbols.contains(name)) {
             if (m_DeclaredSymbols.at(name).Extern) {
-                m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Defining function marked extern: {}", decl->Name));
+                // m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Defining function marked extern: {}", decl->Name));
                 m_Error = true;
             }
 
             if (StmtFunctionDecl* fdecl = GetNode<StmtFunctionDecl>(m_DeclaredSymbols.at(name).Decl)) {
                 if (fdecl->Body) {
-                    m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redefining function body: {}", fdecl->Name));
+                    // m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redefining function body: {}", fdecl->Name));
                     m_Error = true;
                 }
             } else {
-                m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redefining identifier as a different type: {}", decl->Name));
+                // m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Redefining identifier as a different type: {}", decl->Name));
                 m_Error = true;
             }
         }
@@ -426,7 +426,7 @@ namespace BlackLua::Internal {
         }
 
         if (!canReturn) {
-            m_Context->ReportCompilerError(stmt->Line, stmt->Column, "Cannot return from a non-function scope");
+            // m_Context->ReportCompilerError(stmt->Line, stmt->Column, "Cannot return from a non-function scope");
             m_Error = true;
             return;
         }
@@ -438,7 +438,7 @@ namespace BlackLua::Internal {
             if (cost.ImplicitCastPossible) {
                 InsertImplicitCast(ret->Value, m_CurrentScope->ReturnType, exprType);
             } else {
-                m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Cannot implicitly cast from {} to {}", VariableTypeToString(exprType), VariableTypeToString(m_CurrentScope->ReturnType)));
+                // m_Context->ReportCompilerError(stmt->Line, stmt->Column, fmt::format("Cannot implicitly cast from {} to {}", VariableTypeToString(exprType), VariableTypeToString(m_CurrentScope->ReturnType)));
                 m_Error = true;
             }
         }

@@ -18,6 +18,12 @@ namespace BlackLua::Internal {
         inline StringView(const char* str, size_t size)
             : m_Str(str), m_Size(size) {}
 
+        inline StringView(StringView l, StringView r)
+            : m_Str(l.m_Str), m_Size((r.m_Str + r.m_Size) - l.m_Str) {}
+
+        inline StringView(const StringView& other)
+            : m_Str(other.m_Str), m_Size(other.m_Size) {}
+
         inline void operator=(const char* str) {
             m_Str = str;
             m_Size = std::strlen(str);
@@ -47,7 +53,7 @@ namespace BlackLua::Internal {
         }
 
         inline StringView SubStr(size_t start, size_t end) {
-            return StringView(m_Str + start, m_Size - end);
+            return StringView(m_Str + start, end - start);
         }
 
     private:

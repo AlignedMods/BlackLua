@@ -15,8 +15,8 @@ namespace BlackLua::Internal {
 
         void DumpNodeList(NodeList list, size_t indentation);
 
-        void DumpNodeExpr(NodeExpr* expr, size_t indentation);
-        void DumpNodeStmt(NodeStmt* stmt, size_t indentation);
+        void DumpNodeExpr(NodeExpr* expr, size_t indentation, size_t line);
+        void DumpNodeStmt(NodeStmt* stmt, size_t indentation, size_t line);
 
         void DumpASTNode(Node* n, size_t indentation);
 
@@ -25,6 +25,8 @@ namespace BlackLua::Internal {
 
         std::string m_Output;
         std::string m_Indentation;
+
+        size_t m_CurrentLine = 1;
     };
 
 } // namespace BlackLua::Internal

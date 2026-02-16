@@ -4,6 +4,7 @@
 #include "internal/compiler/core/string_view.hpp"
 #include "internal/compiler/core/string_builder.hpp"
 #include "internal/compiler/variable_type.hpp"
+#include "internal/compiler/core/source_location.hpp"
 
 #include <variant>
 
@@ -103,8 +104,7 @@ namespace BlackLua::Internal {
                      StmtReturn*,
                      std::nullptr_t> Data;
 
-        size_t Line = 0;
-        size_t Column = 0;
+        SourceRange Loc;
     };
 
     template <typename T>

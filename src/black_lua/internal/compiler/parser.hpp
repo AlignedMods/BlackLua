@@ -41,8 +41,8 @@ namespace BlackLua::Internal {
 
         NodeStmt* ParseType(bool external = false);
 
-        NodeStmt* ParseVariableDecl(StringBuilder type); // This function expects the first token to be the identifier!
-        NodeStmt* ParseFunctionDecl(StringBuilder returnType, bool external = false);
+        NodeStmt* ParseVariableDecl(StringBuilder type, SourceRange start);
+        NodeStmt* ParseFunctionDecl(StringBuilder returnType, SourceRange start, bool external = false);
         NodeStmt* ParseExtern();
 
         NodeStmt* ParseStructDecl();

@@ -2,7 +2,9 @@
 
 #define BLUA_TOKEN_DATA(str, type) \
     if (buf == str) { \
-        AddToken(TokenType::type, buf); \
+        AddToken(TokenType::type, \
+            SourceRange(m_CurrentLine, GetColumn(m_Index - buf.Size()), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - buf.Size(), m_Index)), \
+            buf); \
         continue; \
     }
 
@@ -19,9 +21,9 @@
             } \
             \
             if (isEq) { \
-                AddToken(TokenType::yesEq); \
+                AddToken(TokenType::yesEq, SourceRange(m_CurrentLine, GetColumn(m_Index - 2), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 2, m_Index))); \
             } else { \
-                AddToken(TokenType::noEq); \
+                AddToken(TokenType::noEq, SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); \
             } \
         } \
         break; \
@@ -86,8 +88,10 @@ namespace BlackLua::Internal {
 
                 BLUA_TOKEN_DATA("extern", Extern)
 
-                // If all else fails, we say it's an identifier
-                AddToken(TokenType::Identifier, buf);
+                // If all else fails, it's an identifier
+                AddToken(TokenType::Identifier, 
+                    SourceRange(m_CurrentLine, GetColumn(m_Index - buf.Size()), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - buf.Size(), m_Index)),
+                    buf);
             } else if (std::isdigit(*Peek())) {
                 size_t startIndex = m_Index;
                 size_t endIndex = 0;
@@ -113,55 +117,53 @@ namespace BlackLua::Internal {
                 // Handle suffixes (u, l, f)
                 while (Peek()) {
                     if (*Peek() == 'u') {
-                        Consume();
-                        isUnsigned = true;
+                        BLUA_ASSERT(false, "TODO");
                     } else if (*Peek() == 'l') {
-                        Consume();
-                        isLong = true;
+                        BLUA_ASSERT(false, "TODO");
                     } else if (*Peek() == 'f') {
-                        Consume();
-                        isFloat = true;
+                        BLUA_ASSERT(false, "TODO");
                     } else {
                         break;
                     }
                 }
 
-                if (isUnsigned && !isFloat) { // "u"
-                    if (isLong) { // "lu/ul"
-                        AddToken(TokenType::ULongLit, buf);
-                        continue;
-                    } else { // "u"
-                        AddToken(TokenType::UIntLit, buf);
-                        continue;
-                    }
-                } else if (isLong && !isFloat) { // "l"
-                    AddToken(TokenType::LongLit, buf);
+                if (encounteredPeriod) {
+                    AddToken(TokenType::FloatLit,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - buf.Size()), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - buf.Size(), m_Index)),
+                        buf);
                     continue;
-                } else if (isFloat && encounteredPeriod) { // "f"
-                    AddToken(TokenType::FloatLit, buf);
-                    continue;
-                } else if (encounteredPeriod) { // No suffix but this can't be an integer literal
-                    AddToken(TokenType::DoubleLit, buf);
-                    continue;
-                } else { // Finally if all else fails this is an integer literal
-                    AddToken(TokenType::IntLit, buf);
+                } else {
+                    AddToken(TokenType::IntLit,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - buf.Size()), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - buf.Size(), m_Index)),
+                        buf);
                     continue;
                 }
 
                 continue;
             } else if (!std::isspace(*Peek())) {
                 switch (Consume()) {
-                    case ';': AddToken(TokenType::Semi); break;
-                    case '(': AddToken(TokenType::LeftParen); break;
-                    case ')': AddToken(TokenType::RightParen); break;
-                    case '[': AddToken(TokenType::LeftBracket); break;
-                    case ']': AddToken(TokenType::RightBracket); break;
-                    case '{': AddToken(TokenType::LeftCurly); break;
-                    case '}': AddToken(TokenType::RightCurly); break;
-                    case '~': AddToken(TokenType::Squigly); break;
-                    case ',': AddToken(TokenType::Comma); break;
-                    case ':': AddToken(TokenType::Colon); break;
-                    case '.': AddToken(TokenType::Dot); break;
+                    case ';': AddToken(TokenType::Semi, 
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case '(': AddToken(TokenType::LeftParen,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case ')': AddToken(TokenType::RightParen,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case '[': AddToken(TokenType::LeftBracket,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case ']': AddToken(TokenType::RightBracket,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case '{': AddToken(TokenType::LeftCurly,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case '}': AddToken(TokenType::RightCurly,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case '~': AddToken(TokenType::Squigly,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case ',': AddToken(TokenType::Comma,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case ':': AddToken(TokenType::Colon,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
+                    case '.': AddToken(TokenType::Dot,
+                        SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index))); break;
 
                     BLUA_TOKEN_POSSIBLE_EQ('+', Plus, PlusEq)
                     BLUA_TOKEN_POSSIBLE_EQ('-', Minus, MinusEq)
@@ -198,16 +200,18 @@ namespace BlackLua::Internal {
                                 }
                             }
                         } else if (isEq) {
-                            AddToken(TokenType::SlashEq);
+                            AddToken(TokenType::SlashEq, 
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 2), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 2, m_Index)));
                         } else {
-                            AddToken(TokenType::Slash);
+                            AddToken(TokenType::Slash,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index)));
                         }
 
                         break;
                     }
 
                     case '\'': {
-                        size_t startIndex = m_Index;
+                        size_t startIndex = m_Index - 1;
 
                         if (Peek()) {
                             Consume();
@@ -219,13 +223,15 @@ namespace BlackLua::Internal {
                             }
                         }
 
-                        AddToken(TokenType::CharLit, StringView(m_Source.Data() + startIndex, 1));
+                        AddToken(TokenType::CharLit,
+                            SourceRange(m_CurrentLine, GetColumn(startIndex), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(startIndex, m_Index)),
+                            StringView(m_Source.Data() + startIndex + 1, 1));
                         break;
                     }
 
                     case '"': {
-                        size_t startIndex = m_Index;
-
+                        size_t startIndex = m_Index - 1;
+                       
                         while (Peek()) {
                             char nc = Consume();
                         
@@ -234,7 +240,9 @@ namespace BlackLua::Internal {
                             }
                         }
 
-                        AddToken(TokenType::StrLit, StringView(m_Source.Data() + startIndex, m_Index - startIndex - 1));
+                        AddToken(TokenType::StrLit, 
+                            SourceRange(m_CurrentLine, GetColumn(startIndex), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(startIndex, m_Index)), 
+                            StringView(m_Source.Data() + startIndex + 1, m_Index - startIndex));
                         break;
                     }
                 }
@@ -265,13 +273,16 @@ namespace BlackLua::Internal {
         return m_Source.At(m_Index - 1);
     }
 
-    void Lexer::AddToken(TokenType type, const StringView data) {
+    void Lexer::AddToken(TokenType type, const SourceRange& loc, const StringView data) {
         Token token;
         token.Type = type;
         token.Data = data;
-        token.Line = m_CurrentLine;
-        token.Column = m_Index - m_CurrentLineStart - data.Size();
+        token.Loc = loc;
         m_Tokens.push_back(token);
+    }
+
+    size_t Lexer::GetColumn(size_t index) {
+        return (m_CurrentLineStart == 0) ? (index - m_CurrentLineStart) + 1 : index - m_CurrentLineStart;
     }
 
 } // namespace BlackLua::Internal

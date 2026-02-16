@@ -2,6 +2,7 @@
 
 #include "core.hpp"
 #include "internal/compiler/core/string_view.hpp"
+#include "internal/compiler/core/source_location.hpp"
 
 #include <string>
 #include <vector>
@@ -52,11 +53,7 @@ namespace BlackLua::Internal {
 
         CharLit,
         IntLit,
-        UIntLit,
-        LongLit,
-        ULongLit,
         FloatLit,
-        DoubleLit,
         StrLit,
 
         Void,
@@ -135,11 +132,7 @@ namespace BlackLua::Internal {
             case TokenType::False: return "false";
 
             case TokenType::IntLit: return "int-lit";
-            case TokenType::UIntLit: return "uint-lit";
-            case TokenType::LongLit: return "long-lit";
-            case TokenType::ULongLit: return "ulong-lit";
             case TokenType::FloatLit: return "float-lit";
-            case TokenType::DoubleLit: return "double-lit";
             case TokenType::StrLit: return "str-lit";
 
             case TokenType::Void: return "void";
@@ -173,8 +166,7 @@ namespace BlackLua::Internal {
     struct Token {
         TokenType Type = TokenType::Semi;
         StringView Data;
-        size_t Line = 0;
-        size_t Column = 0;
+        SourceRange Loc;
     };
 
     class Lexer {
@@ -196,14 +188,16 @@ namespace BlackLua::Internal {
         // NOTE: Consume is not allowed to be called after the end of the source string
         char Consume();
 
-        void AddToken(TokenType type, const StringView data = {});
+        void AddToken(TokenType type, const SourceRange& loc, const StringView data = {});
+
+        size_t GetColumn(size_t index);
 
     private:
         Tokens m_Tokens;
         size_t m_Index = 0;
         StringView m_Source;
-        int m_CurrentLine = 1;
-        int m_CurrentLineStart = 0; // The number of characters it takes to get to this line (from the start of the file)
+        size_t m_CurrentLine = 1;
+        size_t m_CurrentLineStart = 0; // The number of characters it takes to get to this line (from the start of the file)
     };
 
 } // namespace BlackLua::Internal

@@ -3,6 +3,7 @@
 #include "internal/compiler/ast/node_list.hpp"
 #include "internal/compiler/core/string_view.hpp"
 #include "internal/compiler/variable_type.hpp"
+#include "internal/compiler/core/source_location.hpp"
 
 #include <variant>
 
@@ -200,8 +201,7 @@ namespace BlackLua::Internal {
                      ExprParen*, ExprCast*, 
                      ExprUnaryOperator*, ExprBinaryOperator*> Data;
 
-        size_t Line = 0;
-        size_t Column = 0;
+        SourceRange Loc;
     };
 
     template <typename T>

@@ -25,10 +25,20 @@ namespace BlackLua::Internal {
         }
     }
 
-    void ASTDumper::DumpNodeExpr(NodeExpr* expr, size_t indentation) {
+    void ASTDumper::DumpNodeExpr(NodeExpr* expr, size_t indentation, size_t line) {
         std::string ident;
         ident.append(indentation, ' ');
-        m_Output += fmt::format("{}<{}:{}> ", ident, expr->Line, expr->Column);
+        if (expr->Loc.Start.Line == line) {
+            m_Output += fmt::format("{}<col:{}, ", ident, expr->Loc.Start.Column);
+        } else {
+            m_Output += fmt::format("{}<line:{}:{}, ", ident, expr->Loc.Start.Line, expr->Loc.Start.Column);
+        }
+
+        if (expr->Loc.End.Line == line) {
+            m_Output += fmt::format("col:{}> ", expr->Loc.End.Column);
+        } else {
+            m_Output += fmt::format("line:{}:{}> ", expr->Loc.End.Line, expr->Loc.End.Column);
+        }
         
         if (ExprConstant* con = GetNode<ExprConstant>(expr)) {
             if (ConstantBool* cb = GetNode<ConstantBool>(con)) {
@@ -74,21 +84,21 @@ namespace BlackLua::Internal {
         
         if (ExprArrayAccess* arrAccess = GetNode<ExprArrayAccess>(expr)) {
             m_Output += fmt::format("ArrayAccessExpr '{}'\n", VariableTypeToString(arrAccess->ResolvedType));
-            DumpNodeExpr(arrAccess->Index, indentation + 4);
-            DumpNodeExpr(arrAccess->Parent, indentation + 4);
+            DumpNodeExpr(arrAccess->Index, indentation + 4, expr->Loc.Start.Line);
+            DumpNodeExpr(arrAccess->Parent, indentation + 4, expr->Loc.Start.Line);
             return;
         }
         
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
             m_Output += fmt::format("MemberExpr {}\n", mem->Member);
-            DumpNodeExpr(mem->Parent, indentation + 4);
+            DumpNodeExpr(mem->Parent, indentation + 4, expr->Loc.Start.Line);
             return;
         }
         
         if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
             m_Output += fmt::format("MethodCallExpr {}\n", call->Member);
             DumpNodeList(call->Arguments, indentation + 4);
-            DumpNodeExpr(call->Parent, indentation + 4);
+            DumpNodeExpr(call->Parent, indentation + 4, expr->Loc.Start.Line);
             return;
         }
         
@@ -100,34 +110,44 @@ namespace BlackLua::Internal {
         
         if (ExprParen* paren = GetNode<ExprParen>(expr)) {
             m_Output += "ParenExpr\n";
-            DumpNodeExpr(paren->Expression, indentation + 4);
+            DumpNodeExpr(paren->Expression, indentation + 4, expr->Loc.Start.Line);
             return;
         }
         
         if (ExprCast* cast = GetNode<ExprCast>(expr)) {
             m_Output += fmt::format("CastExpr '{}'\n", VariableTypeToString(cast->ResolvedDstType));
-            DumpNodeExpr(cast->Expression, indentation + 4);
+            DumpNodeExpr(cast->Expression, indentation + 4, expr->Loc.Start.Line);
             return;
         }
         
         if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
-            m_Output += fmt::format("UnaryOperatorExpr '{}'\n", UnaryOperatorTypeToString(unOp->Type));
-            DumpNodeExpr(unOp->Expression, indentation + 4);
+            m_Output += fmt::format("UnaryOperatorExpr '{}' '{}'\n", UnaryOperatorTypeToString(unOp->Type), VariableTypeToString(unOp->ResolvedType));
+            DumpNodeExpr(unOp->Expression, indentation + 4, expr->Loc.Start.Line);
             return;
         }
         
         if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
-            m_Output += fmt::format("BinaryOperatorExpr '{}'\n", BinaryOperatorTypeToString(binOp->Type));
-            DumpNodeExpr(binOp->LHS, indentation + 4);
-            DumpNodeExpr(binOp->RHS, indentation + 4);
+            m_Output += fmt::format("BinaryOperatorExpr '{}' '{}'\n", BinaryOperatorTypeToString(binOp->Type), VariableTypeToString(binOp->ResolvedType));
+            DumpNodeExpr(binOp->LHS, indentation + 4, expr->Loc.Start.Line);
+            DumpNodeExpr(binOp->RHS, indentation + 4, expr->Loc.Start.Line);
             return;
         }
     }
 
-    void ASTDumper::DumpNodeStmt(NodeStmt* stmt, size_t indentation) {
+    void ASTDumper::DumpNodeStmt(NodeStmt* stmt, size_t indentation, size_t line) {
         std::string ident;
         ident.append(indentation, ' ');
-        m_Output += fmt::format("{}<{}:{}> ", ident, stmt->Line, stmt->Column);
+        if (stmt->Loc.Start.Line == line) {
+            m_Output += fmt::format("{}<col:{}, ", ident, stmt->Loc.Start.Column);
+        } else {
+            m_Output += fmt::format("{}<line:{}:{}, ", ident, stmt->Loc.Start.Line, stmt->Loc.Start.Column);
+        }
+
+        if (stmt->Loc.End.Line == line) {
+            m_Output += fmt::format("col:{}> ", stmt->Loc.End.Column);
+        } else {
+            m_Output += fmt::format("line:{}:{}> ", stmt->Loc.End.Line, stmt->Loc.End.Column);
+        }
 
         if (StmtCompound* compound = GetNode<StmtCompound>(stmt)) {
             m_Output += fmt::format("CompoundStmt\n");
@@ -138,7 +158,7 @@ namespace BlackLua::Internal {
         if (StmtVarDecl* decl = GetNode<StmtVarDecl>(stmt)) {
             m_Output += fmt::format("VarDeclStmt \"{}\" '{}'\n", decl->Identifier, VariableTypeToString(decl->ResolvedType));
             if (decl->Value) {
-                DumpNodeExpr(decl->Value, indentation + 4);
+                DumpNodeExpr(decl->Value, indentation + 4, stmt->Loc.Start.Line);
             }
             return;
         }
@@ -152,7 +172,7 @@ namespace BlackLua::Internal {
             m_Output += fmt::format("FunctionDeclStmt \"{}\" '{}' {}\n", decl->Name, VariableTypeToString(decl->ResolvedType), (decl->Extern) ? "extern" : "");
             DumpNodeList(decl->Parameters, indentation + 4);
             if (decl->Body) {
-                DumpNodeStmt(decl->Body, indentation + 4);
+                DumpNodeStmt(decl->Body, indentation + 4, stmt->Loc.Start.Line);
             }
             return;
         }
@@ -174,53 +194,58 @@ namespace BlackLua::Internal {
             m_Output += fmt::format("MethodDeclStmt \"{}\" '{}'\n", decl->Name, VariableTypeToString(decl->ResolvedType));
             DumpNodeList(decl->Parameters, indentation + 4);
             if (decl->Body) {
-                DumpNodeStmt(decl->Body, indentation + 4);
+                DumpNodeStmt(decl->Body, indentation + 4, stmt->Loc.Start.Line);
             }
             return;
         }
 
         if (StmtWhile* wh = GetNode<StmtWhile>(stmt)) {
             m_Output += "WhileStmt\n";
-            DumpNodeExpr(wh->Condition, indentation + 4);
-            DumpNodeStmt(wh->Body, indentation + 4);
+            DumpNodeExpr(wh->Condition, indentation + 4, stmt->Loc.Start.Line);
+            DumpNodeStmt(wh->Body, indentation + 4, stmt->Loc.Start.Line);
             return;
         }
 
         if (StmtDoWhile* wh = GetNode<StmtDoWhile>(stmt)) {
             m_Output += "DoWhileStmt\n";
-            DumpNodeExpr(wh->Condition, indentation + 4);
-            DumpNodeStmt(wh->Body, indentation + 4);
+            DumpNodeExpr(wh->Condition, indentation + 4, stmt->Loc.Start.Line);
+            DumpNodeStmt(wh->Body, indentation + 4, stmt->Loc.Start.Line);
             return;
         }
 
         if (StmtFor* fo = GetNode<StmtFor>(stmt)) {
             m_Output += "ForStmt\n";
-            DumpNodeStmt(fo->Prologue, indentation + 4);
-            DumpNodeExpr(fo->Condition, indentation + 4);
-            DumpNodeExpr(fo->Epilogue, indentation + 4);
-            DumpNodeStmt(fo->Body, indentation + 4);
+            DumpNodeStmt(fo->Prologue, indentation + 4, stmt->Loc.Start.Line);
+            DumpNodeExpr(fo->Condition, indentation + 4, stmt->Loc.Start.Line);
+            DumpNodeExpr(fo->Epilogue, indentation + 4, stmt->Loc.Start.Line);
+            DumpNodeStmt(fo->Body, indentation + 4, stmt->Loc.Start.Line);
             return;
         }
 
         if (StmtIf* i = GetNode<StmtIf>(stmt)) {
             m_Output += "IfStmt\n";
-            DumpNodeExpr(i->Condition, indentation + 4);
-            DumpNodeStmt(i->Body, indentation + 4);
+            DumpNodeExpr(i->Condition, indentation + 4, stmt->Loc.Start.Line);
+            DumpNodeStmt(i->Body, indentation + 4, stmt->Loc.Start.Line);
+
+            if (i->ElseBody) {
+                DumpNodeStmt(i->ElseBody, indentation + 4, stmt->Loc.Start.Line);
+            }
+
             return;
         }
 
         if (StmtReturn* ret = GetNode<StmtReturn>(stmt)) {
             m_Output += "ReturnStmt\n";
-            DumpNodeExpr(ret->Value, indentation + 4);
+            DumpNodeExpr(ret->Value, indentation + 4, stmt->Loc.Start.Line);
             return;
         }
     }
 
     void ASTDumper::DumpASTNode(Node* n, size_t indentation) {
         if (NodeExpr* expr = GetNode<NodeExpr>(n)) {
-            DumpNodeExpr(expr, indentation);
+            DumpNodeExpr(expr, indentation, 0);
         } else if (NodeStmt* stmt = GetNode<NodeStmt>(n)) {
-            DumpNodeStmt(stmt, indentation);
+            DumpNodeStmt(stmt, indentation, 0);
         }
     }
 

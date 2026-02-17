@@ -36,6 +36,8 @@ namespace BlackLua::Internal {
         DoubleDot,
         TripleDot,
 
+        Self,
+
         If,
         Else,
 

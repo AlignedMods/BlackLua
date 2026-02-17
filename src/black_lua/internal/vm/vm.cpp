@@ -489,6 +489,20 @@ namespace BlackLua::Internal {
                     break;
                 }
 
+                case OpCodeType::Ref: {
+                    StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
+                    StackSlot src = GetStackSlot(slot);
+
+                    StackSlot s;
+                    s.Memory = src.Memory;
+                    s.ReadOnly = src.ReadOnly;
+                    s.Size = src.Size;
+                    m_StackSlots[m_StackSlotPointer] = s;
+                    m_StackSlotPointer++;
+
+                    break;
+                }
+
                 case OpCodeType::Offset: {
                     OpCodeOffset off = std::get<OpCodeOffset>(op.Data);
                     int32_t offset = GetInt(off.Offset);

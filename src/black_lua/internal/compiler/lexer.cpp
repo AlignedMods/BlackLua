@@ -53,6 +53,8 @@ namespace BlackLua::Internal {
                 }
 
                 StringView buf(m_Source.Data() + startIndex, m_Index - startIndex);
+                BLUA_TOKEN_DATA("self", Self)
+
                 BLUA_TOKEN_DATA("if", If)
                 BLUA_TOKEN_DATA("else", Else)
 

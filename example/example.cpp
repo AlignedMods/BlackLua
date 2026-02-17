@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
     context.Run("test.bl");
     context.Call("main", "test.bl");
     
-    fmt::println("{}", vm.GetInt(-2));
+    fmt::println("{}", vm.GetInt(1));
 
     context.FreeModule("test.bl");
 

@@ -83,7 +83,7 @@ namespace BlackLua::Internal {
         bool m_Error = false;
 
         struct Declaration {
-            VariableType* Type;
+            VariableType* Type = nullptr;
             NodeStmt* Decl = nullptr;
             bool Extern = false;
         };
@@ -98,6 +98,7 @@ namespace BlackLua::Internal {
         };
 
         Scope* m_CurrentScope = nullptr;
+        StructDeclaration* m_ActiveStruct = nullptr;
 
         Context* m_Context = nullptr;
     };

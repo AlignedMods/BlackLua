@@ -66,6 +66,22 @@ namespace BlackLua::Internal {
         if (ExprVarRef* ref = GetNode<ExprVarRef>(expr)) {
             std::string ident = fmt::format("{}", ref->Identifier);
         
+            // First check if we are in a struct context
+            if (m_ActiveStruct) {
+                for (const auto& field : m_ActiveStruct->Fields) {
+                    if (field.Identifier == StringView(ident.data(), ident.size())) {
+                        ExprMember* mem = m_Context->GetAllocator()->AllocateNamed<ExprMember>();
+                        mem->Member = ref->Identifier;
+                        mem->Parent = m_Context->GetAllocator()->AllocateNamed<NodeExpr>(m_Context->GetAllocator()->AllocateNamed<ExprSelf>(), expr->Loc);
+                        mem->ResolvedParentType = CreateVarType(m_Context, PrimitiveType::Structure, false, *m_ActiveStruct);
+                        mem->ResolvedMemberType = field.ResolvedType;
+
+                        expr->Data = mem;
+                        return mem->ResolvedMemberType;
+                    }
+                }
+            }
+
             // Loop backward through all the scopes
             Scope* currentScope = m_CurrentScope;
             while (currentScope) {
@@ -100,6 +116,15 @@ namespace BlackLua::Internal {
             return arrAccess->ResolvedType;
         }
 
+        if (ExprSelf* self = GetNode<ExprSelf>(expr)) {
+            if (!m_ActiveStruct) {
+                // TODO: error
+                return CreateVarType(m_Context, PrimitiveType::Invalid);
+            }
+
+            return CreateVarType(m_Context, PrimitiveType::Structure, false, *m_ActiveStruct);
+        }
+
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
             VariableType* structType = CheckNodeExpression(mem->Parent);
             if (structType->Type != PrimitiveType::Structure) {
@@ -118,6 +143,43 @@ namespace BlackLua::Internal {
 
             // m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Unknown field \"{}\"", mem->Member));
             return nullptr;
+        }
+
+        if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
+            VariableType* parentType = CheckNodeExpression(call->Parent);
+            call->ResolvedParentType = parentType;
+            std::string name = fmt::format("{}__{}", std::get<StructDeclaration>(parentType->Data).Identifier, call->Member);
+            if (m_DeclaredSymbols.contains(name)) {
+                NodeList params = GetNode<StmtMethodDecl>(m_DeclaredSymbols.at(name).Decl)->Parameters;
+        
+                if (params.Size != call->Arguments.Size) {
+                    // ErrorNoMatchingFunction(call->Name, expr->Line, expr->Column);
+                    return CreateVarType(m_Context, PrimitiveType::Invalid);
+                }
+        
+                for (size_t i = 0; i < params.Size; i++) {
+                    Node* param = params.Items[i];
+                    NodeExpr* arg = GetNode<NodeExpr>(call->Arguments.Items[i]);
+        
+                    VariableType* typeParam = GetNode<StmtParamDecl>(GetNode<NodeStmt>((param)))->ResolvedType;
+                    VariableType* typeArg = CheckNodeExpression(arg);
+        
+                    ConversionCost cost = GetConversionCost(typeParam, typeArg);
+                    if (cost.CastNeeded) {
+                        // Perform an implicit cast (if possible)
+                        if (cost.ImplicitCastPossible) {
+                            InsertImplicitCast(arg, typeParam, typeArg);
+                        } else {
+                            // m_Context->ReportCompilerError(arg->Line, arg->Column, fmt::format("Mismatched function argument types, parameter type is {}, while argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
+                            m_Error = true;
+                        }
+                    }
+                }
+        
+                // call->ResolvedReturnType = m_DeclaredSymbols.at(name).Type;
+                // return call->ResolvedReturnType; 
+                return m_DeclaredSymbols.at(name).Type;
+            }
         }
 
         if (ExprCall* call = GetNode<ExprCall>(expr)) {
@@ -310,6 +372,8 @@ namespace BlackLua::Internal {
         StructDeclaration sd;
         sd.Identifier = decl->Identifier;
         
+        std::vector<NodeStmt*> methods;
+
         for (size_t i = 0; i < decl->Fields.Size; i++) {
             if (StmtFieldDecl* fdecl = GetNode<StmtFieldDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
                 StructFieldDeclaration field;
@@ -322,23 +386,32 @@ namespace BlackLua::Internal {
         
                 sd.Fields.push_back(field);
             } else if (StmtMethodDecl* mdecl = GetNode<StmtMethodDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
-                VariableType* type = GetVarTypeFromString(StringView(mdecl->ReturnType.Data(), mdecl->ReturnType.Size()));
-                m_DeclaredSymbols[fmt::format("{}__{}", name, mdecl->Name)] = { type, GetNode<NodeStmt>(decl->Fields.Items[i]) };
-                mdecl->ResolvedType = type;
-                
-                PushScope(type);
-                
-                for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
-                    CheckNode(mdecl->Parameters.Items[i]);
-                }
-                
-                CheckNodeCompound(mdecl->Body);
-                
-                PopScope();
+                methods.push_back(GetNode<NodeStmt>(decl->Fields.Items[i]));
             }
         }
         
         m_DeclaredStructs[name] = sd;
+
+        for (NodeStmt* decl : methods) {
+            StmtMethodDecl* mdecl = GetNode<StmtMethodDecl>(decl);
+            VariableType* type = GetVarTypeFromString(StringView(mdecl->ReturnType.Data(), mdecl->ReturnType.Size()));
+            m_DeclaredSymbols[fmt::format("{}__{}", name, mdecl->Name)] = { type, decl };
+            
+            mdecl->ResolvedType = type;
+            m_ActiveStruct = &m_DeclaredStructs.at(name);
+            
+            PushScope(type);
+            
+            for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
+                CheckNode(mdecl->Parameters.Items[i]);
+            }
+            
+            CheckNodeCompound(mdecl->Body);
+            
+            PopScope();
+
+            m_ActiveStruct = nullptr;
+        }
     }
 
     void TypeChecker::CheckNodeFunctionDecl(NodeStmt* stmt) {
@@ -453,6 +526,8 @@ namespace BlackLua::Internal {
             CheckNodeVarDecl(stmt);
         } else if (GetNode<StmtParamDecl>(stmt)) {
             CheckNodeParamDecl(stmt);
+        } else if (GetNode<StmtStructDecl>(stmt)) {
+            CheckNodeStructDecl(stmt);
         } else if (GetNode<StmtFunctionDecl>(stmt)) {
             CheckNodeFunctionDecl(stmt);
         } else if (GetNode<StmtWhile>(stmt)) {

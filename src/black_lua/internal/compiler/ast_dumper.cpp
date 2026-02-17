@@ -28,17 +28,18 @@ namespace BlackLua::Internal {
     void ASTDumper::DumpNodeExpr(NodeExpr* expr, size_t indentation, size_t line) {
         std::string ident;
         ident.append(indentation, ' ');
-        if (expr->Loc.Start.Line == line) {
-            m_Output += fmt::format("{}<col:{}, ", ident, expr->Loc.Start.Column);
-        } else {
-            m_Output += fmt::format("{}<line:{}:{}, ", ident, expr->Loc.Start.Line, expr->Loc.Start.Column);
-        }
-
-        if (expr->Loc.End.Line == line) {
-            m_Output += fmt::format("col:{}> ", expr->Loc.End.Column);
-        } else {
-            m_Output += fmt::format("line:{}:{}> ", expr->Loc.End.Line, expr->Loc.End.Column);
-        }
+        // if (expr->Loc.Start.Line == line) {
+        //     m_Output += fmt::format("{}<col:{}, ", ident, expr->Loc.Start.Column);
+        // } else {
+        //     m_Output += fmt::format("{}<line:{}:{}, ", ident, expr->Loc.Start.Line, expr->Loc.Start.Column);
+        // }
+        // 
+        // if (expr->Loc.End.Line == line) {
+        //     m_Output += fmt::format("col:{}> ", expr->Loc.End.Column);
+        // } else {
+        //     m_Output += fmt::format("line:{}:{}> ", expr->Loc.End.Line, expr->Loc.End.Column);
+        // }
+        m_Output += ident;
         
         if (ExprConstant* con = GetNode<ExprConstant>(expr)) {
             if (ConstantBool* cb = GetNode<ConstantBool>(con)) {
@@ -89,8 +90,13 @@ namespace BlackLua::Internal {
             return;
         }
         
+        if (ExprSelf* self = GetNode<ExprSelf>(expr)) {
+            m_Output += "SelfExpr\n";
+            return;
+        }
+
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
-            m_Output += fmt::format("MemberExpr {}\n", mem->Member);
+            m_Output += fmt::format("MemberExpr {} '{}'\n", mem->Member, VariableTypeToString(mem->ResolvedMemberType));
             DumpNodeExpr(mem->Parent, indentation + 4, expr->Loc.Start.Line);
             return;
         }
@@ -137,17 +143,18 @@ namespace BlackLua::Internal {
     void ASTDumper::DumpNodeStmt(NodeStmt* stmt, size_t indentation, size_t line) {
         std::string ident;
         ident.append(indentation, ' ');
-        if (stmt->Loc.Start.Line == line) {
-            m_Output += fmt::format("{}<col:{}, ", ident, stmt->Loc.Start.Column);
-        } else {
-            m_Output += fmt::format("{}<line:{}:{}, ", ident, stmt->Loc.Start.Line, stmt->Loc.Start.Column);
-        }
-
-        if (stmt->Loc.End.Line == line) {
-            m_Output += fmt::format("col:{}> ", stmt->Loc.End.Column);
-        } else {
-            m_Output += fmt::format("line:{}:{}> ", stmt->Loc.End.Line, stmt->Loc.End.Column);
-        }
+        // if (stmt->Loc.Start.Line == line) {
+        //     m_Output += fmt::format("{}<col:{}, ", ident, stmt->Loc.Start.Column);
+        // } else {
+        //     m_Output += fmt::format("{}<line:{}:{}, ", ident, stmt->Loc.Start.Line, stmt->Loc.Start.Column);
+        // }
+        // 
+        // if (stmt->Loc.End.Line == line) {
+        //     m_Output += fmt::format("col:{}> ", stmt->Loc.End.Column);
+        // } else {
+        //     m_Output += fmt::format("line:{}:{}> ", stmt->Loc.End.Line, stmt->Loc.End.Column);
+        // }
+        m_Output += ident;
 
         if (StmtCompound* compound = GetNode<StmtCompound>(stmt)) {
             m_Output += fmt::format("CompoundStmt\n");
@@ -180,7 +187,7 @@ namespace BlackLua::Internal {
         if (StmtStructDecl* decl = GetNode<StmtStructDecl>(stmt)) {
             m_Output += fmt::format("StructDeclStmt \"{}\"\n", decl->Identifier);
             for (size_t i = 0; i < decl->Fields.Size; i++) {
-                DumpASTNode(decl->Fields.Items[i], indentation);
+                DumpASTNode(decl->Fields.Items[i], indentation + 4);
             }
             return;
         }

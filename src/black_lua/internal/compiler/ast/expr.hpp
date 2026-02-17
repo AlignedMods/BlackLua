@@ -138,6 +138,8 @@ namespace BlackLua::Internal {
         VariableType* ResolvedType = nullptr;
     };
     
+    struct ExprSelf {};
+
     struct ExprMember {
         NodeExpr* Parent = nullptr;
         StringView Member;
@@ -196,7 +198,7 @@ namespace BlackLua::Internal {
     struct NodeExpr {
         std::variant<ExprConstant*,
                      ExprVarRef*,
-                     ExprArrayAccess*, ExprMember*, 
+                     ExprArrayAccess*, ExprSelf*, ExprMember*, 
                      ExprMethodCall*, ExprCall*, 
                      ExprParen*, ExprCast*, 
                      ExprUnaryOperator*, ExprBinaryOperator*> Data;

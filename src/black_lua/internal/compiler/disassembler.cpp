@@ -148,6 +148,17 @@ namespace BlackLua::Internal {
                 break;
             }
 
+            case OpCodeType::Ref: {
+                StackSlotIndex i = std::get<StackSlotIndex>(op.Data);
+
+                m_Output += m_Indentation;
+                m_Output += "ref ";
+                DisassembleStackSlotIndex(i);
+                m_Output += '\n';
+
+                break;
+            }
+
             case OpCodeType::Offset: {
                 OpCodeOffset o = std::get<OpCodeOffset>(op.Data);
 

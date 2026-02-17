@@ -174,6 +174,10 @@ namespace BlackLua::Internal {
             return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
 
+        if (ExprSelf* self = GetNode<ExprSelf>(expr)) {
+            return CompileStackSlot(m_CurrentStackFrame->DeclaredSymbols.at("bL__internal__self_restrict__").Index, true);
+        }
+
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
             CompileStackSlot slot = EmitNodeExpression(mem->Parent);
         
@@ -193,8 +197,8 @@ namespace BlackLua::Internal {
         }
 
         if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
+            CompileStackSlot slot = EmitNodeExpression(call->Parent);
             VariableType* structType = call->ResolvedParentType;
-        
             Declaration decl = m_DeclaredSymbols.at(fmt::format("{}__{}", std::get<StructDeclaration>(structType->Data).Identifier, call->Member));
         
             std::vector<CompileStackSlot> parameters; 
@@ -204,6 +208,9 @@ namespace BlackLua::Internal {
         
                 parameters.push_back(slot);
             }
+
+            m_OpCodes.emplace_back(OpCodeType::Ref, CompileToRuntimeStackSlot(slot));
+            IncrementStackSlotCount();
         
             for (const auto& p : parameters) {
                 m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(p));
@@ -582,15 +589,19 @@ namespace BlackLua::Internal {
                 PushCompilerStackFrame();
                 
                 size_t returnSlot = (mdecl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
-                size_t varsPushed = 0;
-                
+
+                Declaration s;
+                s.Extern = false;
+                s.Index = 0;
+                m_CurrentStackFrame->DeclaredSymbols["bL__internal__self_restrict__"] = s;
+                m_OpCodes.emplace_back(OpCodeType::Ref, -(mdecl->Parameters.Size + 1 + returnSlot));
+
                 // Inject function parameters into the scope
                 for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
                     EmitNodeParamDecl(GetNode<NodeStmt>(mdecl->Parameters.Items[i]));
                 
                     // Copy the arguments into the parameters
-                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(mdecl->Parameters.Size + 1 + returnSlot)));
-                    varsPushed++;
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(mdecl->Parameters.Size + 2 + returnSlot)));
                 }
                 
                 EmitNodeCompound(mdecl->Body);

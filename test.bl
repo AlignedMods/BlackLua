@@ -1,7 +1,19 @@
-int foo = 4544357;
-int bar = 6;
-int baz = 58;
+int foo = 0;
+
+struct Player {
+    int X;
+    int Y;
+
+    void Move(int x, int y) {
+        foo = (y - x) + X;
+    }
+};
 
 void main() {
-    baz = -(5 + 9 * 7);
+    Player p;
+    p.X = 77;
+    int a = 9;
+    int b = 7;
+    p.Move(a, b);
+    // foo = p.X - p.Y;
 }

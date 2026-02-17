@@ -51,6 +51,7 @@ namespace BlackLua::Internal {
         Get, // Automaticaly pushes the value onto the stack
         Copy, // Copies a value into another slot
         Dup, // Creates a new stack slot and copies a value into it
+        Ref,
         Offset, // Adds a certain offset (specified as a slot) to a specified slot
 
         LoadI8,

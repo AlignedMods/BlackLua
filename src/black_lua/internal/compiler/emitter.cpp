@@ -23,12 +23,12 @@ namespace BlackLua::Internal {
 
     void Emitter::EmitImpl() {
         // Emit the constants first
-        while (Peek()) {
-            EmitConstant(Consume());
-        }
-
-        // Reset the index
-        m_Index = 0;
+        // while (Peek()) {
+        //     EmitConstant(Consume());
+        // }
+        // 
+        // // Reset the index
+        // m_Index = 0;
 
         while (Peek()) {
             EmitNode(Consume());
@@ -47,159 +47,6 @@ namespace BlackLua::Internal {
         BLUA_ASSERT(m_Index < m_Nodes->size(), "Consume() of out bounds!");
 
         return m_Nodes->at(m_Index++);
-    }
-
-    void Emitter::EmitConstantExpr(NodeExpr* expr) {
-        if (ExprConstant* constant = GetNode<ExprConstant>(expr)) {
-            if (!GetNode<ConstantString>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(GetTypeSize(constant->ResolvedType)));
-                m_SlotCount++;
-            }
-
-            if (ConstantBool* b = GetNode<ConstantBool>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 1, &b->Value, true));
-            }
-
-            if (ConstantChar* c = GetNode<ConstantChar>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 1, &c->Char, true));
-            }
-
-            if (ConstantInt* i = GetNode<ConstantInt>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 4, &i->Int, true));
-            }
-
-            if (ConstantLong* l = GetNode<ConstantLong>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 8, &l->Long, true));
-            }
-
-            if (ConstantFloat* f = GetNode<ConstantFloat>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 4, &f->Float, true));
-            }
-
-            if (ConstantDouble* d = GetNode<ConstantDouble>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::Store, OpCodeStore(-1, 8, &d->Double, true));
-            }
-
-            if (ConstantString* s = GetNode<ConstantString>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(s->String.Size()));
-                m_SlotCount++;
-                m_OpCodes.emplace_back(OpCodeType::StoreString, OpCodeStore(-1, s->String.Size(), s->String.Data(), true));
-            }
-
-            m_ConstantMap[expr] = CompileStackSlot(m_SlotCount, false);
-            return;
-        }
-
-        if (ExprArrayAccess* arrAccess = GetNode<ExprArrayAccess>(expr)) {
-            EmitConstantExpr(arrAccess->Index);
-            return;
-        }
-
-        if (ExprParen* paren = GetNode<ExprParen>(expr)) {
-            EmitConstantExpr(paren->Expression);
-            return;
-        }
-
-        if (ExprCast* cast = GetNode<ExprCast>(expr)) {
-            EmitConstantExpr(cast->Expression);
-            return;
-        }
-
-        if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
-            for (size_t i = 0; i < call->Arguments.Size; i++) {
-                EmitConstantExpr(GetNode<NodeExpr>(call->Arguments.Items[i]));
-            }
-            return;
-        }
-
-        if (ExprCall* call = GetNode<ExprCall>(expr)) {
-            for (size_t i = 0; i < call->Arguments.Size; i++) {
-                EmitConstantExpr(GetNode<NodeExpr>(call->Arguments.Items[i]));
-            }
-            return;
-        }
-
-        if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
-            EmitConstantExpr(unOp->Expression);
-            return;
-        }
-
-        if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
-            EmitConstantExpr(binOp->LHS);
-            EmitConstantExpr(binOp->RHS);
-            return;
-        }
-    }
-
-    void Emitter::EmitConstantStatement(NodeStmt* stmt) {
-        if (StmtCompound* scope = GetNode<StmtCompound>(stmt)) {
-            for (size_t i = 0; i < scope->Nodes.Size; i++) {
-                EmitConstant(scope->Nodes.Items[i]);
-            }
-            return;
-        }
-
-        if (StmtVarDecl* decl = GetNode<StmtVarDecl>(stmt)) {
-            if (decl->Value) {
-                EmitConstantExpr(decl->Value);
-            }
-            return;
-        }
-
-        if (StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(stmt)) {
-            for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                EmitConstant(decl->Parameters.Items[i]);
-            }
-
-            if (decl->Body) {
-                EmitConstantStatement(decl->Body);
-            }
-            return;
-        }
-
-        if (StmtStructDecl* decl = GetNode<StmtStructDecl>(stmt)) {
-            for (size_t i = 0; i < decl->Fields.Size; i++) {
-                if (StmtMethodDecl* mdecl = GetNode<StmtMethodDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
-                    EmitConstantStatement(mdecl->Body);
-                }
-            }
-            return;
-        }
-
-        if (StmtWhile* wh = GetNode<StmtWhile>(stmt)) {
-            EmitConstantExpr(wh->Condition);
-            EmitConstantStatement(wh->Body);
-            return;
-        }
-
-        if (StmtDoWhile* doWh = GetNode<StmtDoWhile>(stmt)) {
-            EmitConstantExpr(doWh->Condition);
-            EmitConstantStatement(doWh->Body);
-            return;
-        }
-
-        if (StmtIf* nif = GetNode<StmtIf>(stmt)) {
-            EmitConstantExpr(nif->Condition);
-            EmitConstantStatement(nif->Body);
-
-            if (nif->ElseBody) {
-                EmitConstantStatement(nif->ElseBody);
-            }
-            return;
-        }
-
-        if (StmtReturn* ret = GetNode<StmtReturn>(stmt)) {
-            EmitConstantExpr(ret->Value);
-            return;
-        }
-    }
-
-    void Emitter::EmitConstant(Node* node) {
-        if (NodeExpr* expr = GetNode<NodeExpr>(node)) {
-            EmitConstantExpr(expr);
-        } else if (NodeStmt* stmt = GetNode<NodeStmt>(node)) {
-            EmitConstantStatement(stmt);
-        }
     }
 
     StackSlotIndex Emitter::CompileToRuntimeStackSlot(CompileStackSlot slot) {
@@ -223,7 +70,7 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::PushBytes(size_t bytes, const std::string& debugData) {
-        m_OpCodes.emplace_back(OpCodeType::PushBytes, static_cast<int32_t>(bytes), debugData);
+        m_OpCodes.emplace_back(OpCodeType::Push, static_cast<int32_t>(bytes), debugData);
     }
 
     void Emitter::IncrementStackSlotCount() {
@@ -256,8 +103,38 @@ namespace BlackLua::Internal {
     }
 
     CompileStackSlot Emitter::EmitNodeExpression(NodeExpr* expr) {
-        if (GetNode<ExprConstant>(expr)) {
-            return m_ConstantMap.at(expr);
+        if (ExprConstant* constant = GetNode<ExprConstant>(expr)) {
+            IncrementStackSlotCount();
+
+            if (ConstantBool* b = GetNode<ConstantBool>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::LoadI8, OpCodeLoad(b->Value));
+            }
+
+            if (ConstantChar* c = GetNode<ConstantChar>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::LoadI8, OpCodeLoad(c->Char));
+            }
+
+            if (ConstantInt* i = GetNode<ConstantInt>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::LoadI32, OpCodeLoad(i->Int));
+            }
+
+            if (ConstantLong* l = GetNode<ConstantLong>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::LoadI64, OpCodeLoad(l->Long));
+            }
+
+            if (ConstantFloat* f = GetNode<ConstantFloat>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::LoadF32, OpCodeLoad(f->Float));
+            }
+
+            if (ConstantDouble* d = GetNode<ConstantDouble>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::LoadF64, OpCodeLoad(d->Double));
+            }
+
+            if (ConstantString* s = GetNode<ConstantString>(constant)) {
+                m_OpCodes.emplace_back(OpCodeType::LoadStr, OpCodeLoad(s->String));
+            }
+
+            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
         }
 
         if (ExprVarRef* ref = GetNode<ExprVarRef>(expr)) {
@@ -290,7 +167,7 @@ namespace BlackLua::Internal {
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(index));
             IncrementStackSlotCount();
-            m_OpCodes.emplace_back(OpCodeType::PushBytes, GetTypeSize(arrAccess->ResolvedType));
+            m_OpCodes.emplace_back(OpCodeType::Push, GetTypeSize(arrAccess->ResolvedType));
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
         

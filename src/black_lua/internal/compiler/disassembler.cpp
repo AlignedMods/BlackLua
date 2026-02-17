@@ -23,6 +23,12 @@ namespace BlackLua::Internal {
     }
 
     void Disassembler::DisassembleOpCode(const OpCode& op) {
+        #define CASE_LOAD(_enum, builtInType, str) case OpCodeType::_enum: { \
+            OpCodeLoad l = std::get<OpCodeLoad>(op.Data); \
+            m_Output += fmt::format("{}load {} {}\n", m_Indentation, str, std::get<builtInType>(l.Data)); \
+            break; \
+        }
+
         #define CASE_UNARYEXPR(_enum, opStr, str) case OpCodeType::_enum: { \
             StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
             m_Output += fmt::format("{}{} {} ", m_Indentation, opStr, str); \
@@ -86,7 +92,7 @@ namespace BlackLua::Internal {
         switch (op.Type) {
             case OpCodeType::Nop: m_Output += "nop\n"; break;
 
-            case OpCodeType::PushBytes: {
+            case OpCodeType::Push: {
                 StackSlotIndex i = std::get<StackSlotIndex>(op.Data);
 
                 m_Output += m_Indentation;
@@ -106,62 +112,6 @@ namespace BlackLua::Internal {
             case OpCodeType::Pop: m_Output += m_Indentation; m_Output += "pop\n"; break;
             case OpCodeType::PushStackFrame: m_Output += m_Indentation; m_Output += "push stack frame\n"; break;
             case OpCodeType::PopStackFrame: m_Output += m_Indentation; m_Output += "pop stack frame\n"; break;
-
-            case OpCodeType::Store: {
-                OpCodeStore s = std::get<OpCodeStore>(op.Data);
-
-                m_Output += m_Indentation;
-                m_Output += "store ";
-                DisassembleStackSlotIndex(s.SlotIndex);
-
-                m_Output += " <0x";
-                const uint8_t* bytes = reinterpret_cast<const uint8_t*>(s.Data);
-
-                {
-                    int32_t i = 0x01;
-                    uint8_t rawI[4]{};
-                    memcpy(rawI, &i, 4);
-
-                    if (rawI[0] == 0x01) { // Little endian
-                        for (int32_t i = static_cast<int32_t>(s.DataSize) - 1; i >= 0; i--) {
-                            m_Output += fmt::format("{:02x}", bytes[i]);
-                        }
-                    } else if (rawI[3] == 0x01) { // Big endian
-                        for (size_t i = 0; i < s.DataSize; i++) {
-                            m_Output += fmt::format("{:02x}", bytes[i]);
-                        }
-                    }
-                }
-                
-                m_Output += ">\n";
-
-                break;
-            }
-
-            case OpCodeType::StoreString: {
-                OpCodeStore s = std::get<OpCodeStore>(op.Data);
-
-                m_Output += m_Indentation;
-                m_Output += "store ";
-                DisassembleStackSlotIndex(s.SlotIndex);
-
-                m_Output += " \"";
-                const char* bytes = reinterpret_cast<const char*>(s.Data);
-
-                {
-                    int32_t i = 0x01;
-                    uint8_t rawI[4]{};
-                    memcpy(rawI, &i, 4);
-
-                    for (size_t i = 0; i < s.DataSize; i++) {
-                        m_Output += fmt::format("{}", bytes[i]);
-                    }
-                }
-                
-                m_Output += "\"\n";
-
-                break;
-            }
 
             case OpCodeType::Get: {
                 StackSlotIndex i = std::get<StackSlotIndex>(op.Data);
@@ -210,6 +160,21 @@ namespace BlackLua::Internal {
 
                 break;
             }
+
+            CASE_LOAD(LoadI8,  i8,  "i8")
+            CASE_LOAD(LoadI16, i16, "i16")
+            CASE_LOAD(LoadI32, i32, "i32")
+            CASE_LOAD(LoadI64, i64, "i64")
+
+            CASE_LOAD(LoadU8,  u8,  "u8")
+            CASE_LOAD(LoadU16, u16, "u16")
+            CASE_LOAD(LoadU32, u32, "u32")
+            CASE_LOAD(LoadU64, u64, "u64")
+
+            CASE_LOAD(LoadF32, f32, "f32");
+            CASE_LOAD(LoadF64, f64, "f64");
+
+            CASE_LOAD(LoadStr, StringView, "str")
 
             case OpCodeType::Label: {
                 StackSlotIndex i = std::get<StackSlotIndex>(op.Data);

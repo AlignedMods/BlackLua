@@ -2,7 +2,7 @@
 
 #include "internal/compiler/ast/expr.hpp"
 #include "internal/compiler/ast/stmt.hpp"
-#include "internal/vm.hpp"
+#include "internal/vm/vm.hpp"
 
 #include <unordered_map>
 

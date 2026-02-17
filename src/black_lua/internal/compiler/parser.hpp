@@ -3,7 +3,7 @@
 #include "internal/compiler/lexer.hpp"
 #include "internal/compiler/ast/expr.hpp"
 #include "internal/compiler/ast/stmt.hpp"
-#include "allocator.hpp"
+#include "internal/allocator.hpp"
 #include "context.hpp"
 
 namespace BlackLua::Internal {

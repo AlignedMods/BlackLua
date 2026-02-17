@@ -1,5 +1,5 @@
-#include "internal/vm.hpp"
-#include "allocator.hpp"
+#include "internal/vm/vm.hpp"
+#include "internal/allocator.hpp"
 #include "context.hpp"
 
 namespace BlackLua::Internal {
@@ -296,6 +296,13 @@ namespace BlackLua::Internal {
     }
 
     void VM::Run() {
+        #define CASE_LOAD(_enum, builtInType) case OpCodeType::_enum: { \
+            OpCodeLoad l = std::get<OpCodeLoad>(op.Data); \
+            PushBytes(sizeof(builtInType)); \
+            memcpy(GetStackSlot(-1).Memory, &std::get<builtInType>(l.Data), sizeof(builtInType)); \
+            break; \
+        }
+
         #define CASE_UNARYEXPR(_enum, builtinType, builtinOp) case OpCodeType::_enum: { \
             StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
             StackSlot s = GetStackSlot(v); \
@@ -405,7 +412,7 @@ namespace BlackLua::Internal {
                 case OpCodeType::Invalid: { BLUA_ASSERT(false, "Unreachable!"); break; }
                 case OpCodeType::Nop: { continue; }
 
-                case OpCodeType::PushBytes: {
+                case OpCodeType::Push: {
                     size_t byteCount = static_cast<size_t>(std::get<StackSlotIndex>(op.Data).Slot);
 
                     PushBytes(byteCount);
@@ -427,17 +434,23 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                case OpCodeType::StoreString:
-                case OpCodeType::Store: {
-                    OpCodeStore store = std::get<OpCodeStore>(op.Data);
-                    StackSlot s = GetStackSlot(store.SlotIndex);
+                CASE_LOAD(LoadI8,  i8)
+                CASE_LOAD(LoadI16, i16)
+                CASE_LOAD(LoadI32, i32)
+                CASE_LOAD(LoadI64, i64)
 
-                    BLUA_ASSERT(!s.ReadOnly, "Trying to store data in a read only slot!");
+                CASE_LOAD(LoadU8,  u8)
+                CASE_LOAD(LoadU16, u16)
+                CASE_LOAD(LoadU32, u32)
+                CASE_LOAD(LoadU64, u64)
 
-                    memcpy(s.Memory, store.Data, s.Size);
-
-                    m_StackSlots[GetStackSlotIndex(store.SlotIndex.Slot)].ReadOnly = store.SetReadOnly;
-
+                CASE_LOAD(LoadF32, f32)
+                CASE_LOAD(LoadF64, f64)
+                case OpCodeType::LoadStr: {
+                    OpCodeLoad l = std::get<OpCodeLoad>(op.Data);
+                    StringView str = std::get<StringView>(l.Data);
+                    PushBytes(str.Size());
+                    memcpy(GetStackSlot(-1).Memory, str.Data(), str.Size());
                     break;
                 }
 

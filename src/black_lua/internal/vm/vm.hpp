@@ -1,6 +1,8 @@
 #pragma once
 
 #include "core.hpp"
+#include "internal/types.hpp"
+#include "internal/compiler/core/string_view.hpp"
 
 #include <vector>
 #include <variant>
@@ -42,16 +44,26 @@ namespace BlackLua::Internal {
         Invalid,
         Nop,
 
-        PushBytes,
+        Push,
         Pop,
         PushStackFrame,
         PopStackFrame,
-        Store,
-        StoreString,
         Get, // Automaticaly pushes the value onto the stack
         Copy, // Copies a value into another slot
         Dup, // Creates a new stack slot and copies a value into it
         Offset, // Adds a certain offset (specified as a slot) to a specified slot
+
+        LoadI8,
+        LoadI16,
+        LoadI32,
+        LoadI64,
+        LoadU8,
+        LoadU16,
+        LoadU32,
+        LoadU64,
+        LoadF32,
+        LoadF64,
+        LoadStr,
 
         Label,
         Jmp,
@@ -195,15 +207,6 @@ namespace BlackLua::Internal {
 
     #undef TYPED_OP
 
-    struct OpCodeStore {
-        StackSlotIndex SlotIndex{};
-        size_t DataSize = 0;
-        const void* Data = nullptr; // NOTE: The VM should not care what this contains, it should just copy it to a slot
-                                    // Another note: The VM should not free this memory, it should be part of the arena allocator
-
-        bool SetReadOnly = false;
-    };
-
     struct OpCodeCopy {
         StackSlotIndex DstSlot{};
         StackSlotIndex SrcSlot{};
@@ -213,6 +216,10 @@ namespace BlackLua::Internal {
         StackSlotIndex Offset{};
         StackSlotIndex Slot{};
         size_t Size = 0;
+    };
+
+    struct OpCodeLoad {
+        std::variant<i8, u8, i16, u16, i32, u32, i64, u64, f32, f64, Internal::StringView> Data;
     };
 
     struct OpCodeJump {
@@ -227,7 +234,7 @@ namespace BlackLua::Internal {
 
     struct OpCode {
         OpCodeType Type = OpCodeType::Invalid;
-        std::variant<StackSlotIndex, std::string, OpCodeStore, OpCodeCopy, OpCodeOffset, OpCodeJump, OpCodeMath> Data;
+        std::variant<StackSlotIndex, std::string, OpCodeCopy, OpCodeOffset, OpCodeLoad, OpCodeJump, OpCodeMath> Data;
         std::string DebugData; // Optional debug data the compiler can provide
     };
 

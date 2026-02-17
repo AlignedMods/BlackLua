@@ -1,5 +1,5 @@
 #pragma once
 
 #include "core.hpp"
-#include "allocator.hpp"
+#include "internal/allocator.hpp"
 #include "context.hpp"

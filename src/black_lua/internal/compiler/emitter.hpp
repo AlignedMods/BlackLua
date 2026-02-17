@@ -2,7 +2,7 @@
 
 #include "internal/compiler/ast/expr.hpp"
 #include "internal/compiler/ast/stmt.hpp"
-#include "internal/vm.hpp"
+#include "internal/vm/vm.hpp"
 #include "internal/compiler/reflection/compiler_reflection.hpp"
 
 namespace BlackLua::Internal {
@@ -71,8 +71,7 @@ namespace BlackLua::Internal {
     
             size_t m_SlotCount = 0;
             size_t m_LabelCount = 0;
-            std::unordered_map<NodeExpr*, CompileStackSlot> m_ConstantMap;
-    
+
             struct Declaration {
                 int32_t Index = 0;
                 size_t Size = 0;

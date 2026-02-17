@@ -1,6 +1,6 @@
 #pragma once
 
-#include "internal/vm.hpp"
+#include "internal/vm/vm.hpp"
 
 #include <variant>
 #include <vector>

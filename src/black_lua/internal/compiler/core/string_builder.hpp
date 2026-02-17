@@ -2,7 +2,7 @@
 
 #include "core.hpp"
 #include "context.hpp"
-#include "allocator.hpp"
+#include "internal/allocator.hpp"
 #include "internal/compiler/core/string_view.hpp"
 
 #include <cstring>

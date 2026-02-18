@@ -22,14 +22,6 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::EmitImpl() {
-        // Emit the constants first
-        // while (Peek()) {
-        //     EmitConstant(Consume());
-        // }
-        // 
-        // // Reset the index
-        // m_Index = 0;
-
         while (Peek()) {
             EmitNode(Consume());
         }
@@ -642,7 +634,27 @@ namespace BlackLua::Internal {
     }
 
     void Emitter::EmitNodeDoWhile(NodeStmt* stmt) {
-        BLUA_ASSERT(false, "TODO");
+        StmtDoWhile* dwh = GetNode<StmtDoWhile>(stmt);
+
+        int32_t loop = m_LabelCount;
+        m_LabelCount++;
+        int32_t loopEnd = m_LabelCount;
+        m_LabelCount++;
+        m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "do while loop start");
+        m_OpCodes.emplace_back(OpCodeType::Label, loop, "do while loop start");
+
+        PushStackFrame();
+
+        EmitNodeCompound(dwh->Body);
+        CompileStackSlot slot = EmitNodeExpression(dwh->Condition);
+
+        m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(slot), loopEnd), "do while loop end");
+
+        PopStackFrame();
+
+        m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "do while loop start");
+        m_OpCodes.emplace_back(OpCodeType::Label, loopEnd, "do while loop end");
+        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
     }
 
     void Emitter::EmitNodeIf(NodeStmt* stmt) {

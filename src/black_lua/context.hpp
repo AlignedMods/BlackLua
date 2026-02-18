@@ -42,6 +42,14 @@ namespace BlackLua {
         // Returns a string containing the disassembled byte code
         std::string Disassemble(const std::string& module);
 
+        void PushBool(bool b    , const std::string& module = {});
+        void PushChar(int8_t c  , const std::string& module = {});
+        void PushShort(int16_t s, const std::string& module = {});
+        void PushInt(int32_t i  , const std::string& module = {});
+        void PushLong(int64_t l , const std::string& module = {});
+        void PushFloat(float f  , const std::string& module = {});
+        void PushDouble(double f, const std::string& module = {});
+
         void PushGlobal(const std::string& str, const std::string& module = {});
         void Pop(size_t count, const std::string& module = {});
 

@@ -42,14 +42,37 @@ TEST_CASE("Runtime Functions") {
 TEST_CASE("Runtime Control Flow") {
     BlackLua::Context ctx = BlackLua::Context::Create();
     ctx.CompileFile("tests/runtime/control_flow.bl", "Runtime Control Flow");
-    fmt::print("{}", ctx.Disassemble("Runtime Control Flow"));
     ctx.Run("Runtime Control Flow");
     
     ctx.Call("While", "Runtime Control Flow");
-    REQUIRE(ctx.GetInt(-1) == 9);
+    REQUIRE(ctx.GetInt(-1) == 10);
+    ctx.Pop(1);
+
+    ctx.Call("DoWhile1", "Runtime Control Flow");
+    REQUIRE(ctx.GetInt(-1) == 10);
+    ctx.Pop(1);
+
+    ctx.Call("DoWhile2", "Runtime Control Flow");
+    REQUIRE(ctx.GetBool(-1) == true);
     ctx.Pop(1);
 
     ctx.Call("If", "Runtime Control Flow");
     REQUIRE(ctx.GetBool(-1) == false);
     ctx.Pop(1);
+}
+
+TEST_CASE("Runtime Recursion") {
+    BlackLua::Context ctx = BlackLua::Context::Create();
+    ctx.CompileFile("tests/runtime/recursion.bl", "Runtime Recursion");
+    ctx.Run("Runtime Recursion");
+    
+    ctx.PushInt(10);
+    ctx.Call("Fib", "Runtime Recursion");
+    REQUIRE(ctx.GetInt(-1) == 55);
+    ctx.Pop(2);
+
+    ctx.PushInt(20);
+    ctx.Call("Fib", "Runtime Recursion");
+    REQUIRE(ctx.GetInt(-1) == 6765);
+    ctx.Pop(2);
 }

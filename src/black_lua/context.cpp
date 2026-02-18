@@ -118,6 +118,48 @@ namespace BlackLua {
         return d.GetDisassembly();
     }
 
+    void Context::PushBool(bool b, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(b));
+        src->VM.StoreBool(-1, b);
+    }
+
+    void Context::PushChar(int8_t c, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(c));
+        src->VM.StoreChar(-1, c);
+    }
+
+    void Context::PushShort(int16_t s, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(s));
+        src->VM.StoreShort(-1, s);
+    }
+
+    void Context::PushInt(int32_t i, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(i));
+        src->VM.StoreInt(-1, i);
+    }
+
+    void Context::PushLong(int64_t l, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(l));
+        src->VM.StoreLong(-1, l);
+    }
+
+    void Context::PushFloat(float f, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(f));
+        src->VM.StoreFloat(-1, f);
+    }
+
+    void Context::PushDouble(double d, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(d));
+        src->VM.StoreDouble(-1, d);
+    }
+
     void Context::PushGlobal(const std::string& str, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
 

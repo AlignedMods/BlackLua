@@ -107,7 +107,7 @@ namespace BlackLua::Internal {
             IncrementStackSlotCount();
 
             if (ConstantBool* b = GetNode<ConstantBool>(constant)) {
-                m_OpCodes.emplace_back(OpCodeType::LoadI8, OpCodeLoad(b->Value));
+                m_OpCodes.emplace_back(OpCodeType::LoadI8, OpCodeLoad(static_cast<i8>(b->Value)));
             }
 
             if (ConstantChar* c = GetNode<ConstantChar>(constant)) {
@@ -536,13 +536,15 @@ namespace BlackLua::Internal {
 
         std::string ident = fmt::format("{}", decl->Name);
         Declaration d;
+        d.Index = m_LabelCount++;
         d.Size = GetTypeSize(decl->ResolvedType);
         d.Extern = decl->Extern;
         d.Type = decl->ResolvedType;
         m_DeclaredSymbols[ident] = d;
 
         if (decl->Body) {
-            int32_t label = CreateLabel();
+            int32_t label = m_LabelCount - 1;
+            m_OpCodes.emplace_back(OpCodeType::Label, label);
 
             CompilerReflectionDeclaration dd;
             dd.Type = ReflectionType::Function;
@@ -636,6 +638,7 @@ namespace BlackLua::Internal {
 
         m_OpCodes.emplace_back(OpCodeType::Jmp, loop, "while loop condition");
         m_OpCodes.emplace_back(OpCodeType::Label, loopEnd, "while loop end");
+        m_OpCodes.emplace_back(OpCodeType::PopStackFrame);
     }
 
     void Emitter::EmitNodeDoWhile(NodeStmt* stmt) {

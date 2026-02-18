@@ -207,6 +207,17 @@ namespace BlackLua::Internal {
         memcpy(dst.Memory, src.Memory, src.Size);
     }
 
+    void VM::Ref(StackSlotIndex srcSlot) {
+        StackSlot src = GetStackSlot(srcSlot);
+
+        StackSlot newSlot;
+        newSlot.Memory = src.Memory;
+        newSlot.Size = src.Size;
+        newSlot.ReadOnly = src.ReadOnly;
+        m_StackSlots[m_StackSlotPointer] = newSlot;
+        m_StackSlotPointer++;
+    }
+
     bool VM::GetBool(StackSlotIndex slot) {
         StackSlot s = GetStackSlot(slot);
 

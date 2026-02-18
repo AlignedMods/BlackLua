@@ -3,6 +3,7 @@
 #include "internal/compiler/ast/expr.hpp"
 #include "internal/compiler/ast/stmt.hpp"
 #include "internal/vm/vm.hpp"
+#include "context.hpp"
 
 #include <unordered_map>
 

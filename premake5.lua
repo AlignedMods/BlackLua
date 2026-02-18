@@ -19,6 +19,26 @@ workspace "BlackLua"
         filter "configurations:Release"
             optimize "On"
 
+    project "BlackLuaTest"
+        language "C++"
+        cppdialect "C++20"
+        kind "ConsoleApp"
+
+        targetdir("build/bin/%{cfg.buildcfg}/")
+        objdir("build/obj/%{cfg.buildcfg}/")
+
+        files { "tests/**.cpp", "tests/**.hpp" }
+
+        includedirs { "tests/", "src/black_lua/", "src/vendor/catch2/", "src/vendor/fmt/include/" }
+
+        links { "BlackLua", "fmt" }
+
+        filter "configurations:Debug"
+            symbols "On"
+
+        filter "configurations:Release"
+            optimize "On"
+
     project "BlackLuaExample"
         language "C++"
         cppdialect "C++20"
@@ -29,7 +49,7 @@ workspace "BlackLua"
 
         files { "example/example.cpp" }
 
-        includedirs { "src/black_lua", "src/vendor/fmt/include/" }
+        includedirs { "src/black_lua/", "src/vendor/fmt/include/" }
 
         links { "BlackLua", "fmt" }
 

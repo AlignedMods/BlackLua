@@ -1,10 +1,20 @@
 #pragma once
 
-#include "internal/vm/vm.hpp"
+#include "internal/compiler/variable_type.hpp"
 
 #include <variant>
 #include <vector>
 #include <unordered_map>
+
+namespace BlackLua::Internal {
+    class Parser;
+    class TypeChecker;
+    class Emitter;
+    class VM;
+
+    class StringBuilder;
+    struct NodeList;
+}
 
 namespace BlackLua {
 
@@ -32,22 +42,41 @@ namespace BlackLua {
         // Returns a string containing the disassembled byte code
         std::string Disassemble(const std::string& module);
 
+        void PushGlobal(const std::string& str, const std::string& module = {});
+        void Pop(size_t count, const std::string& module = {});
+
+        bool    GetBool(int32_t index,   const std::string& module = {});
+        int8_t  GetChar(int32_t index,   const std::string& module = {});
+        int16_t GetShort(int32_t index,  const std::string& module = {});
+        int32_t GetInt(int32_t index,    const std::string& module = {});
+        int64_t GetLong(int32_t index,   const std::string& module = {});
+        float   GetFloat(int32_t index,  const std::string& module = {});
+        double  GetDouble(int32_t index, const std::string& module = {});
+
         void Call(const std::string& str, const std::string& module);
 
         void SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn);
         void SetCompilerErrorHandler(CompilerErrorHandlerFn fn);
 
+    private:
+        CompiledSource* GetCompiledSource(const std::string& module);
+
         void ReportCompilerError(size_t line, size_t column, const std::string& error);
-        // Calls the currently set error handler with the given error message
-        // If the current error handler is NULL, it will use the default handler
         void ReportRuntimeError(const std::string& error);
 
         Allocator* GetAllocator();
-        Internal::VM& GetVM();
+
+        friend class Internal::Parser;
+        friend class Internal::TypeChecker;
+        friend class Internal::Emitter;
+        friend class Internal::VM;
+
+        friend class Internal::StringBuilder;
+        friend struct Internal::NodeList;
+        friend Internal::VariableType* Internal::CreateVarType(Context* ctx, Internal::PrimitiveType type, bool _signed, decltype(Internal::VariableType::Data) data);
 
     private:
         std::unordered_map<std::string, CompiledSource*> m_Modules;
-        Internal::VM m_VM;
         CompiledSource* m_CurrentCompiledSource = nullptr;
 
         RuntimeErrorHandlerFn m_RuntimeErrorHandler = nullptr;

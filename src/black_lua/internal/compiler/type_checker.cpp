@@ -531,9 +531,9 @@ namespace BlackLua::Internal {
         } else if (GetNode<StmtFunctionDecl>(stmt)) {
             CheckNodeFunctionDecl(stmt);
         } else if (GetNode<StmtWhile>(stmt)) {
-            CheckNodeStructDecl(stmt);
-        } else if (GetNode<StmtDoWhile>(stmt)) {
             CheckNodeWhile(stmt);
+        } else if (GetNode<StmtDoWhile>(stmt)) {
+            CheckNodeDoWhile(stmt);
         } else if (GetNode<StmtIf>(stmt)) {
             CheckNodeIf(stmt);
         } else if (GetNode<StmtReturn>(stmt)) {

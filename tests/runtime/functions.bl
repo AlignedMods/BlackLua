@@ -1,0 +1,14 @@
+int result = 0; // Expected to be 18
+
+int add(int lhs, int rhs) {
+    return lhs + rhs;
+}
+
+int sub(int lhs, int rhs) {
+    return lhs - rhs;
+}
+
+void main() {
+    result = add(5, 9);
+    result += add(sub(6, 3), 7);
+}

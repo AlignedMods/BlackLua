@@ -15,6 +15,9 @@
 namespace BlackLua {
 
     struct CompiledSource {
+        CompiledSource(Context* ctx)
+            : VM(ctx) {}
+
         std::vector<Internal::OpCode> OpCodes;
         Internal::ASTNodes ASTNodes;
         Allocator* Allocator = nullptr;
@@ -23,23 +26,23 @@ namespace BlackLua {
         std::string Module;
 
         Internal::CompilerReflectionData ReflectionData;
+        Internal::VM VM;
     };
 
-    Context::Context()
-        : m_VM(this) {}
+    Context::Context() {}
 
     Context Context::Create() {
         Context ctx{};
-        ctx.m_VM.AddExtern("bl__array__init__", BlackLua::Internal::bl__array__init__);
-        ctx.m_VM.AddExtern("bl__array__destruct__", BlackLua::Internal::bl__array__destruct__);
-        ctx.m_VM.AddExtern("bl__array__copy__", BlackLua::Internal::bl__array__copy__);
-        ctx.m_VM.AddExtern("bl__array__index__", BlackLua::Internal::bl__array__index__);
-
-        ctx.m_VM.AddExtern("bl__string__construct__", BlackLua::Internal::bl__string__construct__);
-        ctx.m_VM.AddExtern("bl__string__construct_from_literal__", BlackLua::Internal::bl__string__construct_from_literal__);
-
-        ctx.m_VM.AddExtern("bl__string__copy__", BlackLua::Internal::bl__string__copy__);
-        ctx.m_VM.AddExtern("bl__string__assign__", BlackLua::Internal::bl__string__assign__);
+        // ctx.m_VM.AddExtern("bl__array__init__", BlackLua::Internal::bl__array__init__);
+        // ctx.m_VM.AddExtern("bl__array__destruct__", BlackLua::Internal::bl__array__destruct__);
+        // ctx.m_VM.AddExtern("bl__array__copy__", BlackLua::Internal::bl__array__copy__);
+        // ctx.m_VM.AddExtern("bl__array__index__", BlackLua::Internal::bl__array__index__);
+        // 
+        // ctx.m_VM.AddExtern("bl__string__construct__", BlackLua::Internal::bl__string__construct__);
+        // ctx.m_VM.AddExtern("bl__string__construct_from_literal__", BlackLua::Internal::bl__string__construct_from_literal__);
+        // 
+        // ctx.m_VM.AddExtern("bl__string__copy__", BlackLua::Internal::bl__string__copy__);
+        // ctx.m_VM.AddExtern("bl__string__assign__", BlackLua::Internal::bl__string__assign__);
         
         return ctx;
     }
@@ -62,7 +65,7 @@ namespace BlackLua {
     void Context::CompileString(const std::string& source, const std::string& module) {
         bool valid = true;
 
-        CompiledSource* src = new CompiledSource();
+        CompiledSource* src = new CompiledSource(this);
         src->Allocator = new Allocator(10 * 1024 * 1024);
         src->SourceCode = source;
         src->Module = module;
@@ -87,36 +90,84 @@ namespace BlackLua {
     }
 
     void Context::FreeModule(const std::string& module) {
-        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
+        CompiledSource* src = GetCompiledSource(module);
 
-        CompiledSource* src = m_Modules.at(module);
         delete src->Allocator;
         delete src;
         m_Modules.erase(module);
     }
 
     void Context::Run(const std::string& module) {
-        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
+        CompiledSource* src = GetCompiledSource(module);
 
-        CompiledSource* src = m_Modules.at(module);
         m_CurrentCompiledSource = src;
-        m_VM.RunByteCode(src->OpCodes.data(), src->OpCodes.size());
+        m_CurrentCompiledSource->VM.RunByteCode(src->OpCodes.data(), src->OpCodes.size());
     }
 
     std::string Context::DumpAST(const std::string& module) {
-        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
+        CompiledSource* src = GetCompiledSource(module);
 
-        CompiledSource* src = m_Modules.at(module);
         Internal::ASTDumper d = Internal::ASTDumper::DumpAST(&src->ASTNodes);
         return d.GetOutput();
     }
 
     std::string Context::Disassemble(const std::string& module) {
-        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
+        CompiledSource* src = GetCompiledSource(module);
 
-        CompiledSource* src = m_Modules.at(module);
         Internal::Disassembler d = Internal::Disassembler::Disassemble(&src->OpCodes);
         return d.GetDisassembly();
+    }
+
+    void Context::PushGlobal(const std::string& str, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+
+        BLUA_ASSERT(src->ReflectionData.Declarations.contains(str), "Trying to push an unknown global variable");
+        BLUA_ASSERT(src->ReflectionData.Declarations.at(str).Type == Internal::ReflectionType::Variable, "Trying to push a non-variable global (perhaps a function)");
+
+        src->VM.Ref(std::get<int32_t>(src->ReflectionData.Declarations.at(str).Data));
+    }
+
+    void Context::Pop(size_t count, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+
+        for (size_t i = 0; i < count; i++) {
+            src->VM.Pop();
+        }
+    }
+
+    bool Context::GetBool(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetBool(index);
+    }
+
+    int8_t Context::GetChar(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetChar(index);
+    }
+
+    int16_t Context::GetShort(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetShort(index);
+    }
+
+    int32_t Context::GetInt(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetInt(index);
+    }
+
+    int64_t Context::GetLong(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetLong(index);
+    }
+
+    float Context::GetFloat(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetFloat(index);
+    }
+
+    double Context::GetDouble(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetDouble(index);
     }
 
     void Context::Call(const std::string& str, const std::string& module) {
@@ -125,7 +176,11 @@ namespace BlackLua {
 
         BLUA_ASSERT(src->ReflectionData.Declarations.contains(str), "Trying to call an unknown function");
         BLUA_ASSERT(src->ReflectionData.Declarations.at(str).Type == Internal::ReflectionType::Function, "Trying to call an non-function");
-        m_VM.Call(std::get<int32_t>(src->ReflectionData.Declarations.at(str).Data));
+        size_t size = GetTypeSize(src->ReflectionData.Declarations.at(str).ResolvedType);
+        if (size > 0) {
+            src->VM.PushBytes(size);
+        }
+        src->VM.Call(std::get<int32_t>(src->ReflectionData.Declarations.at(str).Data));
     }
 
     void Context::SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn) {
@@ -134,6 +189,16 @@ namespace BlackLua {
 
     void Context::SetCompilerErrorHandler(CompilerErrorHandlerFn fn) {
         m_CompilerErrorHandler = fn;
+    }
+
+    CompiledSource* Context::GetCompiledSource(const std::string& module) {
+        if (module.empty()) {
+            BLUA_ASSERT(m_CurrentCompiledSource, "Cannot get any active module!");
+            return m_CurrentCompiledSource;
+        }
+
+        BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
+        return m_Modules.at(module);
     }
 
     void Context::ReportCompilerError(size_t line, size_t column, const std::string& error) {
@@ -153,15 +218,11 @@ namespace BlackLua {
             fmt::print(stderr, "A runtime error occurred!\nError message: {}", error);
         }
 
-        m_VM.StopExecution();
+        m_CurrentCompiledSource->VM.StopExecution();
     }
 
     Allocator* Context::GetAllocator() {
         return m_CurrentCompiledSource->Allocator;
-    }
-
-    Internal::VM& Context::GetVM() {
-        return m_VM;
     }
 
 } // namespace BlackLua

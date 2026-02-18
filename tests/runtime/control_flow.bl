@@ -1,0 +1,16 @@
+int While() {
+    int i = 0;
+    while (i < 10) {
+        i += 1;
+    }
+
+    return 9;
+}
+
+bool If() {
+    if (4 < 6) {
+        return false;
+    }
+
+    return true;
+}

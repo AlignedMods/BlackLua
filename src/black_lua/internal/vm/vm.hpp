@@ -280,6 +280,7 @@ namespace BlackLua::Internal {
 
         // Copies the memory at one slot (srcSlot) to another slot (dstSlot)
         void Copy(StackSlotIndex dstSlot, StackSlotIndex srcSlot);
+        void Ref(StackSlotIndex srcSlot);
 
         bool GetBool(StackSlotIndex slot);
         int8_t GetChar(StackSlotIndex slot);

@@ -1,0 +1,3 @@
+bool f = false;
+bool t = true;
+int i = 99;

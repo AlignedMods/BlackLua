@@ -212,6 +212,89 @@ namespace BlackLua::Internal {
                         break;
                     }
 
+                    case '&': {
+                        bool isEq = false;
+                        bool isDouble = false;
+
+                        if (Peek()) {
+                            char nc = *Peek();
+
+                            if (nc == '&') {
+                                Consume();
+                                isDouble = true;
+                            } else if (nc == '=') {
+                                Consume();
+                                isEq = true;
+                            }
+                        }
+
+                        if (isEq) {
+                            AddToken(TokenType::AmpersandEq,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 2), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 2, m_Index)));
+                        } else if (isDouble) {
+                            AddToken(TokenType::DoubleAmpersand,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 2), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 2, m_Index)));
+                        } else {
+                            AddToken(TokenType::Ampersand,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index)));
+                        }
+
+                        break;
+                    }
+
+                    case '|': {
+                        bool isEq = false;
+                        bool isDouble = false;
+
+                        if (Peek()) {
+                            char nc = *Peek();
+
+                            if (nc == '|') {
+                                Consume();
+                                isDouble = true;
+                            } else if (nc == '=') {
+                                Consume();
+                                isEq = true;
+                            }
+                        }
+
+                        if (isEq) {
+                            AddToken(TokenType::PipeEq,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 2), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 2, m_Index)));
+                        } else if (isDouble) {
+                            AddToken(TokenType::DoublePipe,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 2), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 2, m_Index)));
+                        } else {
+                            AddToken(TokenType::Pipe,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index)));
+                        }
+
+                        break;
+                    }
+
+                    case '^^': {
+                        bool isEq = false;
+
+                        if (Peek()) {
+                            char nc = *Peek();
+
+                            if (nc == '=') {
+                                Consume();
+                                isEq = true;
+                            }
+                        }
+
+                        if (isEq) {
+                            AddToken(TokenType::UpArrowEq,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 2), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 2, m_Index)));
+                        } else {
+                            AddToken(TokenType::UpArrow,
+                                SourceRange(m_CurrentLine, GetColumn(m_Index - 1), m_CurrentLine, GetColumn(m_Index), m_Source.SubStr(m_Index - 1, m_Index)));
+                        }
+
+                        break;
+                    }
+
                     case '\'': {
                         size_t startIndex = m_Index - 1;
 

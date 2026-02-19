@@ -296,16 +296,20 @@ namespace BlackLua::Internal {
 
                 case BinaryOperatorType::Add:
                 case BinaryOperatorType::AddInPlace:
-                case BinaryOperatorType::AddOne:
                 case BinaryOperatorType::Sub:
                 case BinaryOperatorType::SubInPlace:
-                case BinaryOperatorType::SubOne:
                 case BinaryOperatorType::Mul:
                 case BinaryOperatorType::MulInPlace:
                 case BinaryOperatorType::Div:
                 case BinaryOperatorType::DivInPlace:
                 case BinaryOperatorType::Mod:
                 case BinaryOperatorType::ModInPlace:
+                case BinaryOperatorType::And:
+                case BinaryOperatorType::AndInPlace:
+                case BinaryOperatorType::Or:
+                case BinaryOperatorType::OrInPlace:
+                case BinaryOperatorType::Xor:
+                case BinaryOperatorType::XorInPlace:
                     resolved = typeLHS; break;
                 
                 case BinaryOperatorType::IsEq:
@@ -314,6 +318,8 @@ namespace BlackLua::Internal {
                 case BinaryOperatorType::LessOrEq:
                 case BinaryOperatorType::Greater:
                 case BinaryOperatorType::GreaterOrEq:
+                case BinaryOperatorType::BitAnd:
+                case BinaryOperatorType::BitOr:
                     resolved = CreateVarType(m_Context, PrimitiveType::Bool); break;
         
                 default: return nullptr;

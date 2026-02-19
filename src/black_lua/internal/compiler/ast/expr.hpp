@@ -72,8 +72,8 @@ namespace BlackLua::Internal {
 
     enum class BinaryOperatorType {
         Invalid,
-        Add, AddInPlace, AddOne,
-        Sub, SubInPlace, SubOne,
+        Add, AddInPlace,
+        Sub, SubInPlace,
         Mul, MulInPlace,
         Div, DivInPlace,
         Mod, ModInPlace,
@@ -82,6 +82,10 @@ namespace BlackLua::Internal {
         LessOrEq,
         Greater,
         GreaterOrEq,
+
+        And, AndInPlace, BitAnd,
+        Or, OrInPlace, BitOr,
+        Xor, XorInPlace, BitXor,
     
         Eq,
         IsEq,
@@ -93,10 +97,8 @@ namespace BlackLua::Internal {
             case BinaryOperatorType::Invalid: return "invalid";
             case BinaryOperatorType::Add: return "+";
             case BinaryOperatorType::AddInPlace: return "+=";
-            case BinaryOperatorType::AddOne: return "++";
             case BinaryOperatorType::Sub: return "-";
             case BinaryOperatorType::SubInPlace: return "-=";
-            case BinaryOperatorType::SubOne: return "--";
             case BinaryOperatorType::Mul: return "*";
             case BinaryOperatorType::MulInPlace: return "*=";
             case BinaryOperatorType::Div: return "/";
@@ -108,6 +110,16 @@ namespace BlackLua::Internal {
             case BinaryOperatorType::LessOrEq: return "<=";
             case BinaryOperatorType::Greater: return ">";
             case BinaryOperatorType::GreaterOrEq: return ">=";
+
+            case BinaryOperatorType::And: return "&";
+            case BinaryOperatorType::AndInPlace: return "&=";
+            case BinaryOperatorType::BitAnd: return "&&";
+            case BinaryOperatorType::Or: return "|";
+            case BinaryOperatorType::OrInPlace: return "|=";
+            case BinaryOperatorType::BitOr: return "||";
+            case BinaryOperatorType::Xor: return "^";
+            case BinaryOperatorType::XorInPlace: return "^=";
+            case BinaryOperatorType::BitXor: return "^^";
     
             case BinaryOperatorType::Eq: return "=";
             case BinaryOperatorType::IsEq: return "==";

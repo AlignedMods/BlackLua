@@ -27,6 +27,16 @@ namespace BlackLua::Internal {
         name##F32, \
         name##F64,
 
+    #define INTEGRAL_OP(name) \
+        name##I8, \
+        name##I16, \
+        name##I32, \
+        name##I64, \
+        name##U8, \
+        name##U16, \
+        name##U32, \
+        name##U64,
+
     struct StackSlotIndex {
         StackSlotIndex() = default;
         StackSlotIndex(int32_t slot) : Slot(slot) {}
@@ -82,6 +92,10 @@ namespace BlackLua::Internal {
         TYPED_OP(Mul)
         TYPED_OP(Div)
         TYPED_OP(Mod)
+
+        INTEGRAL_OP(And)
+        INTEGRAL_OP(Or)
+        INTEGRAL_OP(Xor)
 
         TYPED_OP(Cmp)
         TYPED_OP(Ncmp)

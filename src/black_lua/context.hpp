@@ -24,6 +24,8 @@ namespace BlackLua {
     using RuntimeErrorHandlerFn = void(*)(const std::string& error);
     using CompilerErrorHandlerFn = void(*)(size_t line, size_t column, const std::string& file, const std::string& error);
 
+    using ExternFn = void(*)(Context* ctx);
+
     struct Context {
         Context();
         static Context Create();
@@ -61,6 +63,7 @@ namespace BlackLua {
         float   GetFloat(int32_t index,  const std::string& module = {});
         double  GetDouble(int32_t index, const std::string& module = {});
 
+        void AddExternalFunction(const std::string& name, ExternFn fn, const std::string& module);
         void Call(const std::string& str, const std::string& module);
 
         void SetRuntimeErrorHandler(RuntimeErrorHandlerFn fn);

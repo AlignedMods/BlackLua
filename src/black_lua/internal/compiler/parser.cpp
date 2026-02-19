@@ -201,6 +201,14 @@ namespace BlackLua::Internal {
             case TokenType::SlashEq: return BinaryOperatorType::DivInPlace;
             case TokenType::Percent: return BinaryOperatorType::Mod;
             case TokenType::PercentEq: return BinaryOperatorType::ModInPlace;
+            case TokenType::Ampersand: return BinaryOperatorType::And;
+            case TokenType::AmpersandEq: return BinaryOperatorType::AndInPlace;
+            case TokenType::DoubleAmpersand: return BinaryOperatorType::BitAnd;
+            case TokenType::Pipe: return BinaryOperatorType::Or;
+            case TokenType::PipeEq: return BinaryOperatorType::OrInPlace;
+            case TokenType::DoublePipe: return BinaryOperatorType::BitOr;
+            case TokenType::UpArrow: return BinaryOperatorType::Xor;
+            case TokenType::UpArrowEq: return BinaryOperatorType::XorInPlace;
             case TokenType::Less: return BinaryOperatorType::Less;
             case TokenType::LessOrEq: return BinaryOperatorType::LessOrEq;
             case TokenType::Greater: return BinaryOperatorType::Greater;
@@ -220,6 +228,9 @@ namespace BlackLua::Internal {
             case BinaryOperatorType::MulInPlace:
             case BinaryOperatorType::ModInPlace:
             case BinaryOperatorType::DivInPlace:
+            case BinaryOperatorType::AndInPlace:
+            case BinaryOperatorType::OrInPlace:
+            case BinaryOperatorType::XorInPlace:
                 return 10;
 
             case BinaryOperatorType::Less:
@@ -228,17 +239,20 @@ namespace BlackLua::Internal {
             case BinaryOperatorType::GreaterOrEq:
             case BinaryOperatorType::IsEq:
             case BinaryOperatorType::IsNotEq:
+            case BinaryOperatorType::BitAnd:
+            case BinaryOperatorType::BitOr:
                 return 20;
 
-            case BinaryOperatorType::Mod:
+            case BinaryOperatorType::And:
+            case BinaryOperatorType::Or:
+            case BinaryOperatorType::Xor:
                 return 30;
 
             case BinaryOperatorType::Add:
-            case BinaryOperatorType::AddOne:
             case BinaryOperatorType::Sub:
-            case BinaryOperatorType::SubOne:
                 return 40;
 
+            case BinaryOperatorType::Mod:
             case BinaryOperatorType::Mul:
             case BinaryOperatorType::Div:
                 return 50;

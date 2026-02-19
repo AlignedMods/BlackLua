@@ -1,3 +1,19 @@
+extern bool ShouldNeverBeCalled();
+
 int a = 5 + 5;
 int b = (a + 5) / -5;
-int c = 1 + (2 * 3) - b; // Expected result is 10
+int c = 1 + (2 * 3) - b; // Should be 10
+
+bool d = false && false; // Should be false
+bool e = false && true; // Should be false
+bool f = true && true; // Should be true
+bool g = f && (true && false); // Should be false
+
+bool h = false || true; // Should be true
+bool i = true || true; // Should be true
+bool j = false || false; // Should be false
+bool k = j || (true && h); // Should be true
+
+// This next section validates that && and || don't execute code that is not neccesary
+bool aa = false && ShouldNeverBeCalled();
+bool bb = true || ShouldNeverBeCalled();

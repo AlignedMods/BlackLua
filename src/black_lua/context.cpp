@@ -212,6 +212,11 @@ namespace BlackLua {
         return src->VM.GetDouble(index);
     }
 
+    void Context::AddExternalFunction(const std::string& name, ExternFn fn, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.AddExtern(name, fn);
+    }
+
     void Context::Call(const std::string& str, const std::string& module) {
         BLUA_ASSERT(m_Modules.contains(module), "Current context does not contain the requested module!");
         CompiledSource* src = m_Modules.at(module);

@@ -23,6 +23,9 @@ namespace BlackLua::Internal {
         Star, StarEq,
         Slash, SlashEq,
         Percent, PercentEq,
+        Ampersand, AmpersandEq, DoubleAmpersand,
+        Pipe, PipeEq, DoublePipe,
+        UpArrow, UpArrowEq,
         Eq, IsEq,
         Not, IsNotEq,
         Less, LessOrEq,
@@ -101,6 +104,14 @@ namespace BlackLua::Internal {
             case TokenType::SlashEq: return "/=";
             case TokenType::Percent: return "%";
             case TokenType::PercentEq: return "%=";
+            case TokenType::Ampersand: return "&";
+            case TokenType::AmpersandEq: return "&=";
+            case TokenType::DoubleAmpersand: return "&&";
+            case TokenType::Pipe: return "|";
+            case TokenType::PipeEq: return "|=";
+            case TokenType::DoublePipe: return "||";
+            case TokenType::UpArrow: return "^";
+            case TokenType::UpArrowEq: return "^=";
             case TokenType::Eq: return "=";
             case TokenType::IsEq: return "==";
             case TokenType::Not: return "!";

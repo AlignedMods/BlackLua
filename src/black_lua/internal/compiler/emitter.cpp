@@ -69,6 +69,10 @@ namespace BlackLua::Internal {
         (m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount++ : m_SlotCount++;
     }
 
+    CompileStackSlot Emitter::GetStackTop() {
+        return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+    }
+
     void Emitter::PushStackFrame() {
         m_OpCodes.emplace_back(OpCodeType::PushStackFrame);
 
@@ -126,7 +130,7 @@ namespace BlackLua::Internal {
                 m_OpCodes.emplace_back(OpCodeType::LoadStr, OpCodeLoad(s->String));
             }
 
-            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+            return GetStackTop();
         }
 
         if (ExprVarRef* ref = GetNode<ExprVarRef>(expr)) {
@@ -163,7 +167,7 @@ namespace BlackLua::Internal {
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
         
-            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+            return GetStackTop();
         }
 
         if (ExprSelf* self = GetNode<ExprSelf>(expr)) {
@@ -216,7 +220,7 @@ namespace BlackLua::Internal {
         
             m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
             
-            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+            return GetStackTop();
         }
 
         if (ExprCall* call = GetNode<ExprCall>(expr)) {
@@ -262,7 +266,7 @@ namespace BlackLua::Internal {
                 m_OpCodes.emplace_back(OpCodeType::Call, decl.Index);
             }
             
-            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+            return GetStackTop();
         }
         
         if (ExprParen* paren = GetNode<ExprParen>(expr)) {
@@ -335,7 +339,7 @@ namespace BlackLua::Internal {
             #undef CASE_INNER
             #undef CASE_OUTER
             
-            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+            return GetStackTop();
         }
        
         if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
@@ -374,17 +378,23 @@ namespace BlackLua::Internal {
             #undef MATH_OP
             #undef MATH_OP_GROUP
             
-            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+            return GetStackTop();
         }
         
         if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
-            CompileStackSlot rhs = EmitNodeExpression(binOp->RHS);
-            CompileStackSlot lhs = EmitNodeExpression(binOp->LHS);
-            
             #define MATH_OP(baseOp, type, _enum) \
                 if (binOp->ResolvedSourceType->Type == PrimitiveType::_enum) { \
+                    CompileStackSlot lhs = EmitNodeExpression(binOp->LHS); \
+                    CompileStackSlot rhs = EmitNodeExpression(binOp->RHS); \
                     m_OpCodes.emplace_back(OpCodeType::baseOp##type, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs))); \
                     IncrementStackSlotCount(); \
+                    \
+                    if (binOp->Type == BinaryOperatorType::AddInPlace || binOp->Type == BinaryOperatorType::SubInPlace || \
+                        binOp->Type == BinaryOperatorType::MulInPlace || binOp->Type == BinaryOperatorType::DivInPlace || binOp->Type == BinaryOperatorType::ModInPlace || \
+                        binOp->Type == BinaryOperatorType::AndInPlace || binOp->Type == BinaryOperatorType::OrInPlace || binOp->Type == BinaryOperatorType::XorInPlace) { \
+                        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), -1)); \
+                        return lhs; \
+                    } \
                 }
             
             #define MATH_OP_GROUP(binExpr, op) case BinaryOperatorType::binExpr: { \
@@ -425,21 +435,92 @@ namespace BlackLua::Internal {
                 MATH_OP_GROUP(GreaterOrEq, Gte);
                 MATH_OP_GROUP(IsEq, Cmp);
                 MATH_OP_GROUP(IsNotEq, Ncmp);
+
+                // The reason why && and || operators have to be so complex is because they have very specific rules:
+                // if the lhs of && is false, the entire expression is automatically false, and the rhs should NOT be executed
+                // meanwhile if the lhs of || is true, the entire expression is automatically true, and the rhs should also NOT be executed
+                // This involves creates actual stack frames and labels for an operator that could be described as just "and i8 lhs rhs"/"or i8 lhs rhs"
+                // However that naive approach is not what people would usually expect
+                case BinaryOperatorType::BitAnd: {
+                    CompileStackSlot lhs = EmitNodeExpression(binOp->LHS);
+
+                    int32_t ifTrue = m_LabelCount;
+                    m_LabelCount++;
+                    int32_t ifFalse = m_LabelCount;
+                    m_LabelCount++;
+                    int32_t ifEnd = m_LabelCount;
+                    m_LabelCount++;
+                    
+                    m_OpCodes.emplace_back(OpCodeType::Push, 1);
+                    IncrementStackSlotCount();
+                    CompileStackSlot result = GetStackTop();
+
+                    PushStackFrame();
+                    m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(lhs), ifFalse));
+                    m_OpCodes.emplace_back(OpCodeType::Jmp, ifTrue);
+                
+                    m_OpCodes.emplace_back(OpCodeType::Label, ifTrue);
+                    CompileStackSlot rhs = EmitNodeExpression(binOp->RHS);
+                    m_OpCodes.emplace_back(OpCodeType::AndI8, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
+                    IncrementStackSlotCount();
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(result), -1));
+                    m_OpCodes.emplace_back(OpCodeType::Jmp, ifEnd);
+                
+                    m_OpCodes.emplace_back(OpCodeType::Label, ifFalse);
+                    m_OpCodes.emplace_back(OpCodeType::LoadI8, OpCodeLoad(static_cast<i8>(false)));
+                    IncrementStackSlotCount();
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(result), -1));
+                    m_OpCodes.emplace_back(OpCodeType::Jmp, ifEnd);
+                
+                    m_OpCodes.emplace_back(OpCodeType::Label, ifEnd);
+                    PopStackFrame();
+                
+                    return result;
+                }
+
+                case BinaryOperatorType::BitOr: {
+                    CompileStackSlot lhs = EmitNodeExpression(binOp->LHS);
+
+                    int32_t ifTrue = m_LabelCount;
+                    m_LabelCount++;
+                    int32_t ifFalse = m_LabelCount;
+                    m_LabelCount++;
+                    int32_t ifEnd = m_LabelCount;
+                    m_LabelCount++;
+                    
+                    m_OpCodes.emplace_back(OpCodeType::Push, 1);
+                    IncrementStackSlotCount();
+                    CompileStackSlot result = GetStackTop();
+
+                    PushStackFrame();
+                    m_OpCodes.emplace_back(OpCodeType::Jf, OpCodeJump(CompileToRuntimeStackSlot(lhs), ifFalse));
+                    m_OpCodes.emplace_back(OpCodeType::Jmp, ifTrue);
+                
+                    m_OpCodes.emplace_back(OpCodeType::Label, ifTrue);
+                    m_OpCodes.emplace_back(OpCodeType::LoadI8, OpCodeLoad(static_cast<i8>(true)));
+                    IncrementStackSlotCount();
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(result), -1));
+                    m_OpCodes.emplace_back(OpCodeType::Jmp, ifEnd);
+                
+                    m_OpCodes.emplace_back(OpCodeType::Label, ifFalse);
+                    CompileStackSlot rhs = EmitNodeExpression(binOp->RHS);
+                    m_OpCodes.emplace_back(OpCodeType::OrI8, OpCodeMath(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
+                    IncrementStackSlotCount();
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(result), -1));
+                    m_OpCodes.emplace_back(OpCodeType::Jmp, ifEnd);
+                
+                    m_OpCodes.emplace_back(OpCodeType::Label, ifEnd);
+                    PopStackFrame();
+                
+                    return result;
+                }
                 
                 case BinaryOperatorType::Eq: {
+                    CompileStackSlot lhs = EmitNodeExpression(binOp->LHS);
+                    CompileStackSlot rhs = EmitNodeExpression(binOp->RHS);
+
                     m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), CompileToRuntimeStackSlot(rhs)));
 
-                    return lhs;
-                }
-            }
-            
-            switch (binOp->Type) {
-                case BinaryOperatorType::AddInPlace:
-                case BinaryOperatorType::SubInPlace:
-                case BinaryOperatorType::MulInPlace:
-                case BinaryOperatorType::DivInPlace:
-                case BinaryOperatorType::ModInPlace: {
-                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(CompileToRuntimeStackSlot(lhs), -1));
                     return lhs;
                 }
             }
@@ -447,7 +528,7 @@ namespace BlackLua::Internal {
             #undef MATH_OP
             #undef MATH_OP_GROUP
             
-            return CompileStackSlot((m_CurrentStackFrame) ? m_CurrentStackFrame->SlotCount : m_SlotCount, (m_CurrentStackFrame) ? true : false);
+            return GetStackTop();
         }
     }
 

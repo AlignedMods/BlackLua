@@ -26,16 +26,12 @@ namespace BlackLua::Internal {
             Node* Peek();
             Node* Consume();
     
-            void EmitConstantExpr(NodeExpr* expr);
-            void EmitConstantStatement(NodeStmt* stmt);
-
-            void EmitConstant(Node* node);
-    
             StackSlotIndex CompileToRuntimeStackSlot(CompileStackSlot slot);
     
             int32_t CreateLabel(const std::string& debugData = {});
             void PushBytes(size_t bytes, const std::string& debugData = {});
             void IncrementStackSlotCount();
+            CompileStackSlot GetStackTop();
 
             void PushStackFrame();
             void PushCompilerStackFrame();

@@ -57,6 +57,16 @@ namespace BlackLua::Internal {
             break; \
         }
 
+        #define CASE_BINEXPR_INTEGRAL_GROUP(mathop, str) \
+            CASE_BINEXPR(mathop##I8,  str, "i8") \
+            CASE_BINEXPR(mathop##I16, str, "i16") \
+            CASE_BINEXPR(mathop##I32, str, "i32") \
+            CASE_BINEXPR(mathop##I64, str, "i64") \
+            CASE_BINEXPR(mathop##U8,  str, "u8") \
+            CASE_BINEXPR(mathop##U16, str, "u16") \
+            CASE_BINEXPR(mathop##U32, str, "u32") \
+            CASE_BINEXPR(mathop##U64, str, "u64")
+
         #define CASE_BINEXPR_GROUP(mathop, str) \
             CASE_BINEXPR(mathop##I8,  str, "i8") \
             CASE_BINEXPR(mathop##I16, str, "i16") \
@@ -266,6 +276,10 @@ namespace BlackLua::Internal {
             CASE_BINEXPR_GROUP(Mul, "mul")
             CASE_BINEXPR_GROUP(Div, "div")
             CASE_BINEXPR_GROUP(Mod, "mod")
+
+            CASE_BINEXPR_INTEGRAL_GROUP(And, "and")
+            CASE_BINEXPR_INTEGRAL_GROUP(Or, "or")
+            CASE_BINEXPR_INTEGRAL_GROUP(Xor, "xor")
 
             CASE_BINEXPR_GROUP(Cmp, "cmp")
             CASE_BINEXPR_GROUP(Ncmp, "ncmp")

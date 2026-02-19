@@ -18,6 +18,9 @@ TEST_CASE("Runtime Variable Declaration") {
 TEST_CASE("Runtime Basic Expressions") {
     BlackLua::Context ctx = BlackLua::Context::Create();
     ctx.CompileFile("tests/runtime/basic_expressions.bl", "Runtime Basic Expressions");
+    ctx.AddExternalFunction("ShouldNeverBeCalled", [](BlackLua::Context* ctx) {
+        throw std::exception("function that shouldn't be called was called");
+    }, "Runtime Basic Expressions");
     ctx.Run("Runtime Basic Expressions");
     
     ctx.PushGlobal("a");
@@ -26,6 +29,24 @@ TEST_CASE("Runtime Basic Expressions") {
     REQUIRE(ctx.GetInt(-1) == -3);
     ctx.PushGlobal("c");
     REQUIRE(ctx.GetInt(-1) == 10);
+
+    ctx.PushGlobal("d");
+    REQUIRE(ctx.GetBool(-1) == false);
+    ctx.PushGlobal("e");
+    REQUIRE(ctx.GetBool(-1) == false);
+    ctx.PushGlobal("f");
+    REQUIRE(ctx.GetBool(-1) == true);
+    ctx.PushGlobal("g");
+    REQUIRE(ctx.GetBool(-1) == false);
+
+    ctx.PushGlobal("h");
+    REQUIRE(ctx.GetBool(-1) == true);
+    ctx.PushGlobal("i");
+    REQUIRE(ctx.GetBool(-1) == true);
+    ctx.PushGlobal("j");
+    REQUIRE(ctx.GetBool(-1) == false);
+    ctx.PushGlobal("k");
+    REQUIRE(ctx.GetBool(-1) == true);
 }
 
 TEST_CASE("Runtime Functions") {

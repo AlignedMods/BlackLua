@@ -22,6 +22,13 @@ namespace BlackLua::Internal {
     }
 
     template <typename T>
+    T And(T lhs, T rhs) { return lhs & rhs; }
+    template <typename T>
+    T Or(T lhs, T rhs) { return lhs | rhs; }
+    template <typename T>
+    T Xor(T lhs, T rhs) { return lhs ^ rhs; }
+
+    template <typename T>
     T Cmp(T lhs, T rhs) { return lhs == rhs; }
     template <typename T>
     T Ncmp(T lhs, T rhs) { return lhs != rhs; }
@@ -376,6 +383,16 @@ namespace BlackLua::Internal {
             CASE_BINEXPR(mathop##F32, float,    op) \
             CASE_BINEXPR(mathop##F64, double,   op)
 
+        #define CASE_BINEXPR_INTEGRAL_GROUP(mathop, op) \
+            CASE_BINEXPR(mathop##I8,  int8_t,   op) \
+            CASE_BINEXPR(mathop##I16, int16_t,  op) \
+            CASE_BINEXPR(mathop##I32, int32_t,  op) \
+            CASE_BINEXPR(mathop##I64, int64_t,  op) \
+            CASE_BINEXPR(mathop##U8,  uint8_t,  op) \
+            CASE_BINEXPR(mathop##U16, uint16_t, op) \
+            CASE_BINEXPR(mathop##U32, uint32_t, op) \
+            CASE_BINEXPR(mathop##U64, uint64_t, op)
+
         #define CASE_BINEXPR_BOOL_GROUP(mathop, op) \
             CASE_BINEXPR_BOOL(mathop##I8,  int8_t,   op) \
             CASE_BINEXPR_BOOL(mathop##I16, int16_t,  op) \
@@ -611,6 +628,10 @@ namespace BlackLua::Internal {
                 CASE_BINEXPR_GROUP(Mul, Mul)
                 CASE_BINEXPR_GROUP(Div, Div)
                 CASE_BINEXPR_GROUP(Mod, Mod)
+
+                CASE_BINEXPR_INTEGRAL_GROUP(And, And)
+                CASE_BINEXPR_INTEGRAL_GROUP(Or, Or)
+                CASE_BINEXPR_INTEGRAL_GROUP(Xor, Xor)
 
                 CASE_BINEXPR_BOOL_GROUP(Cmp, Cmp)
                 CASE_BINEXPR_BOOL_GROUP(Ncmp, Ncmp)

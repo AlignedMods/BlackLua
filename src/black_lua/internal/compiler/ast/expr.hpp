@@ -45,6 +45,17 @@ namespace BlackLua::Internal {
 
 #pragma endregion
 
+#pragma region CastType
+
+    enum class CastType {
+        Integral,
+        Floating,
+        IntegralToFloating,
+        FloatingToIntegral
+    };
+
+#pragma endregion
+
 #pragma region UnaryOperatorType
 
     enum class UnaryOperatorType {
@@ -186,7 +197,8 @@ namespace BlackLua::Internal {
     struct ExprCast {
         StringView Type;
         NodeExpr* Expression = nullptr;
-    
+
+        CastType ResolvedCastType = CastType::Integral;
         VariableType* ResolvedSrcType = nullptr;
         VariableType* ResolvedDstType = nullptr;
     };

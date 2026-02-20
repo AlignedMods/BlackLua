@@ -25,6 +25,8 @@ namespace BlackLua::Internal {
         while (Peek()) {
             EmitNode(Consume());
         }
+
+        EmitFunctions();
     }
 
     Node* Emitter::Peek() {
@@ -276,69 +278,88 @@ namespace BlackLua::Internal {
         if (ExprCast* cast = GetNode<ExprCast>(expr)) {
             CompileStackSlot slot = EmitNodeExpression(cast->Expression);
         
-            #define CASE_INNER(primType, op) case PrimitiveType::primType: m_OpCodes.emplace_back(OpCodeType::op, CompileToRuntimeStackSlot(slot)); break
-        
-            #define CASE_OUTER(primType, op, prefix) case PrimitiveType::primType: { \
-                switch (cast->ResolvedDstType->Type) { \
-                    CASE_INNER(Bool, Cast##op##To##prefix##8); \
-                    CASE_INNER(Char, Cast##op##To##prefix##8); \
-                    CASE_INNER(Short, Cast##op##To##prefix##16); \
-                    CASE_INNER(Int, Cast##op##To##prefix##32); \
-                    CASE_INNER(Float, Cast##op##ToF32); \
-                    CASE_INNER(Double, Cast##op##ToF64); \
-                } \
-                break; \
-            }
-        
-            if (cast->ResolvedSrcType->Signed) {
-                if (cast->ResolvedDstType->Signed) {
+            #define CASE_CAST(name) m_OpCodes.emplace_back(OpCodeType::name, CompileToRuntimeStackSlot(slot)); break
+
+            #define CASE_CAST_OUTER_INTEGRAL(src, srcName) \
+                case PrimitiveType::src: {\
+                    if (cast->ResolvedDstType->IsSigned()) { \
+                        switch (cast->ResolvedDstType->Type) { \
+                            case PrimitiveType::Bool: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Char: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Short: CASE_CAST(Cast##srcName##ToI16); break; \
+                            case PrimitiveType::Int: CASE_CAST(Cast##srcName##ToI32); break; \
+                            case PrimitiveType::Long: CASE_CAST(Cast##srcName##ToI64); break; \
+                        } \
+                    } else { \
+                        switch (cast->ResolvedDstType->Type) { \
+                            case PrimitiveType::Bool: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Char: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Short: CASE_CAST(Cast##srcName##ToI16); break; \
+                            case PrimitiveType::Int: CASE_CAST(Cast##srcName##ToI32); break; \
+                            case PrimitiveType::Long: CASE_CAST(Cast##srcName##ToI64); break; \
+                        } \
+                    } \
+                    break; \
+                }
+
+            #define CASE_CAST_OUTER_FLOATING(src, srcName) \
+                case PrimitiveType::src: {\
+                    switch (cast->ResolvedDstType->Type) { \
+                        case PrimitiveType::Float: CASE_CAST(Cast##srcName##ToF32); break; \
+                        case PrimitiveType::Double: CASE_CAST(Cast##srcName##ToF64); break; \
+                    } \
+                    break; \
+                }
+
+            if (cast->ResolvedCastType == CastType::Integral) {
+                if (cast->ResolvedSrcType->IsSigned()) {
                     switch (cast->ResolvedSrcType->Type) {
-                        CASE_OUTER(Bool,   I8,  I)
-                        CASE_OUTER(Char,   I8,  I)
-                        CASE_OUTER(Short,  I16, I)
-                        CASE_OUTER(Int,    I32, I)
-                        CASE_OUTER(Long,   I64, I)
-                        CASE_OUTER(Float,  F32, I)
-                        CASE_OUTER(Double, F64, I)
+                        CASE_CAST_OUTER_INTEGRAL(Bool, I8)
+                        CASE_CAST_OUTER_INTEGRAL(Char, I8)
+                        CASE_CAST_OUTER_INTEGRAL(Short, I16)
+                        CASE_CAST_OUTER_INTEGRAL(Int, I32)
+                        CASE_CAST_OUTER_INTEGRAL(Long, I64)
                     }
                 } else {
                     switch (cast->ResolvedSrcType->Type) {
-                        CASE_OUTER(Bool,   I8,  U)
-                        CASE_OUTER(Char,   I8,  U)
-                        CASE_OUTER(Short,  I16, U)
-                        CASE_OUTER(Int,    I32, U)
-                        CASE_OUTER(Long,   I64, U)
-                        CASE_OUTER(Float,  F32, U)
-                        CASE_OUTER(Double, F64, U)
+                        CASE_CAST_OUTER_INTEGRAL(Bool, U8)
+                        CASE_CAST_OUTER_INTEGRAL(Char, U8)
+                        CASE_CAST_OUTER_INTEGRAL(Short, U16)
+                        CASE_CAST_OUTER_INTEGRAL(Int, U32)
+                        CASE_CAST_OUTER_INTEGRAL(Long, U64)
                     }
                 }
-            } else {
-                if (cast->ResolvedDstType->Signed) {
+            } else if (cast->ResolvedCastType == CastType::Floating) {
+                switch (cast->ResolvedSrcType->Type) {
+                    CASE_CAST_OUTER_FLOATING(Float, F32)
+                    CASE_CAST_OUTER_FLOATING(Double, F64)
+                }
+            } else if (cast->ResolvedCastType == CastType::IntegralToFloating) {
+                if (cast->ResolvedSrcType->IsSigned()) {
                     switch (cast->ResolvedSrcType->Type) {
-                        CASE_OUTER(Bool,   U8,  I)
-                        CASE_OUTER(Char,   U8,  I)
-                        CASE_OUTER(Short,  U16, I)
-                        CASE_OUTER(Int,    U32, I)
-                        CASE_OUTER(Long,   U64, I)
-                        CASE_OUTER(Float,  F32, I)
-                        CASE_OUTER(Double, F64, I)
+                        CASE_CAST_OUTER_FLOATING(Bool, I8)
+                        CASE_CAST_OUTER_FLOATING(Char, I8)
+                        CASE_CAST_OUTER_FLOATING(Short, I16)
+                        CASE_CAST_OUTER_FLOATING(Int, I32)
+                        CASE_CAST_OUTER_FLOATING(Long, I64)
                     }
                 } else {
                     switch (cast->ResolvedSrcType->Type) {
-                        CASE_OUTER(Bool,   U8,  U)
-                        CASE_OUTER(Char,   U8,  U)
-                        CASE_OUTER(Short,  U16, U)
-                        CASE_OUTER(Int,    U32, U)
-                        CASE_OUTER(Long,   U64, U)
-                        CASE_OUTER(Float,  F32, U)
-                        CASE_OUTER(Double, F64, U)
+                        CASE_CAST_OUTER_FLOATING(Bool, U8)
+                        CASE_CAST_OUTER_FLOATING(Char, U8)
+                        CASE_CAST_OUTER_FLOATING(Short, U16)
+                        CASE_CAST_OUTER_FLOATING(Int, U32)
+                        CASE_CAST_OUTER_FLOATING(Long, U64)
                     }
                 }
+            } else if (cast->ResolvedCastType == CastType::FloatingToIntegral) {
+                switch (cast->ResolvedSrcType->Type) {
+                    CASE_CAST_OUTER_INTEGRAL(Float, F32)
+                    CASE_CAST_OUTER_INTEGRAL(Double, F64)
+                }
             }
-        
-            #undef CASE_INNER
-            #undef CASE_OUTER
             
+            IncrementStackSlotCount();
             return GetStackTop();
         }
        
@@ -352,7 +373,7 @@ namespace BlackLua::Internal {
                 }
             
             #define MATH_OP_GROUP(unaryExpr, op) case UnaryOperatorType::unaryExpr: { \
-                if (unOp->ResolvedType->Signed) { \
+                if (unOp->ResolvedType->IsSigned()) { \
                     MATH_OP(op, I8, Bool) \
                     MATH_OP(op, I8, Char) \
                     MATH_OP(op, I16, Short) \
@@ -398,7 +419,7 @@ namespace BlackLua::Internal {
                 }
             
             #define MATH_OP_GROUP(binExpr, op) case BinaryOperatorType::binExpr: { \
-                if (binOp->ResolvedSourceType->Signed) { \
+                if (binOp->ResolvedSourceType->IsSigned()) { \
                     MATH_OP(op, I8, Bool) \
                     MATH_OP(op, I8, Char) \
                     MATH_OP(op, I16, Short) \
@@ -604,8 +625,8 @@ namespace BlackLua::Internal {
 
     void Emitter::EmitNodeFunctionDecl(NodeStmt* stmt) {
         StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(stmt);
-        
-        if (!decl->Extern && !decl->Body) { return; }
+
+        if (decl->Extern) { return; }
 
         std::string ident = fmt::format("{}", decl->Name);
         Declaration d;
@@ -615,38 +636,8 @@ namespace BlackLua::Internal {
         d.Type = decl->ResolvedType;
         m_DeclaredSymbols[ident] = d;
 
-        if (decl->Body) {
-            int32_t label = m_LabelCount - 1;
-            m_OpCodes.emplace_back(OpCodeType::Label, label);
-
-            CompilerReflectionDeclaration dd;
-            dd.Type = ReflectionType::Function;
-            dd.Data = label;
-            dd.ResolvedType = decl->ResolvedType;
-            m_ReflectionData.Declarations[ident] = dd;
-
-            PushCompilerStackFrame();
-            
-            size_t returnSlot = (decl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
-            size_t varsPushed = 0;
-            
-            // Inject function parameters into the scope
-            for (size_t i = 0; i < decl->Parameters.Size; i++) {
-                EmitNodeParamDecl(GetNode<NodeStmt>(decl->Parameters.Items[i]));
-            
-                // Copy the arguments into the parameters
-                m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(decl->Parameters.Size + 1 + returnSlot)));
-                varsPushed++;
-            }
-            
-            EmitNodeCompound(decl->Body);
-
-            if (m_OpCodes.back().Type != OpCodeType::Ret) {
-                m_OpCodes.emplace_back(OpCodeType::Ret);
-            }
-            
-            PopCompilerStackFrame();
-        }
+        m_FunctionsToDeclare[m_LabelCount - 1] = stmt;
+        m_ReflectionData.Declarations[ident] = { decl->ResolvedType, ReflectionType::Function, static_cast<int32_t>(m_LabelCount - 1) };
     }
 
     void Emitter::EmitNodeStructDecl(NodeStmt* stmt) {
@@ -803,6 +794,38 @@ namespace BlackLua::Internal {
             EmitNodeIf(stmt);
         } else if (GetNode<StmtReturn>(stmt)) {
             EmitNodeReturn(stmt);
+        }
+    }
+
+    void Emitter::EmitFunctions() {
+        for (const auto&[label, stmt] : m_FunctionsToDeclare) {
+            if (StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(stmt)) {
+                if (decl->Body) {
+                    m_OpCodes.emplace_back(OpCodeType::Label, label);
+
+                    PushCompilerStackFrame();
+                    
+                    size_t returnSlot = (decl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
+                    size_t varsPushed = 0;
+                    
+                    // Inject function parameters into the scope
+                    for (size_t i = 0; i < decl->Parameters.Size; i++) {
+                        EmitNodeParamDecl(GetNode<NodeStmt>(decl->Parameters.Items[i]));
+                    
+                        // Copy the arguments into the parameters
+                        m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(decl->Parameters.Size + 1 + returnSlot)));
+                        varsPushed++;
+                    }
+                    
+                    EmitNodeCompound(decl->Body);
+
+                    if (m_OpCodes.back().Type != OpCodeType::Ret) {
+                        m_OpCodes.emplace_back(OpCodeType::Ret);
+                    }
+                    
+                    PopCompilerStackFrame();
+                }
+            }
         }
     }
 

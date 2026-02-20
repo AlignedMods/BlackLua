@@ -43,7 +43,7 @@ namespace BlackLua::Internal {
             VariableType* type = nullptr;
         
             if (GetNode<ConstantBool>(con)) {
-                type = CreateVarType(m_Context, PrimitiveType::Bool);
+                type = CreateVarType(m_Context, PrimitiveType::Bool, true);
             } else if (GetNode<ConstantChar>(con)) {
                 type = CreateVarType(m_Context, PrimitiveType::Char);
             } else if (ConstantInt* ci = GetNode<ConstantInt>(con)) {
@@ -51,9 +51,9 @@ namespace BlackLua::Internal {
             } else if (ConstantLong* cl = GetNode<ConstantLong>(con)) {
                 type = CreateVarType(m_Context, PrimitiveType::Long, !cl->Unsigned);
             } else if (GetNode<ConstantFloat>(con)) {
-                type = CreateVarType(m_Context, PrimitiveType::Float);
+                type = CreateVarType(m_Context, PrimitiveType::Float, true);
             } else if (GetNode<ConstantDouble>(con)) {
-                type = CreateVarType(m_Context, PrimitiveType::Double);
+                type = CreateVarType(m_Context, PrimitiveType::Double, true);
             } else if (GetNode<ConstantString>(con)) {
                 type = CreateVarType(m_Context, PrimitiveType::String);
             }
@@ -73,10 +73,11 @@ namespace BlackLua::Internal {
                         ExprMember* mem = m_Context->GetAllocator()->AllocateNamed<ExprMember>();
                         mem->Member = ref->Identifier;
                         mem->Parent = m_Context->GetAllocator()->AllocateNamed<NodeExpr>(m_Context->GetAllocator()->AllocateNamed<ExprSelf>(), expr->Loc);
-                        mem->ResolvedParentType = CreateVarType(m_Context, PrimitiveType::Structure, false, *m_ActiveStruct);
+                        mem->ResolvedParentType = CreateVarType(m_Context, PrimitiveType::Structure, *m_ActiveStruct);
                         mem->ResolvedMemberType = field.ResolvedType;
 
                         expr->Data = mem;
+                        ref->ResolvedType = mem->ResolvedMemberType;
                         return mem->ResolvedMemberType;
                     }
                 }
@@ -122,7 +123,7 @@ namespace BlackLua::Internal {
                 return CreateVarType(m_Context, PrimitiveType::Invalid);
             }
 
-            return CreateVarType(m_Context, PrimitiveType::Structure, false, *m_ActiveStruct);
+            return CreateVarType(m_Context, PrimitiveType::Structure, *m_ActiveStruct);
         }
 
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
@@ -248,8 +249,23 @@ namespace BlackLua::Internal {
                 // m_Context->ReportCompilerError(expr->Line, expr->Column, fmt::format("Cannot cast from {} to {}", VariableTypeToString(cast->ResolvedSrcType), VariableTypeToString(cast->ResolvedDstType)));
                 m_Error = true;
             }
+
+            VariableType* src = cast->ResolvedSrcType;
+            VariableType* dest = cast->ResolvedDstType;
+
+            if (src->IsIntegral() && dest->IsIntegral()) {
+                cast->ResolvedCastType = CastType::Integral;
+            } else if (src->IsFloatingPoint() && dest->IsFloatingPoint()) {
+                cast->ResolvedCastType = CastType::Floating;
+            } else if (src->IsIntegral() && dest->IsFloatingPoint()) {
+                cast->ResolvedCastType = CastType::IntegralToFloating;
+            } else if (src->IsFloatingPoint() && dest->IsIntegral()) {
+                cast->ResolvedCastType = CastType::FloatingToIntegral;
+            } else {
+                BLUA_ASSERT(false, "Impossible cast combination");
+            }
             
-            return cast->ResolvedDstType;
+            return dest;
         }
         
         if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
@@ -320,7 +336,7 @@ namespace BlackLua::Internal {
                 case BinaryOperatorType::GreaterOrEq:
                 case BinaryOperatorType::BitAnd:
                 case BinaryOperatorType::BitOr:
-                    resolved = CreateVarType(m_Context, PrimitiveType::Bool); break;
+                    resolved = CreateVarType(m_Context, PrimitiveType::Bool, true); break;
         
                 default: return nullptr;
             }
@@ -365,7 +381,9 @@ namespace BlackLua::Internal {
         StmtParamDecl* decl = GetNode<StmtParamDecl>(stmt);
         
         VariableType* type = GetVarTypeFromString(StringView(decl->Type.Data(), decl->Type.Size()));
-        m_CurrentScope->DeclaredSymbols[fmt::format("{}", decl->Identifier)] = { type, stmt };
+        if (m_CurrentScope) {
+            m_CurrentScope->DeclaredSymbols[fmt::format("{}", decl->Identifier)] = { type, stmt };
+        }
         
         decl->ResolvedType = type;
     }
@@ -444,17 +462,20 @@ namespace BlackLua::Internal {
         VariableType* type = GetVarTypeFromString(StringView(decl->ReturnType.Data(), decl->ReturnType.Size()));
         m_DeclaredSymbols[name] = { type, stmt };
         decl->ResolvedType = type;
-        
+
         if (decl->Body) {
             PushScope(type);
             
             for (size_t i = 0; i < decl->Parameters.Size; i++) {
                 CheckNode(decl->Parameters.Items[i]);
             }
-            
             CheckNodeCompound(decl->Body);
             
             PopScope();
+        } else {
+            for (size_t i = 0; i < decl->Parameters.Size; i++) {
+                CheckNode(decl->Parameters.Items[i]);
+            }
         }
     }
 
@@ -566,7 +587,7 @@ namespace BlackLua::Internal {
         cost.Source = type2;
         cost.Destination = type1;
 
-        if (type1->Signed != type2->Signed) {
+        if (type1->IsSigned() != type2->IsSigned()) {
             cost.SignedMismatch = true;
             cost.ImplicitCastPossible = false;
         }
@@ -578,14 +599,14 @@ namespace BlackLua::Internal {
             return cost;
         }
 
-        if (type1->Type == PrimitiveType::Bool || type1->Type == PrimitiveType::Char || type1->Type == PrimitiveType::Short || type1->Type == PrimitiveType::Int || type1->Type == PrimitiveType::Long) {
-            if (type2->Type == PrimitiveType::Bool || type2->Type == PrimitiveType::Char || type2->Type == PrimitiveType::Short || type2->Type == PrimitiveType::Int || type2->Type == PrimitiveType::Long) {
+        if (type1->IsIntegral()) {
+            if (type2->IsIntegral()) {
                 if (GetTypeSize(type1) > GetTypeSize(type2)) {
                     cost.Type = ConversionType::Narrowing;
                 } else {
                     cost.Type = ConversionType::Promotion;
                 }
-            } else if (type2->Type == PrimitiveType::Float || type2->Type == PrimitiveType::Double) {
+            } else if (type2->IsFloatingPoint()) {
                 cost.ImplicitCastPossible = false;
 
                 if (GetTypeSize(type1) > GetTypeSize(type2)) {
@@ -598,14 +619,14 @@ namespace BlackLua::Internal {
             }
         }
 
-        if (type1->Type == PrimitiveType::Float || type1->Type == PrimitiveType::Double) {
-            if (type2->Type == PrimitiveType::Float || type2->Type == PrimitiveType::Double) {
+        if (type1->IsFloatingPoint()) {
+            if (type2->IsFloatingPoint()) {
                 if (GetTypeSize(type1) > GetTypeSize(type1)) {
                     cost.Type = ConversionType::Narrowing;
                 } else {
                     cost.Type = ConversionType::Promotion;
                 }
-            } else if (type2->Type == PrimitiveType::Bool || type2->Type == PrimitiveType::Char || type2->Type == PrimitiveType::Short || type2->Type == PrimitiveType::Int || type2->Type == PrimitiveType::Long) {
+            } else if (type2->IsIntegral()) {
                 cost.ImplicitCastPossible = false;
 
                 if (GetTypeSize(type1) > GetTypeSize(type2)) {
@@ -625,6 +646,19 @@ namespace BlackLua::Internal {
         ExprCast* cast = m_Context->GetAllocator()->AllocateNamed<ExprCast>();
         NodeExpr* newExpr = m_Context->GetAllocator()->AllocateNamed<NodeExpr>(*expr);
         cast->Expression = newExpr;
+
+        if (src->IsIntegral() && dest->IsIntegral()) {
+            cast->ResolvedCastType = CastType::Integral;
+        } else if (src->IsFloatingPoint() && dest->IsFloatingPoint()) {
+            cast->ResolvedCastType = CastType::Floating;
+        } else if (src->IsIntegral() && dest->IsFloatingPoint()) {
+            cast->ResolvedCastType = CastType::IntegralToFloating;
+        } else if (src->IsFloatingPoint() && dest->IsIntegral()) {
+            cast->ResolvedCastType = CastType::FloatingToIntegral;
+        } else {
+            BLUA_ASSERT(false, "Impossible cast combination");
+        }
+
         cast->ResolvedSrcType = src;
         cast->ResolvedDstType = dest;
 
@@ -644,7 +678,7 @@ namespace BlackLua::Internal {
             isolatedType = fmt::format("{}", str);
         }
 
-        #define TYPE(str, t, _signed) if (isolatedType == str) { type->Type = PrimitiveType::t; type->Signed = _signed; }
+        #define TYPE(str, t, _signed) if (isolatedType == str) { type->Type = PrimitiveType::t; type->Data = _signed; }
 
         VariableType* type = CreateVarType(m_Context, PrimitiveType::Invalid);
         TYPE("void",   Void, true);

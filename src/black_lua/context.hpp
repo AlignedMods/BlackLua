@@ -84,7 +84,7 @@ namespace BlackLua {
 
         friend class Internal::StringBuilder;
         friend struct Internal::NodeList;
-        friend Internal::VariableType* Internal::CreateVarType(Context* ctx, Internal::PrimitiveType type, bool _signed, decltype(Internal::VariableType::Data) data);
+        friend Internal::VariableType* Internal::CreateVarType(Context* ctx, Internal::PrimitiveType type, decltype(Internal::VariableType::Data) data);
 
     private:
         std::unordered_map<std::string, CompiledSource*> m_Modules;

@@ -49,8 +49,7 @@ namespace BlackLua::Internal {
 
     struct VariableType {
         PrimitiveType Type = PrimitiveType::Invalid;
-        bool Signed = true;
-        std::variant<VariableType*, StructDeclaration> Data;
+        std::variant<bool, VariableType*, StructDeclaration> Data;
 
         bool operator==(const VariableType& other) {
             return Type == other.Type;
@@ -59,20 +58,36 @@ namespace BlackLua::Internal {
         bool operator!=(const VariableType& other) {
             return !(operator==(other));
         }
+
+        bool IsIntegral() const {
+            return Type == PrimitiveType::Bool || Type == PrimitiveType::Char || Type == PrimitiveType::Short || Type == PrimitiveType::Int || Type == PrimitiveType::Long;
+        }
+
+        bool IsFloatingPoint() const {
+            return Type == PrimitiveType::Float || Type == PrimitiveType::Double;
+        }
+
+        bool IsSigned() const {
+            if (IsIntegral() && std::get_if<bool>(&Data) == nullptr) {
+                return false;
+            }
+
+            return std::get<bool>(Data);
+        }
     };
 
-    VariableType* CreateVarType(Context* ctx, PrimitiveType type, bool _signed = true, decltype(VariableType::Data) data = {});
+    VariableType* CreateVarType(Context* ctx, PrimitiveType type, decltype(VariableType::Data) data = {});
 
     inline std::string VariableTypeToString(VariableType* type) {
         std::string str;
-        if (!type->Signed) {
+        if (!type->IsSigned()) {
             str = "u";
         }
 
         switch (type->Type) {
-            case PrimitiveType::Invalid: str += "invalid"; break;
-            case PrimitiveType::Void:    str += "void"; break;
-            case PrimitiveType::Bool:    str += "bool"; break;
+            case PrimitiveType::Invalid: str = "invalid"; break;
+            case PrimitiveType::Void:    str = "void"; break;
+            case PrimitiveType::Bool:    str = "bool"; break;
             case PrimitiveType::Char:    str += "char"; break;
             case PrimitiveType::Short:   str += "short"; break;
             case PrimitiveType::Int:     str += "int"; break;

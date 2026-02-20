@@ -75,12 +75,12 @@ namespace BlackLua {
 
         Internal::Parser p = Internal::Parser::Parse(l.GetTokens(), this);
         valid = p.IsValid();
-        if (!valid) {delete src->Allocator; return; }
+        if (!valid) { delete src->Allocator; return; }
         src->ASTNodes = *p.GetNodes();
 
         Internal::TypeChecker c = Internal::TypeChecker::Check(&src->ASTNodes, this);
         valid = c.IsValid();
-        if (!valid) { delete src->Allocator; return; }
+        if (!valid) { BLUA_ASSERT(false, "f"); delete src->Allocator; return; }
 
         Internal::Emitter e = Internal::Emitter::Emit(p.GetNodes(), this);
         src->ReflectionData = e.GetReflectionData();

@@ -57,6 +57,8 @@ namespace BlackLua::Internal {
             void EmitNodeReturn(NodeStmt* stmt);
 
             void EmitNodeStatement(NodeStmt* stmt);
+
+            void EmitFunctions();
     
             void EmitNode(Node* node);
     
@@ -76,6 +78,7 @@ namespace BlackLua::Internal {
             };
     
             std::unordered_map<std::string, Declaration> m_DeclaredSymbols;
+            std::unordered_map<int32_t, NodeStmt*> m_FunctionsToDeclare; // We do not immediately declare functions, we actually do them last
     
             struct StackFrame {
                 StackFrame* Parent = nullptr;

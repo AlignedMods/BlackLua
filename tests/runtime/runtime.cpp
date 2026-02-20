@@ -52,12 +52,19 @@ TEST_CASE("Runtime Basic Expressions") {
 TEST_CASE("Runtime Functions") {
     BlackLua::Context ctx = BlackLua::Context::Create();
     ctx.CompileFile("tests/runtime/functions.bl", "Runtime Functions");
+    ctx.AddExternalFunction("ExternalFunction", [](BlackLua::Context* ctx) {
+        REQUIRE(ctx->GetInt(-3) == 5);
+        REQUIRE(ctx->GetInt(-2) == 66);
+        REQUIRE(ctx->GetInt(-1) == 50);
+    }, "Runtime Functions");
     ctx.Run("Runtime Functions");
     
     ctx.Call("main", "Runtime Functions");
     
     ctx.PushGlobal("result");
     REQUIRE(ctx.GetInt(-1) == 24);
+    ctx.PushGlobal("otherResult");
+    REQUIRE(ctx.GetInt(-1) == 26);
 }
 
 TEST_CASE("Runtime Control Flow") {
@@ -96,4 +103,17 @@ TEST_CASE("Runtime Recursion") {
     ctx.Call("Fib", "Runtime Recursion");
     REQUIRE(ctx.GetInt(-1) == 6765);
     ctx.Pop(2);
+}
+
+TEST_CASE("Runtime Casts") {
+    BlackLua::Context ctx = BlackLua::Context::Create();
+    ctx.CompileFile("tests/runtime/casts.bl", "Runtime Casts");
+    ctx.Run("Runtime Casts");
+
+    ctx.PushGlobal("a");
+    REQUIRE(ctx.GetInt(-1) == 2);
+    ctx.PushGlobal("b");
+    REQUIRE((ctx.GetFloat(-1) > 1.9999f && ctx.GetFloat(-1) < 2.0001f)); // Due to floating point inaccuracies we don't require exact matching numbers
+    ctx.PushGlobal("c");
+    REQUIRE(ctx.GetLong(-1) == static_cast<int64_t>(5));
 }

@@ -29,7 +29,7 @@ namespace BlackLua::Internal {
             StackSlotIndex CompileToRuntimeStackSlot(CompileStackSlot slot);
     
             int32_t CreateLabel(const std::string& debugData = {});
-            void PushBytes(size_t bytes, const std::string& debugData = {});
+            void PushBytes(size_t bytes, VariableType* type, const std::string& debugData = {});
             void IncrementStackSlotCount();
             CompileStackSlot GetStackTop();
 

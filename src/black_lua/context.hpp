@@ -22,7 +22,9 @@ namespace BlackLua {
     class Allocator;
 
     using RuntimeErrorHandlerFn = void(*)(const std::string& error);
-    using CompilerErrorHandlerFn = void(*)(size_t line, size_t column, const std::string& file, const std::string& error);
+    using CompilerErrorHandlerFn = void(*)(size_t line, size_t column, 
+                                           size_t startLine, size_t startColumn, 
+                                           size_t endLine, size_t endColumn, const std::string& file, const std::string& error);
 
     using ExternFn = void(*)(Context* ctx);
 
@@ -44,16 +46,18 @@ namespace BlackLua {
         // Returns a string containing the disassembled byte code
         std::string Disassemble(const std::string& module);
 
-        void PushBool(bool b    , const std::string& module = {});
-        void PushChar(int8_t c  , const std::string& module = {});
+        void PushBool(bool b,     const std::string& module = {});
+        void PushChar(int8_t c,   const std::string& module = {});
         void PushShort(int16_t s, const std::string& module = {});
-        void PushInt(int32_t i  , const std::string& module = {});
-        void PushLong(int64_t l , const std::string& module = {});
-        void PushFloat(float f  , const std::string& module = {});
+        void PushInt(int32_t i,   const std::string& module = {});
+        void PushLong(int64_t l,  const std::string& module = {});
+        void PushFloat(float f,   const std::string& module = {});
         void PushDouble(double f, const std::string& module = {});
 
         void PushGlobal(const std::string& str, const std::string& module = {});
         void Pop(size_t count, const std::string& module = {});
+
+        void PushField(int32_t index, const std::string& name, const std::string& module = {});
 
         bool    GetBool(int32_t index,   const std::string& module = {});
         int8_t  GetChar(int32_t index,   const std::string& module = {});
@@ -72,7 +76,9 @@ namespace BlackLua {
     private:
         CompiledSource* GetCompiledSource(const std::string& module);
 
-        void ReportCompilerError(size_t line, size_t column, const std::string& error);
+        void ReportCompilerError(size_t line, size_t column, 
+                                 size_t startLine, size_t startColumn, 
+                                 size_t endLine, size_t endColumn, const std::string& error);
         void ReportRuntimeError(const std::string& error);
 
         Allocator* GetAllocator();

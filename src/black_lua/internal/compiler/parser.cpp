@@ -339,7 +339,7 @@ namespace BlackLua::Internal {
                 NodeExpr* expr = ParseValue();
                 ExprUnaryOperator* node = Allocate<ExprUnaryOperator>(expr, UnaryOperatorType::Negate);
     
-                final = Allocate<NodeExpr>(node, SourceRange(m.Loc.Start, Peek(-1)->Loc.End, StringView(m.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                final = Allocate<NodeExpr>(node, SourceRange(m.Loc.Start, Peek(-1)->Loc.End), m.Loc.Start);
                 break;
             }
     
@@ -355,14 +355,14 @@ namespace BlackLua::Internal {
                     node->Type = StringView(type.Data(), type.Size());
                     node->Expression = ParseValue();
                 
-                    final = Allocate<NodeExpr>(node, SourceRange(p.Loc.Start, Peek(-1)->Loc.End, StringView(p.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                    final = Allocate<NodeExpr>(node, SourceRange(p.Loc.Start, Peek(-1)->Loc.End), p.Loc.Start);
                 } else {
                     NodeExpr* expr = ParseExpression();
                     ExprParen* node = Allocate<ExprParen>(expr);
                     
                     TryConsume(TokenType::RightParen, "')'");
                     
-                    final = Allocate<NodeExpr>(node, SourceRange(p.Loc.Start, Peek(-1)->Loc.End, StringView(p.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                    final = Allocate<NodeExpr>(node, SourceRange(p.Loc.Start, Peek(-1)->Loc.End), p.Loc.Start);
                 }
                 
                 break;
@@ -397,12 +397,12 @@ namespace BlackLua::Internal {
     
                     TryConsume(TokenType::RightParen, "')'");
     
-                    final = Allocate<NodeExpr>(node, SourceRange(i.Loc.Start, Peek(-1)->Loc.End, StringView(i.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                    final = Allocate<NodeExpr>(node, SourceRange(i.Loc.Start, Peek(-1)->Loc.End), i.Loc.Start);
                 } else {
                     ExprVarRef* varRef = Allocate<ExprVarRef>();
                     varRef->Identifier = value.Data;
 
-                    final = Allocate<NodeExpr>(varRef, SourceRange(i.Loc.Start, Peek(-1)->Loc.End, StringView(i.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                    final = Allocate<NodeExpr>(varRef, SourceRange(i.Loc.Start, Peek(-1)->Loc.End), i.Loc.Start);
                 }
 
                 break;
@@ -436,13 +436,13 @@ namespace BlackLua::Internal {
     
                     TryConsume(TokenType::RightParen, "')'");
     
-                    final = Allocate<NodeExpr>(methodExpr, SourceRange(final->Loc.Start, Peek(-1)->Loc.End, StringView(final->Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                    final = Allocate<NodeExpr>(methodExpr, SourceRange(final->Range.Start, Peek(-1)->Loc.End), op.Loc.Start);
                 } else {
                     ExprMember* memExpr = Allocate<ExprMember>();
 
                     memExpr->Member = member->Data;
                     memExpr->Parent = final;
-                    final = Allocate<NodeExpr>(memExpr, SourceRange(final->Loc.Start, Peek(-1)->Loc.End, StringView(final->Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                    final = Allocate<NodeExpr>(memExpr, SourceRange(final->Range.Start, Peek(-1)->Loc.End), op.Loc.Start);
                 }
             } else if (op.Type == TokenType::LeftBracket) {
                 ExprArrayAccess* arrExpr = Allocate<ExprArrayAccess>();
@@ -451,7 +451,7 @@ namespace BlackLua::Internal {
                 arrExpr->Parent = final;
                 TryConsume(TokenType::RightBracket, "']'");
 
-                final = Allocate<NodeExpr>(arrExpr, SourceRange(final->Loc.Start, Peek(-1)->Loc.End, StringView(final->Loc.SourceString, Peek(-1)->Loc.SourceString)));
+                final = Allocate<NodeExpr>(arrExpr, SourceRange(final->Range.Start, Peek(-1)->Loc.End), op.Loc.Start);
             }
         }
 
@@ -475,7 +475,7 @@ namespace BlackLua::Internal {
             newExpr->RHS = rhsExpr;
             newExpr->Type = op;
 
-            lhsExpr = Allocate<NodeExpr>(newExpr, SourceRange(lhsExpr->Loc.Start, rhsExpr->Loc.End, StringView(lhsExpr->Loc.SourceString, rhsExpr->Loc.SourceString)));
+            lhsExpr = Allocate<NodeExpr>(newExpr, SourceRange(lhsExpr->Range.Start, rhsExpr->Range.End), o.Loc.Start);
         }
 
         return lhsExpr;
@@ -493,7 +493,7 @@ namespace BlackLua::Internal {
 
         TryConsume(TokenType::RightCurly, "'}'");
 
-        return Allocate<NodeStmt>(node, SourceRange(l->Loc.Start, Peek(-1)->Loc.End, StringView(l->Loc.SourceString, Peek(-1)->Loc.SourceString)));
+        return Allocate<NodeStmt>(node, SourceRange(l->Loc.Start, Peek(-1)->Loc.End), l->Loc.Start);
     }
 
     NodeStmt* Parser::ParseCompoundInline() {
@@ -504,7 +504,7 @@ namespace BlackLua::Internal {
 
             StmtCompound* node = Allocate<StmtCompound>();
             node->Nodes.Append(m_Context, ParseToken());
-            return Allocate<NodeStmt>(node, SourceRange(start.Start, Peek(-1)->Loc.End, StringView(start.SourceString, Peek(-1)->Loc.SourceString)));
+            return Allocate<NodeStmt>(node, SourceRange(start.Start, Peek(-1)->Loc.End), start.Start);
         }
     }
 
@@ -533,7 +533,7 @@ namespace BlackLua::Internal {
                 node->Value = ParseExpression();
             }
 
-            return Allocate<NodeStmt>(node, SourceRange(start.Start, Peek(-1)->Loc.End, StringView(start.SourceString, Peek(-1)->Loc.SourceString)));
+            return Allocate<NodeStmt>(node, SourceRange(start.Start, Peek(-1)->Loc.End), ident->Loc.Start);
         } else {
             return nullptr;
         }
@@ -563,7 +563,7 @@ namespace BlackLua::Internal {
                     m_NeedsSemi = false;
                 }
 
-                return Allocate<NodeStmt>(node, SourceRange(start.Start, end, StringView(start.SourceString, Peek(-1)->Loc.SourceString)));
+                return Allocate<NodeStmt>(node, SourceRange(start.Start, end), ident->Loc.Start);
             } else {
                 ErrorExpected("'('");
             }
@@ -628,7 +628,8 @@ namespace BlackLua::Internal {
 
         TryConsume(TokenType::RightCurly, "'}'");
 
-        return Allocate<NodeStmt>(node, SourceRange(s.Loc.Start, Peek(-1)->Loc.End, StringView(s.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+        m_NeedsSemi = false;
+        return Allocate<NodeStmt>(node, SourceRange(s.Loc.Start, Peek(-1)->Loc.End), ident->Loc.Start);
     }
 
     NodeStmt* Parser::ParseWhile() {
@@ -644,7 +645,7 @@ namespace BlackLua::Internal {
 
         m_NeedsSemi = false;
 
-        return Allocate<NodeStmt>(node, SourceRange(w.Loc.Start, end, StringView(w.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+        return Allocate<NodeStmt>(node, SourceRange(w.Loc.Start, end), w.Loc.Start);
     }
 
     NodeStmt* Parser::ParseDoWhile() {
@@ -682,7 +683,7 @@ namespace BlackLua::Internal {
 
         m_NeedsSemi = false;
 
-        return Allocate<NodeStmt>(node, SourceRange(f.Loc.Start, end, StringView(f.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+        return Allocate<NodeStmt>(node, SourceRange(f.Loc.Start, end), f.Loc.Start);
     }
 
     NodeStmt* Parser::ParseIf() {
@@ -705,7 +706,7 @@ namespace BlackLua::Internal {
 
         m_NeedsSemi = false;
 
-        return Allocate<NodeStmt>(node, SourceRange(i.Loc.Start, end, StringView(i.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+        return Allocate<NodeStmt>(node, SourceRange(i.Loc.Start, end), i.Loc.Start);
     }
 
     NodeStmt* Parser::ParseBreak() {
@@ -726,7 +727,7 @@ namespace BlackLua::Internal {
         StmtReturn* node = Allocate<StmtReturn>();
         node->Value = ParseExpression();
 
-        return Allocate<NodeStmt>(node, SourceRange(r.Loc.Start, Peek(-1)->Loc.End, StringView(r.Loc.SourceString, Peek(-1)->Loc.SourceString)));
+        return Allocate<NodeStmt>(node, SourceRange(r.Loc.Start, Peek(-1)->Loc.End), r.Loc.Start);
     }
 
     NodeStmt* Parser::ParseStatement() {

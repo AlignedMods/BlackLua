@@ -27,6 +27,8 @@ namespace BlackLua {
 
         Internal::CompilerReflectionData ReflectionData;
         Internal::VM VM;
+
+        Internal::VariableType* m_CurrentStackTop = nullptr;
     };
 
     Context::Context() {}
@@ -120,43 +122,43 @@ namespace BlackLua {
 
     void Context::PushBool(bool b, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(b));
+        src->VM.PushBytes(sizeof(b), Internal::CreateVarType(this, Internal::PrimitiveType::Bool));
         src->VM.StoreBool(-1, b);
     }
 
     void Context::PushChar(int8_t c, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(c));
+        src->VM.PushBytes(sizeof(c), Internal::CreateVarType(this, Internal::PrimitiveType::Char));
         src->VM.StoreChar(-1, c);
     }
 
     void Context::PushShort(int16_t s, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(s));
+        src->VM.PushBytes(sizeof(s), Internal::CreateVarType(this, Internal::PrimitiveType::Short));
         src->VM.StoreShort(-1, s);
     }
 
     void Context::PushInt(int32_t i, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(i));
+        src->VM.PushBytes(sizeof(i), Internal::CreateVarType(this, Internal::PrimitiveType::Int));
         src->VM.StoreInt(-1, i);
     }
 
     void Context::PushLong(int64_t l, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(l));
+        src->VM.PushBytes(sizeof(l), Internal::CreateVarType(this, Internal::PrimitiveType::Long));
         src->VM.StoreLong(-1, l);
     }
 
     void Context::PushFloat(float f, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(f));
+        src->VM.PushBytes(sizeof(f), Internal::CreateVarType(this, Internal::PrimitiveType::Float));
         src->VM.StoreFloat(-1, f);
     }
 
     void Context::PushDouble(double d, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(d));
+        src->VM.PushBytes(sizeof(d), Internal::CreateVarType(this, Internal::PrimitiveType::Double));
         src->VM.StoreDouble(-1, d);
     }
 
@@ -166,7 +168,7 @@ namespace BlackLua {
         BLUA_ASSERT(src->ReflectionData.Declarations.contains(str), "Trying to push an unknown global variable");
         BLUA_ASSERT(src->ReflectionData.Declarations.at(str).Type == Internal::ReflectionType::Variable, "Trying to push a non-variable global (perhaps a function)");
 
-        src->VM.Ref(std::get<int32_t>(src->ReflectionData.Declarations.at(str).Data));
+        src->VM.Ref(std::get<int32_t>(src->ReflectionData.Declarations.at(str).Data), src->ReflectionData.Declarations.at(str).ResolvedType);
     }
 
     void Context::Pop(size_t count, const std::string& module) {
@@ -175,6 +177,22 @@ namespace BlackLua {
         for (size_t i = 0; i < count; i++) {
             src->VM.Pop();
         }
+    }
+
+    void Context::PushField(int32_t index, const std::string& name, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+
+        Internal::StackSlot slot = src->VM.GetStackSlot(index);
+        
+        BLUA_ASSERT(slot.ResolvedType->Type == Internal::PrimitiveType::Structure, "Accessing a field can only happen with a struct");
+        
+        for (const auto& field : std::get<Internal::StructDeclaration>(slot.ResolvedType->Data).Fields) {
+            if (Internal::StringView(name.data(), name.size()) == field.Identifier) {
+                src->VM.Ref({index, field.Offset, GetTypeSize(field.ResolvedType)}, field.ResolvedType);
+            }
+        }
+
+        ReportRuntimeError(fmt::format("Could find field {} in {}", name, Internal::VariableTypeToString(slot.ResolvedType)));
     }
 
     bool Context::GetBool(int32_t index, const std::string& module) {
@@ -225,7 +243,7 @@ namespace BlackLua {
         BLUA_ASSERT(src->ReflectionData.Declarations.at(str).Type == Internal::ReflectionType::Function, "Trying to call an non-function");
         size_t size = GetTypeSize(src->ReflectionData.Declarations.at(str).ResolvedType);
         if (size > 0) {
-            src->VM.PushBytes(size);
+            src->VM.PushBytes(size, src->ReflectionData.Declarations.at(str).ResolvedType);
         }
         src->VM.Call(std::get<int32_t>(src->ReflectionData.Declarations.at(str).Data));
     }
@@ -248,9 +266,9 @@ namespace BlackLua {
         return m_Modules.at(module);
     }
 
-    void Context::ReportCompilerError(size_t line, size_t column, const std::string& error) {
+    void Context::ReportCompilerError(size_t line, size_t column, size_t startLine, size_t startColumn, size_t endLine, size_t endColumn, const std::string& error) {
         if (m_CompilerErrorHandler) {
-            m_CompilerErrorHandler(line, column, m_CurrentCompiledSource->Module, error);
+            m_CompilerErrorHandler(line, column, startLine, startColumn, endLine, endColumn, m_CurrentCompiledSource->Module, error);
         } else {
             fmt::print(fg(fmt::color::gray), "{}:{}:{}, ", m_CurrentCompiledSource->Module, line, column);
             fmt::print(fg(fmt::color::pale_violet_red), "fatal error: ");

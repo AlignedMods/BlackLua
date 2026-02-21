@@ -63,8 +63,8 @@ namespace BlackLua::Internal {
         return static_cast<int32_t>(m_LabelCount - 1);
     }
 
-    void Emitter::PushBytes(size_t bytes, const std::string& debugData) {
-        m_OpCodes.emplace_back(OpCodeType::Push, static_cast<int32_t>(bytes), debugData);
+    void Emitter::PushBytes(size_t bytes, VariableType* type, const std::string& debugData) {
+        m_OpCodes.emplace_back(OpCodeType::Push, OpCodePush(bytes, type), debugData);
     }
 
     void Emitter::IncrementStackSlotCount() {
@@ -165,7 +165,7 @@ namespace BlackLua::Internal {
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(index));
             IncrementStackSlotCount();
-            m_OpCodes.emplace_back(OpCodeType::Push, GetTypeSize(arrAccess->ResolvedType));
+            PushBytes(GetTypeSize(arrAccess->ResolvedType), arrAccess->ResolvedType);
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
         
@@ -197,7 +197,7 @@ namespace BlackLua::Internal {
         if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
             CompileStackSlot slot = EmitNodeExpression(call->Parent);
             VariableType* structType = call->ResolvedParentType;
-            Declaration decl = m_DeclaredSymbols.at(fmt::format("{}__{}", std::get<StructDeclaration>(structType->Data).Identifier, call->Member));
+            Declaration decl = m_DeclaredSymbols.at(fmt::format("{}::{}", std::get<StructDeclaration>(structType->Data).Identifier, call->Member));
         
             std::vector<CompileStackSlot> parameters; 
         
@@ -207,7 +207,7 @@ namespace BlackLua::Internal {
                 parameters.push_back(slot);
             }
 
-            m_OpCodes.emplace_back(OpCodeType::Ref, CompileToRuntimeStackSlot(slot));
+            m_OpCodes.emplace_back(OpCodeType::Ref, CompileToRuntimeStackSlot(slot), "self");
             IncrementStackSlotCount();
         
             for (const auto& p : parameters) {
@@ -216,7 +216,7 @@ namespace BlackLua::Internal {
             }
         
             if (decl.Size != 0) {
-                PushBytes(decl.Size, "return slot");
+                PushBytes(decl.Size, decl.Type, "return slot");
                 IncrementStackSlotCount();
             }
         
@@ -240,7 +240,7 @@ namespace BlackLua::Internal {
                 }
         
                 if (call->ResolvedReturnType->Type != PrimitiveType::Void) {
-                    PushBytes(GetTypeSize(call->ResolvedReturnType), "return slot");
+                    PushBytes(GetTypeSize(call->ResolvedReturnType), call->ResolvedReturnType, "return slot");
                     IncrementStackSlotCount();
                 }
 
@@ -261,7 +261,7 @@ namespace BlackLua::Internal {
                 }
         
                 if (call->ResolvedReturnType->Type != PrimitiveType::Void) {
-                    PushBytes(GetTypeSize(call->ResolvedReturnType), "return slot");
+                    PushBytes(GetTypeSize(call->ResolvedReturnType), call->ResolvedReturnType, "return slot");
                     IncrementStackSlotCount();
                 }
 
@@ -472,7 +472,7 @@ namespace BlackLua::Internal {
                     int32_t ifEnd = m_LabelCount;
                     m_LabelCount++;
                     
-                    m_OpCodes.emplace_back(OpCodeType::Push, 1);
+                    PushBytes(1, CreateVarType(m_Context, PrimitiveType::Bool));
                     IncrementStackSlotCount();
                     CompileStackSlot result = GetStackTop();
 
@@ -509,7 +509,7 @@ namespace BlackLua::Internal {
                     int32_t ifEnd = m_LabelCount;
                     m_LabelCount++;
                     
-                    m_OpCodes.emplace_back(OpCodeType::Push, 1);
+                    PushBytes(1, CreateVarType(m_Context, PrimitiveType::Bool));
                     IncrementStackSlotCount();
                     CompileStackSlot result = GetStackTop();
 
@@ -564,7 +564,7 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeVarDecl(NodeStmt* stmt) {
         StmtVarDecl* decl = GetNode<StmtVarDecl>(stmt);
         
-        PushBytes(GetTypeSize(decl->ResolvedType), fmt::format("Declaration of {}", decl->Identifier));
+        PushBytes(GetTypeSize(decl->ResolvedType), decl->ResolvedType, fmt::format("Declaration of {}", decl->Identifier));
         
         auto& map = (m_CurrentStackFrame != 0) ? m_CurrentStackFrame->DeclaredSymbols : m_DeclaredSymbols;
         
@@ -607,7 +607,7 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeParamDecl(NodeStmt* stmt) {
         StmtParamDecl* decl = GetNode<StmtParamDecl>(stmt);
         
-        PushBytes(GetTypeSize(decl->ResolvedType), fmt::format("Declaration of {}", decl->Identifier));
+        PushBytes(GetTypeSize(decl->ResolvedType), decl->ResolvedType, fmt::format("Declaration of {}", decl->Identifier));
         auto& map = (m_CurrentStackFrame != 0) ? m_CurrentStackFrame->DeclaredSymbols : m_DeclaredSymbols;
         
         Declaration d;
@@ -645,38 +645,15 @@ namespace BlackLua::Internal {
         
         for (size_t i = 0; i < decl->Fields.Size; i++) {
             if (StmtMethodDecl* mdecl = GetNode<StmtMethodDecl>(GetNode<NodeStmt>(decl->Fields.Items[i]))) {
-                std::string ident = fmt::format("{}__{}", decl->Identifier, mdecl->Name);
-                Declaration decl;
-                decl.Index = CreateLabel(fmt::format("method {}", mdecl->Name));
-                decl.Size = GetTypeSize(mdecl->ResolvedType);
-                decl.Type = mdecl->ResolvedType;
-                m_DeclaredSymbols[ident] = decl;
-                
-                PushCompilerStackFrame();
-                
-                size_t returnSlot = (mdecl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
+                std::string ident = fmt::format("{}::{}", decl->Identifier, mdecl->Name);
+                Declaration d;
+                d.Index = m_LabelCount++;
+                d.Size = GetTypeSize(mdecl->ResolvedType);
+                d.Type = mdecl->ResolvedType;
+                m_DeclaredSymbols[ident] = d;
 
-                Declaration s;
-                s.Extern = false;
-                s.Index = 0;
-                m_CurrentStackFrame->DeclaredSymbols["bL__internal__self_restrict__"] = s;
-                m_OpCodes.emplace_back(OpCodeType::Ref, -(mdecl->Parameters.Size + 1 + returnSlot));
-
-                // Inject function parameters into the scope
-                for (size_t i = 0; i < mdecl->Parameters.Size; i++) {
-                    EmitNodeParamDecl(GetNode<NodeStmt>(mdecl->Parameters.Items[i]));
-                
-                    // Copy the arguments into the parameters
-                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -(mdecl->Parameters.Size + 2 + returnSlot)));
-                }
-                
-                EmitNodeCompound(mdecl->Body);
-                
-                if (m_OpCodes.back().Type != OpCodeType::Ret) {
-                    m_OpCodes.emplace_back(OpCodeType::Ret);
-                }
-                
-                PopCompilerStackFrame();
+                m_FunctionsToDeclare[m_LabelCount - 1] = GetNode<NodeStmt>(decl->Fields.Items[i]);
+                m_ReflectionData.Declarations[ident] = { mdecl->ResolvedType, ReflectionType::Function, static_cast<int32_t>(m_LabelCount - 1) };
             }
         }
     }
@@ -806,7 +783,6 @@ namespace BlackLua::Internal {
                     PushCompilerStackFrame();
                     
                     size_t returnSlot = (decl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
-                    size_t varsPushed = 0;
                     
                     // Inject function parameters into the scope
                     for (size_t i = 0; i < decl->Parameters.Size; i++) {
@@ -814,7 +790,6 @@ namespace BlackLua::Internal {
                     
                         // Copy the arguments into the parameters
                         m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(decl->Parameters.Size + 1 + returnSlot)));
-                        varsPushed++;
                     }
                     
                     EmitNodeCompound(decl->Body);
@@ -825,6 +800,35 @@ namespace BlackLua::Internal {
                     
                     PopCompilerStackFrame();
                 }
+            } else if (StmtMethodDecl* decl = GetNode<StmtMethodDecl>(stmt)) {
+                m_OpCodes.emplace_back(OpCodeType::Label, label);
+
+                PushCompilerStackFrame();
+                
+                size_t returnSlot = (decl->ResolvedType->Type == PrimitiveType::Void) ? 0 : 1;
+
+                Declaration s;
+                s.Extern = false;
+                s.Index = 1;
+                m_CurrentStackFrame->DeclaredSymbols["bL__internal__self_restrict__"] = s;
+                m_OpCodes.emplace_back(OpCodeType::Ref, -static_cast<int32_t>(decl->Parameters.Size + 1 + returnSlot));
+                IncrementStackSlotCount();
+
+                // Inject function parameters into the scope
+                for (size_t i = 0; i < decl->Parameters.Size; i++) {
+                    EmitNodeParamDecl(GetNode<NodeStmt>(decl->Parameters.Items[i]));
+                
+                    // Copy the arguments into the parameters
+                    m_OpCodes.emplace_back(OpCodeType::Copy, OpCodeCopy(-1, -static_cast<int32_t>(decl->Parameters.Size + 2 + returnSlot)));
+                }
+                
+                EmitNodeCompound(decl->Body);
+                
+                if (m_OpCodes.back().Type != OpCodeType::Ret) {
+                    m_OpCodes.emplace_back(OpCodeType::Ret);
+                }
+                
+                PopCompilerStackFrame();
             }
         }
     }

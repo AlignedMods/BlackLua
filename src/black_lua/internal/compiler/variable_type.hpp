@@ -68,7 +68,7 @@ namespace BlackLua::Internal {
         }
 
         bool IsSigned() const {
-            if (IsIntegral() && std::get_if<bool>(&Data) == nullptr) {
+            if (!IsIntegral()) {
                 return false;
             }
 
@@ -103,7 +103,7 @@ namespace BlackLua::Internal {
 
             case PrimitiveType::Structure: {
                 StructDeclaration decl = std::get<StructDeclaration>(type->Data);
-                str = fmt::format("{}", decl.Identifier);
+                str = fmt::format("struct {}", decl.Identifier);
 
                 break;
             }

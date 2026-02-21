@@ -48,7 +48,7 @@ namespace BlackLua::Internal {
         m_Context = ctx;
     }
 
-    void VM::PushBytes(size_t amount) {
+    void VM::PushBytes(size_t amount, VariableType* type) {
         size_t alignedAmount = ((amount + 8 - 1) / 8) * 8; // We need to handle 8 byte alignment since some CPU's will require it
         
         BLUA_ASSERT(alignedAmount % 8 == 0, "Memory not aligned to 8 bytes correctly!");
@@ -65,7 +65,7 @@ namespace BlackLua::Internal {
             m_StackSlots.resize(m_StackSlots.size() * 2);
         }
 
-        m_StackSlots[m_StackSlotPointer] = {&m_Stack[m_StackPointer - alignedAmount], amount};
+        m_StackSlots[m_StackSlotPointer] = {&m_Stack[m_StackPointer - alignedAmount], amount, false, type};
         m_StackSlotPointer++;
     }
 
@@ -214,13 +214,14 @@ namespace BlackLua::Internal {
         memcpy(dst.Memory, src.Memory, src.Size);
     }
 
-    void VM::Ref(StackSlotIndex srcSlot) {
+    void VM::Ref(StackSlotIndex srcSlot, VariableType* type) {
         StackSlot src = GetStackSlot(srcSlot);
 
         StackSlot newSlot;
         newSlot.Memory = src.Memory;
         newSlot.Size = src.Size;
         newSlot.ReadOnly = src.ReadOnly;
+        newSlot.ResolvedType = type;
         m_StackSlots[m_StackSlotPointer] = newSlot;
         m_StackSlotPointer++;
     }
@@ -314,9 +315,9 @@ namespace BlackLua::Internal {
     }
 
     void VM::Run() {
-        #define CASE_LOAD(_enum, builtInType) case OpCodeType::_enum: { \
+        #define CASE_LOAD(_enum, builtInType, varType) case OpCodeType::_enum: { \
             OpCodeLoad l = std::get<OpCodeLoad>(op.Data); \
-            PushBytes(sizeof(builtInType)); \
+            PushBytes(sizeof(builtInType), varType); \
             memcpy(GetStackSlot(-1).Memory, &std::get<builtInType>(l.Data), sizeof(builtInType)); \
             break; \
         }
@@ -327,7 +328,7 @@ namespace BlackLua::Internal {
             builtinType value{}; \
             memcpy(&value, s.Memory, sizeof(builtinType)); \
             builtinType result = builtinOp(value); \
-            PushBytes(sizeof(builtinType)); \
+            PushBytes(sizeof(builtinType), s.ResolvedType); \
             StackSlot newSlot = GetStackSlot(-1); \
             memcpy(newSlot.Memory, &result, sizeof(builtinType)); \
             break; \
@@ -352,7 +353,7 @@ namespace BlackLua::Internal {
             memcpy(&lhs, GetStackSlot(m.LHSSlot).Memory, sizeof(builtinType)); \
             memcpy(&rhs, GetStackSlot(m.RHSSlot).Memory, sizeof(builtinType)); \
             builtinType result = builtinOp(lhs, rhs); \
-            PushBytes(sizeof(builtinType)); \
+            PushBytes(sizeof(builtinType), GetStackSlot(m.LHSSlot).ResolvedType); \
             StackSlot s = GetStackSlot(-1); \
             memcpy(s.Memory, &result, sizeof(builtinType)); \
             break; \
@@ -365,7 +366,7 @@ namespace BlackLua::Internal {
             memcpy(&lhs, GetStackSlot(m.LHSSlot).Memory, sizeof(builtinType)); \
             memcpy(&rhs, GetStackSlot(m.RHSSlot).Memory, sizeof(builtinType)); \
             bool result = builtinOp(lhs, rhs); \
-            PushBytes(1); \
+            PushBytes(1, CreateVarType(m_Context, PrimitiveType::Bool)); \
             StackSlot s = GetStackSlot(-1); \
             memcpy(s.Memory, &result, 1); \
             break; \
@@ -405,29 +406,29 @@ namespace BlackLua::Internal {
             CASE_BINEXPR_BOOL(mathop##F32, float,    op) \
             CASE_BINEXPR_BOOL(mathop##F64, double,   op)
 
-        #define CASE_CAST(_enum, sourceType, destType) case OpCodeType::_enum: { \
+        #define CASE_CAST(_enum, sourceType, destType, varType) case OpCodeType::_enum: { \
             StackSlotIndex v = std::get<StackSlotIndex>(op.Data); \
             StackSlot s = GetStackSlot(v); \
             sourceType t{}; \
             memcpy(&t, s.Memory, sizeof(sourceType)); \
             destType d = static_cast<destType>(t); \
-            PushBytes(sizeof(destType)); \
+            PushBytes(sizeof(destType), varType); \
             StackSlot __a = GetStackSlot(-1); \
             memcpy(__a.Memory, &d, sizeof(destType)); \
             break; \
         }
 
         #define CASE_CAST_GROUP(_cast, _builtinType) \
-            CASE_CAST(Cast##_cast##ToI8,  _builtinType, int8_t) \
-            CASE_CAST(Cast##_cast##ToI16, _builtinType, int16_t) \
-            CASE_CAST(Cast##_cast##ToI32, _builtinType, int32_t) \
-            CASE_CAST(Cast##_cast##ToI64, _builtinType, int64_t) \
-            CASE_CAST(Cast##_cast##ToU8,  _builtinType, uint8_t) \
-            CASE_CAST(Cast##_cast##ToU16, _builtinType, uint16_t) \
-            CASE_CAST(Cast##_cast##ToU32, _builtinType, uint32_t) \
-            CASE_CAST(Cast##_cast##ToU64, _builtinType, uint64_t) \
-            CASE_CAST(Cast##_cast##ToF32, _builtinType, float) \
-            CASE_CAST(Cast##_cast##ToF64, _builtinType, double)
+            CASE_CAST(Cast##_cast##ToI8,  _builtinType, int8_t,   CreateVarType(m_Context, PrimitiveType::Char, true)) \
+            CASE_CAST(Cast##_cast##ToI16, _builtinType, int16_t,  CreateVarType(m_Context, PrimitiveType::Short, true)) \
+            CASE_CAST(Cast##_cast##ToI32, _builtinType, int32_t,  CreateVarType(m_Context, PrimitiveType::Int, true)) \
+            CASE_CAST(Cast##_cast##ToI64, _builtinType, int64_t,  CreateVarType(m_Context, PrimitiveType::Long, true)) \
+            CASE_CAST(Cast##_cast##ToU8,  _builtinType, uint8_t,  CreateVarType(m_Context, PrimitiveType::Char, false)) \
+            CASE_CAST(Cast##_cast##ToU16, _builtinType, uint16_t, CreateVarType(m_Context, PrimitiveType::Short, false)) \
+            CASE_CAST(Cast##_cast##ToU32, _builtinType, uint32_t, CreateVarType(m_Context, PrimitiveType::Int, false)) \
+            CASE_CAST(Cast##_cast##ToU64, _builtinType, uint64_t, CreateVarType(m_Context, PrimitiveType::Long, false)) \
+            CASE_CAST(Cast##_cast##ToF32, _builtinType, float,    CreateVarType(m_Context, PrimitiveType::Float)) \
+            CASE_CAST(Cast##_cast##ToF64, _builtinType, double,   CreateVarType(m_Context, PrimitiveType::Double))
 
         for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
             const OpCode& op = m_Program[m_ProgramCounter];
@@ -441,9 +442,9 @@ namespace BlackLua::Internal {
                 case OpCodeType::Nop: { continue; }
 
                 case OpCodeType::Push: {
-                    size_t byteCount = static_cast<size_t>(std::get<StackSlotIndex>(op.Data).Slot);
+                    OpCodePush push = std::get<OpCodePush>(op.Data);
 
-                    PushBytes(byteCount);
+                    PushBytes(push.Count, push.ResolvedType);
                     break;
                 }
 
@@ -462,22 +463,22 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                CASE_LOAD(LoadI8,  i8)
-                CASE_LOAD(LoadI16, i16)
-                CASE_LOAD(LoadI32, i32)
-                CASE_LOAD(LoadI64, i64)
+                CASE_LOAD(LoadI8,  i8,  CreateVarType(m_Context, PrimitiveType::Char, true))
+                CASE_LOAD(LoadI16, i16, CreateVarType(m_Context, PrimitiveType::Short, true))
+                CASE_LOAD(LoadI32, i32, CreateVarType(m_Context, PrimitiveType::Int, true))
+                CASE_LOAD(LoadI64, i64, CreateVarType(m_Context, PrimitiveType::Long, true))
 
-                CASE_LOAD(LoadU8,  u8)
-                CASE_LOAD(LoadU16, u16)
-                CASE_LOAD(LoadU32, u32)
-                CASE_LOAD(LoadU64, u64)
+                CASE_LOAD(LoadU8,  u8,  CreateVarType(m_Context, PrimitiveType::Char, false))
+                CASE_LOAD(LoadU16, u16, CreateVarType(m_Context, PrimitiveType::Short, false))
+                CASE_LOAD(LoadU32, u32, CreateVarType(m_Context, PrimitiveType::Int, false))
+                CASE_LOAD(LoadU64, u64, CreateVarType(m_Context, PrimitiveType::Long, false))
 
-                CASE_LOAD(LoadF32, f32)
-                CASE_LOAD(LoadF64, f64)
+                CASE_LOAD(LoadF32, f32, CreateVarType(m_Context, PrimitiveType::Float))
+                CASE_LOAD(LoadF64, f64, CreateVarType(m_Context, PrimitiveType::Double))
                 case OpCodeType::LoadStr: {
                     OpCodeLoad l = std::get<OpCodeLoad>(op.Data);
                     StringView str = std::get<StringView>(l.Data);
-                    PushBytes(str.Size());
+                    PushBytes(str.Size(), CreateVarType(m_Context, PrimitiveType::String));
                     memcpy(GetStackSlot(-1).Memory, str.Data(), str.Size());
                     break;
                 }
@@ -485,7 +486,7 @@ namespace BlackLua::Internal {
                 case OpCodeType::Get: {
                     StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
                     StackSlot s = GetStackSlot(slot);
-                    PushBytes(s.Size);
+                    PushBytes(s.Size, s.ResolvedType);
 
                     memcpy(GetStackSlot(-1).Memory, s.Memory, s.Size);
 
@@ -509,7 +510,7 @@ namespace BlackLua::Internal {
                     StackSlotIndex slot = std::get<StackSlotIndex>(op.Data);
                     StackSlot src = GetStackSlot(slot);
 
-                    PushBytes(src.Size);
+                    PushBytes(src.Size, src.ResolvedType);
                     StackSlot dst = GetStackSlot(-1);
                     
                     memcpy(dst.Memory, src.Memory, src.Size);
@@ -525,6 +526,7 @@ namespace BlackLua::Internal {
                     s.Memory = src.Memory;
                     s.ReadOnly = src.ReadOnly;
                     s.Size = src.Size;
+                    s.ResolvedType = src.ResolvedType;
                     m_StackSlots[m_StackSlotPointer] = s;
                     m_StackSlotPointer++;
 
@@ -544,6 +546,7 @@ namespace BlackLua::Internal {
                     s.Size = off.Size;
                     m_StackSlots[m_StackSlotPointer] = s;
                     m_StackSlotPointer++;
+                    BLUA_ASSERT(false, "TODO");
 
                     break;
                 }
@@ -640,11 +643,11 @@ namespace BlackLua::Internal {
                 CASE_BINEXPR_BOOL_GROUP(Gt, Gt)
                 CASE_BINEXPR_BOOL_GROUP(Gte, Gte)
 
-                CASE_CAST_GROUP(I8, int8_t)
+                CASE_CAST_GROUP(I8,  int8_t)
                 CASE_CAST_GROUP(I16, int16_t)
                 CASE_CAST_GROUP(I32, int32_t)
                 CASE_CAST_GROUP(I64, int64_t)
-                CASE_CAST_GROUP(U8, uint8_t)
+                CASE_CAST_GROUP(U8,  uint8_t)
                 CASE_CAST_GROUP(U16, uint16_t)
                 CASE_CAST_GROUP(U32, uint32_t)
                 CASE_CAST_GROUP(U64, uint64_t)

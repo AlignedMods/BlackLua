@@ -227,7 +227,8 @@ namespace BlackLua::Internal {
                      ExprParen*, ExprCast*, 
                      ExprUnaryOperator*, ExprBinaryOperator*> Data;
 
-        SourceRange Loc;
+        SourceRange Range;
+        SourceLocation Loc;
     };
 
     template <typename T>

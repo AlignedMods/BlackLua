@@ -104,7 +104,8 @@ namespace BlackLua::Internal {
                      StmtReturn*,
                      std::nullptr_t> Data;
 
-        SourceRange Loc;
+        SourceRange Range;
+        SourceLocation Loc;
     };
 
     template <typename T>

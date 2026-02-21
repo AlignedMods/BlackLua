@@ -117,3 +117,16 @@ TEST_CASE("Runtime Casts") {
     ctx.PushGlobal("c");
     REQUIRE(ctx.GetLong(-1) == static_cast<int64_t>(5));
 }
+
+TEST_CASE("Runtime Structs") {
+    BlackLua::Context ctx = BlackLua::Context::Create();
+    ctx.CompileFile("tests/runtime/structs.bl", "Runtime Structs");
+    ctx.Run("Runtime Structs");
+
+    ctx.PushGlobal("p");
+    ctx.Call("Player::GetX", "Runtime Structs");
+    REQUIRE((ctx.GetFloat(-1) > 4.9999f && ctx.GetFloat(-1) < 5.0001f));
+    ctx.Pop(1); // Pop the return value
+    ctx.Call("Player::GetY", "Runtime Structs");
+    REQUIRE((ctx.GetFloat(-1) > 3.9999f && ctx.GetFloat(-1) < 4.0001f));
+}

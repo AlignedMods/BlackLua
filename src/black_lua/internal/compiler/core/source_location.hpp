@@ -18,15 +18,14 @@ namespace BlackLua::Internal {
     struct SourceRange {
         SourceLocation Start;
         SourceLocation End;
-        StringView SourceString;
 
         SourceRange() = default;
-        SourceRange(SourceLocation start, SourceLocation end, StringView source)
-            : Start(start), End(end), SourceString(source) {}
-        SourceRange(size_t startLine, size_t startColumn, size_t endLine, size_t endColumn, StringView source)
-            : Start(startLine, startColumn), End(endLine, endColumn), SourceString(source) {}
+        SourceRange(SourceLocation start, SourceLocation end)
+            : Start(start), End(end) {}
+        SourceRange(size_t startLine, size_t startColumn, size_t endLine, size_t endColumn)
+            : Start(startLine, startColumn), End(endLine, endColumn) {}
 
-        inline bool IsValid() const { return Start.IsValid() && End.IsValid() && SourceString.Size() != 0; }
+        inline bool IsValid() const { return Start.IsValid() && End.IsValid(); }
     };
 
 } // namespace BlackLua::Internal

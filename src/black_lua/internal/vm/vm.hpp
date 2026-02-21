@@ -3,6 +3,7 @@
 #include "core.hpp"
 #include "internal/types.hpp"
 #include "internal/compiler/core/string_view.hpp"
+#include "internal/compiler/variable_type.hpp"
 
 #include <vector>
 #include <variant>
@@ -222,6 +223,11 @@ namespace BlackLua::Internal {
 
     #undef TYPED_OP
 
+    struct OpCodePush {
+        size_t Count = 0;
+        VariableType* ResolvedType = nullptr;
+    };
+
     struct OpCodeCopy {
         StackSlotIndex DstSlot{};
         StackSlotIndex SrcSlot{};
@@ -249,7 +255,7 @@ namespace BlackLua::Internal {
 
     struct OpCode {
         OpCodeType Type = OpCodeType::Invalid;
-        std::variant<StackSlotIndex, std::string, OpCodeCopy, OpCodeOffset, OpCodeLoad, OpCodeJump, OpCodeMath> Data;
+        std::variant<StackSlotIndex, std::string, OpCodePush, OpCodeCopy, OpCodeOffset, OpCodeLoad, OpCodeJump, OpCodeMath> Data;
         std::string DebugData; // Optional debug data the compiler can provide
     };
 
@@ -257,6 +263,8 @@ namespace BlackLua::Internal {
         void* Memory = nullptr;
         size_t Size = 0;
         bool ReadOnly = false;
+
+        VariableType* ResolvedType = nullptr; // The VM won't directly use this however it is needed for the context to understand the types at runtime
     };
 
     class VM {
@@ -265,7 +273,7 @@ namespace BlackLua::Internal {
 
         // Increments the stack pointer by specified amount of bytes
         // Also creates a new stack slot, which gets set as the current stack slot
-        void PushBytes(size_t amount);
+        void PushBytes(size_t amount, VariableType* type);
 
         // Pops the current stack slot
         void Pop();
@@ -294,7 +302,7 @@ namespace BlackLua::Internal {
 
         // Copies the memory at one slot (srcSlot) to another slot (dstSlot)
         void Copy(StackSlotIndex dstSlot, StackSlotIndex srcSlot);
-        void Ref(StackSlotIndex srcSlot);
+        void Ref(StackSlotIndex srcSlot, VariableType* type);
 
         bool GetBool(StackSlotIndex slot);
         int8_t GetChar(StackSlotIndex slot);

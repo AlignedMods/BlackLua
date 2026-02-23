@@ -116,9 +116,20 @@ namespace BlackLua::Internal {
                                                "Trying to index into a non array type");
             }
         
-            CheckNodeExpression(arrAccess->Index);
-            arrAccess->ResolvedType = std::get<VariableType*>(arrType->Data);
-        
+            VariableType* indexType = CheckNodeExpression(arrAccess->Index);
+            ConversionCost cost = GetConversionCost(CreateVarType(m_Context, PrimitiveType::Int, false), indexType);
+            if (cost.CastNeeded) {
+                if (cost.ImplicitCastPossible || (cost.SignedMismatch && cost.ExplicitCastPossible)) {
+                    InsertImplicitCast(arrAccess->Index, CreateVarType(m_Context, PrimitiveType::Int, false), indexType);
+                } else {
+                    m_Context->ReportCompilerError(arrAccess->Index->Loc.Line, arrAccess->Index->Loc.Column, 
+                                                   arrAccess->Index->Range.Start.Line, arrAccess->Index->Range.Start.Column,
+                                                   arrAccess->Index->Range.End.Line, arrAccess->Index->Range.End.Column,
+                                                   fmt::format("Array index value must be an unsigned integer but it is {}", VariableTypeToString(indexType)));
+                }
+            }
+
+            arrAccess->ResolvedType = std::get<ArrayDeclaration>(arrType->Data).Type;
             return arrAccess->ResolvedType;
         }
 
@@ -162,41 +173,82 @@ namespace BlackLua::Internal {
 
         if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
             VariableType* parentType = CheckNodeExpression(call->Parent);
-            call->ResolvedParentType = parentType;
-            std::string name = fmt::format("{}::{}", std::get<StructDeclaration>(parentType->Data).Identifier, call->Member);
-            if (m_DeclaredSymbols.contains(name)) {
-                NodeList params = GetNode<StmtMethodDecl>(m_DeclaredSymbols.at(name).Decl)->Parameters;
+
+            if (parentType->Type == PrimitiveType::Structure) {
+                call->ResolvedParentType = parentType;
+                std::string name = fmt::format("{}::{}", std::get<StructDeclaration>(parentType->Data).Identifier, call->Member);
+                if (m_DeclaredSymbols.contains(name)) {
+                    NodeList params = GetNode<StmtMethodDecl>(m_DeclaredSymbols.at(name).Decl)->Parameters;
         
-                if (params.Size != call->Arguments.Size) {
-                    m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
-                                                   expr->Range.Start.Line, expr->Range.Start.Column,
-                                                   expr->Range.End.Line, expr->Range.End.Column,
-                                                   fmt::format("No matching method to call \"{}\" (method accepts {} arguments, but got {})", call->Member, params.Size, call->Arguments.Size));
-                    return CreateVarType(m_Context, PrimitiveType::Invalid);
+                    if (params.Size != call->Arguments.Size) {
+                        m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
+                                                       expr->Range.Start.Line, expr->Range.Start.Column,
+                                                       expr->Range.End.Line, expr->Range.End.Column,
+                                                       fmt::format("No matching method to call \"{}\" (method accepts {} arguments, but got {})", call->Member, params.Size, call->Arguments.Size));
+                        return CreateVarType(m_Context, PrimitiveType::Invalid);
+                    }
+        
+                    for (size_t i = 0; i < params.Size; i++) {
+                        Node* param = params.Items[i];
+                        NodeExpr* arg = GetNode<NodeExpr>(call->Arguments.Items[i]);
+        
+                        VariableType* typeParam = GetNode<StmtParamDecl>(GetNode<NodeStmt>((param)))->ResolvedType;
+                        VariableType* typeArg = CheckNodeExpression(arg);
+        
+                        ConversionCost cost = GetConversionCost(typeParam, typeArg);
+                        if (cost.CastNeeded) {
+                            // Perform an implicit cast (if possible)
+                            if (cost.ImplicitCastPossible) {
+                                InsertImplicitCast(arg, typeParam, typeArg);
+                            } else {
+                                m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
+                                                               expr->Range.Start.Line, expr->Range.Start.Column,
+                                                               expr->Range.End.Line, expr->Range.End.Column,
+                                                               fmt::format("Mismatched method argument types, method expects {} but argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
+                            }
+                        }
+                    }
+        
+                    return m_DeclaredSymbols.at(name).Type;
                 }
-        
-                for (size_t i = 0; i < params.Size; i++) {
-                    Node* param = params.Items[i];
-                    NodeExpr* arg = GetNode<NodeExpr>(call->Arguments.Items[i]);
-        
-                    VariableType* typeParam = GetNode<StmtParamDecl>(GetNode<NodeStmt>((param)))->ResolvedType;
+            } else if (parentType->Type == PrimitiveType::Array) {
+                if (call->Member == "Append") {
+                    ExprCall* newExpr = m_Context->GetAllocator()->AllocateNamed<ExprCall>();
+                    newExpr->Name = "bl__array__append__";
+                    newExpr->Arguments.Append(m_Context, m_Context->GetAllocator()->AllocateNamed<Node>(call->Parent));
+                    
+                    for (size_t i = 0; i < call->Arguments.Size; i++) {
+                        newExpr->Arguments.Append(m_Context, call->Arguments.Items[i]);
+                    }
+
+                    newExpr->Extern = true;
+                    newExpr->ResolvedReturnType = CreateVarType(m_Context, PrimitiveType::Void);
+                    VariableType* typeParam = std::get<ArrayDeclaration>(parentType->Data).Type;
+
+                    if (newExpr->Arguments.Size != 2) {
+                        m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
+                                                       expr->Range.Start.Line, expr->Range.Start.Column,
+                                                       expr->Range.End.Line, expr->Range.End.Column, 
+                                                       fmt::format("method Array::Append() expects 1 argument but is recieving {}", newExpr->Arguments.Size));
+                    }
+                    NodeExpr* arg = GetNode<NodeExpr>(call->Arguments.Items[0]);
                     VariableType* typeArg = CheckNodeExpression(arg);
-        
+
                     ConversionCost cost = GetConversionCost(typeParam, typeArg);
                     if (cost.CastNeeded) {
-                        // Perform an implicit cast (if possible)
                         if (cost.ImplicitCastPossible) {
                             InsertImplicitCast(arg, typeParam, typeArg);
                         } else {
                             m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
                                                            expr->Range.Start.Line, expr->Range.Start.Column,
-                                                           expr->Range.End.Line, expr->Range.End.Column,
-                                                           fmt::format("Mismatched method argument types, method expects {} but argument type is {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
+                                                           expr->Range.End.Line, expr->Range.End.Column, 
+                                                           fmt::format("method Array::Append() expects type {} but got {}", VariableTypeToString(typeParam), VariableTypeToString(typeArg)));
                         }
                     }
+
+                    expr->Data = newExpr;
+                    return newExpr->ResolvedReturnType;
                 }
-        
-                return m_DeclaredSymbols.at(name).Type;
             }
         }
 
@@ -405,10 +457,8 @@ namespace BlackLua::Internal {
         
         VariableType* type = GetVarTypeFromString(StringView(decl->Type.Data(), decl->Type.Size()));
         symbolMap[fmt::format("{}", decl->Identifier)] = { type, stmt };
-        
-        if (decl->Value) {
-            CheckNodeExpression(decl->Value);
-        }
+
+        InsertConstructorCall(&decl->Value, type);
 
         decl->ResolvedType = type;
     }
@@ -711,6 +761,33 @@ namespace BlackLua::Internal {
         expr->Data = cast;
     }
 
+    void TypeChecker::InsertConstructorCall(NodeExpr** expr, VariableType* type) {
+        if (type->Type == PrimitiveType::Array) {
+            if (*expr == nullptr) {
+                ExprCall* call = m_Context->GetAllocator()->AllocateNamed<ExprCall>();
+                call->Name = "bl__array__init__";
+                call->Extern = true;
+                call->ResolvedReturnType = type;
+                
+                ConstantInt* size = m_Context->GetAllocator()->AllocateNamed<ConstantInt>();
+                size->Int = GetTypeSize(std::get<ArrayDeclaration>(type->Data).Type);
+                size->Unsigned = true;
+                ExprConstant* constant = m_Context->GetAllocator()->AllocateNamed<ExprConstant>();
+                constant->Data = size;
+                constant->ResolvedType = CreateVarType(m_Context, PrimitiveType::Int, false);
+
+                call->Arguments.Append(m_Context, 
+                    m_Context->GetAllocator()->AllocateNamed<Node>(m_Context->GetAllocator()->AllocateNamed<NodeExpr>(constant)));
+
+                *expr = m_Context->GetAllocator()->AllocateNamed<NodeExpr>(call);
+            }
+        } else {
+            if (*expr != nullptr) {
+                CheckNodeExpression(*expr);
+            }
+        }
+    }
+
     VariableType* TypeChecker::GetVarTypeFromString(StringView str) {
         size_t bracket = str.Find('[');
 
@@ -754,8 +831,10 @@ namespace BlackLua::Internal {
         }
 
         if (array) {
-            VariableType* arrType = CreateVarType(m_Context, PrimitiveType::Array);
-            arrType->Data = type;
+            ArrayDeclaration decl;
+            decl.Type = type;
+            
+            VariableType* arrType = CreateVarType(m_Context, PrimitiveType::Array, decl);
             type = arrType;
         }
 

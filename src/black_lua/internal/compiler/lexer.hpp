@@ -56,6 +56,9 @@ namespace BlackLua::Internal {
 
         Struct,
 
+        Construct,
+        Destruct,
+
         CharLit,
         IntLit,
         FloatLit,
@@ -140,6 +143,9 @@ namespace BlackLua::Internal {
             case TokenType::Return: return "return";
 
             case TokenType::Struct: return "struct";
+
+            case TokenType::Construct: return "construct";
+            case TokenType::Destruct: return "destruct";
 
             case TokenType::True: return "true";
             case TokenType::False: return "false";

@@ -1,19 +1,16 @@
 int foo = 0;
 
-struct Player {
-    int X;
-    int Y;
-
-    void Move(int x, int y) {
-        foo = (y - x) + X;
-    }
-};
-
 void main() {
-    Player p;
-    p.X = 77;
-    int a = 9;
-    int b = 7;
-    p.Move(a, b);
-    // foo = p.X - p.Y;
+    int[] arr;
+    int a = 1;
+    arr.Append(a);
+    arr.Append(a + 1);
+    arr.Append(a + 2);
+    arr.Append(a + 3);
+    arr.Append(a + 4);
+    arr.Append(a + 5);
+    arr.Append(a + 6);
+    arr.Append(a + 7);
+
+    foo = (arr[0] + arr[2]) * arr[7];
 }

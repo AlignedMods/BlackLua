@@ -130,3 +130,12 @@ TEST_CASE("Runtime Structs") {
     ctx.Call("Player::GetY", "Runtime Structs");
     REQUIRE((ctx.GetFloat(-1) > 3.9999f && ctx.GetFloat(-1) < 4.0001f));
 }
+
+TEST_CASE("Runtime Arrays") {
+    BlackLua::Context ctx = BlackLua::Context::Create();
+    ctx.CompileFile("tests/runtime/arrays.bl", "Runtime Arrays");
+    ctx.Run("Runtime Arrays");
+
+    ctx.PushGlobal("result");
+    REQUIRE(ctx.GetInt(-1) == 140);
+}

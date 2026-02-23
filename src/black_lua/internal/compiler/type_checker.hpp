@@ -68,6 +68,8 @@ namespace BlackLua::Internal {
 
         ConversionCost GetConversionCost(VariableType* type1, VariableType* type2);
         void InsertImplicitCast(NodeExpr* expr, VariableType* dest, VariableType* src);
+        void InsertConstructorCall(NodeExpr** expr, VariableType* type);
+
         VariableType* GetVarTypeFromString(StringView str);
 
         void PushScope(VariableType* returnType = nullptr);

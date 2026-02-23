@@ -33,6 +33,10 @@ namespace BlackLua::Internal {
 
     struct VariableType;
 
+    struct ArrayDeclaration {
+        VariableType* Type = nullptr;
+    };
+
     struct StructFieldDeclaration {
         StringView Identifier;
         size_t Offset = 0;
@@ -49,7 +53,7 @@ namespace BlackLua::Internal {
 
     struct VariableType {
         PrimitiveType Type = PrimitiveType::Invalid;
-        std::variant<bool, VariableType*, StructDeclaration> Data;
+        std::variant<bool, VariableType*, ArrayDeclaration, StructDeclaration> Data;
 
         bool operator==(const VariableType& other) {
             return Type == other.Type;
@@ -97,7 +101,9 @@ namespace BlackLua::Internal {
             case PrimitiveType::String:  str = "string"; break;
 
             case PrimitiveType::Array: {
-                str = fmt::format("{}[]", VariableTypeToString(std::get<VariableType*>(type->Data)));
+                ArrayDeclaration decl = std::get<ArrayDeclaration>(type->Data);
+
+                str = fmt::format("{}[]", VariableTypeToString(decl.Type));
                 break;
             }
 
@@ -127,13 +133,13 @@ namespace BlackLua::Internal {
                 return sizeof(void*);
             }
 
+            case PrimitiveType::Array: {
+                return sizeof(void*);
+            }
+
             case PrimitiveType::Structure: {
                 StructDeclaration decl = std::get<StructDeclaration>(type->Data);
                 return decl.Size;
-            }
-
-            case PrimitiveType::Array: {
-                return sizeof(void*);
             }
 
             default: BLUA_ASSERT(false, "Unreachable!");

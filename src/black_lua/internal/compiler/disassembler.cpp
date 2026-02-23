@@ -103,11 +103,11 @@ namespace BlackLua::Internal {
             case OpCodeType::Nop: m_Output += "nop\n"; break;
 
             case OpCodeType::Push: {
-                StackSlotIndex i = std::get<StackSlotIndex>(op.Data);
+                OpCodePush p = std::get<OpCodePush>(op.Data);
 
                 m_Output += m_Indentation;
                 m_Output += "push ";
-                m_Output += std::to_string(i.Slot);
+                m_Output += std::to_string(p.Count);
 
                 if (!op.DebugData.empty()) {
                     m_Output += "    ; ";

@@ -35,17 +35,6 @@ namespace BlackLua {
 
     Context Context::Create() {
         Context ctx{};
-        // ctx.m_VM.AddExtern("bl__array__init__", BlackLua::Internal::bl__array__init__);
-        // ctx.m_VM.AddExtern("bl__array__destruct__", BlackLua::Internal::bl__array__destruct__);
-        // ctx.m_VM.AddExtern("bl__array__copy__", BlackLua::Internal::bl__array__copy__);
-        // ctx.m_VM.AddExtern("bl__array__index__", BlackLua::Internal::bl__array__index__);
-        // 
-        // ctx.m_VM.AddExtern("bl__string__construct__", BlackLua::Internal::bl__string__construct__);
-        // ctx.m_VM.AddExtern("bl__string__construct_from_literal__", BlackLua::Internal::bl__string__construct_from_literal__);
-        // 
-        // ctx.m_VM.AddExtern("bl__string__copy__", BlackLua::Internal::bl__string__copy__);
-        // ctx.m_VM.AddExtern("bl__string__assign__", BlackLua::Internal::bl__string__assign__);
-        
         return ctx;
     }
 
@@ -87,6 +76,19 @@ namespace BlackLua {
         Internal::Emitter e = Internal::Emitter::Emit(p.GetNodes(), this);
         src->ReflectionData = e.GetReflectionData();
         src->OpCodes = e.GetOpCodes();
+
+        src->VM.AddExtern("bl__array__init__", BlackLua::Internal::bl__array__init__);
+        src->VM.AddExtern("bl__array__destruct__", BlackLua::Internal::bl__array__destruct__);
+        src->VM.AddExtern("bl__array__copy__", BlackLua::Internal::bl__array__copy__);
+
+        src->VM.AddExtern("bl__array__append__", BlackLua::Internal::bl__array__append__);
+        src->VM.AddExtern("bl__array__index__", BlackLua::Internal::bl__array__index__);
+
+        src->VM.AddExtern("bl__string__construct__", BlackLua::Internal::bl__string__construct__);
+        src->VM.AddExtern("bl__string__construct_from_literal__", BlackLua::Internal::bl__string__construct_from_literal__);
+
+        src->VM.AddExtern("bl__string__copy__", BlackLua::Internal::bl__string__copy__);
+        src->VM.AddExtern("bl__string__assign__", BlackLua::Internal::bl__string__assign__);
 
         m_Modules[module] = src;
     }
@@ -162,6 +164,52 @@ namespace BlackLua {
         src->VM.StoreDouble(-1, d);
     }
 
+    void Context::PushPointer(void* p, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.PushBytes(sizeof(p), nullptr);
+        src->VM.StorePointer(-1, p);
+    }
+
+    void Context::StoreBool(size_t index, bool b, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StoreBool(index, b);
+    }
+
+    void Context::StoreChar(size_t index, int8_t c, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StoreChar(index, c);
+    }
+
+    void Context::StoreShort(size_t index, int16_t s, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StoreShort(index, s);
+    }
+
+    void Context::StoreInt(size_t index, int32_t i, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StoreInt(index, i);
+    }
+
+    void Context::StoreLong(size_t index, int64_t l, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StoreLong(index, l);
+    }
+
+    void Context::StoreFloat(size_t index, float f, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StoreFloat(index, f);
+    }
+
+    void Context::StoreDouble(size_t index, double d, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StoreDouble(index, d);
+    }
+
+    void Context::StorePointer(size_t index, void* p, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        src->VM.StorePointer(index, p);
+    }
+
     void Context::PushGlobal(const std::string& str, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
 
@@ -228,6 +276,17 @@ namespace BlackLua {
     double Context::GetDouble(int32_t index, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
         return src->VM.GetDouble(index);
+    }
+
+    void* Context::GetPointer(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        return src->VM.GetPointer(index);
+    }
+
+    StackSlot Context::GetStackSlot(int32_t index, const std::string& module) {
+        CompiledSource* src = GetCompiledSource(module);
+        Internal::StackSlot slot = src->VM.GetStackSlot(index);
+        return { slot.Memory, slot.Size };
     }
 
     void Context::AddExternalFunction(const std::string& name, ExternFn fn, const std::string& module) {

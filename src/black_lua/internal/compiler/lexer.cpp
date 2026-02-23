@@ -67,6 +67,9 @@ namespace BlackLua::Internal {
 
                 BLUA_TOKEN_DATA("struct", Struct)
 
+                BLUA_TOKEN_DATA("construct", Construct)
+                BLUA_TOKEN_DATA("destruct", Destruct)
+
                 BLUA_TOKEN_DATA("true", True)
                 BLUA_TOKEN_DATA("false", False)
 

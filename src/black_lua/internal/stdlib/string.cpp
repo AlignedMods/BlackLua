@@ -16,7 +16,7 @@ namespace BlackLua::Internal {
         // str->Capacity = 1;
         // str->DynamicBuffer = new int8_t[1];
         // 
-        // ctx->GetVM().StorePointer(-1, str);
+        // ctx->StorePointer(-1, str);
         BLUA_ASSERT(false, "TODO");
     }
 

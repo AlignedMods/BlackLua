@@ -88,6 +88,8 @@ namespace BlackLua::Internal {
         bool m_NeedsSemi = true; // A flag to see if the current statement needs to finish with a semicolon
         bool m_Error = false;
 
+        std::unordered_map<std::string, bool> m_DeclaredTypes;
+
         Context* m_Context = nullptr;
     };
 

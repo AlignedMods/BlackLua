@@ -95,13 +95,10 @@ namespace BlackLua::Internal {
             default:                    strType.Append(m_Context, ""); break;
         }
 
-        if (Peek(1)) {
-            if (Peek(0)->Type == TokenType::LeftBracket && Peek(1)->Type == TokenType::RightBracket) {
-                Consume();
-                Consume();
-
-                strType.Append(m_Context, "[]");
-            }
+        if (Match(TokenType::LeftBracket)) {
+            Consume();
+            TryConsume(TokenType::RightBracket, "']'");
+            strType.Append(m_Context, "[]");
         }
 
         return strType;
@@ -160,25 +157,8 @@ namespace BlackLua::Internal {
         if (IsPrimitiveType()) { return true; }
 
         if (Peek()->Type == TokenType::Identifier) {
-            // If identifier is followed by another identifier or by a semicolon, it is a 
-            if (Peek(1)) {
-                if (Peek(1)->Type == TokenType::Semi) {
-                    return false; // Expression
-                } else if (Peek(1)->Type == TokenType::Identifier) {
-                    return true; // Declaration
-                } else if (Peek(1)->Type == TokenType::RightParen) {
-                    return true; // Part of a cast
-                } else { // Could be an array declaration
-                    if (Peek(2)) {
-                        if (Peek(1)->Type == TokenType::LeftBracket && Peek(2)->Type == TokenType::RightBracket) {
-                            return true; // Array declaration
-                        } else {
-                            return false;
-                        }
-                    } else {
-                        return false;
-                    }
-                }
+            if (m_DeclaredTypes.contains(fmt::format("{}", Peek()->Data))) {
+                return true;
             }
 
             return false;
@@ -586,6 +566,7 @@ namespace BlackLua::Internal {
         Token* ident = TryConsume(TokenType::Identifier, "indentifier");
 
         if (!ident) { return nullptr; }
+        m_DeclaredTypes[fmt::format("{}", ident->Data)] = true;
 
         StmtStructDecl* node = Allocate<StmtStructDecl>();
         node->Identifier = ident->Data;

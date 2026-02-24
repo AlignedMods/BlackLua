@@ -35,15 +35,14 @@ namespace BlackLua::Internal {
     }
 
     void bl__array__destruct__(Context* ctx) {
-        // Array* arr = reinterpret_cast<Array*>(ctx->GetVM().GetPointer(-1));
-        // 
-        // delete[] arr->Data;
-        // arr->Size = 0;
-        // arr->Capacity = 0;
-        // 
-        // delete arr;
-        // ctx->GetVM().StorePointer(-1, nullptr);
-        BLUA_ASSERT(false, "TODO");
+        Array* arr = reinterpret_cast<Array*>(ctx->GetPointer(-1));
+        
+        delete[] arr->Data;
+        arr->Size = 0;
+        arr->Capacity = 0;
+        
+        delete arr;
+        ctx->StorePointer(-1, nullptr);
     }
 
     void bl__array__append__(Context* ctx) {
@@ -74,7 +73,6 @@ namespace BlackLua::Internal {
 
         StackSlot retSlot = ctx->GetStackSlot(-1);
         memcpy(retSlot.Memory, &arr->Data[index * arr->MemberSize], arr->MemberSize);
-        //ctx->GetVM().SetMemory(-1, reinterpret_cast<uint8_t*>(arr->Data) + index * arr->MemberSize);
     }
 
 } // namespace BlackLua::Internal

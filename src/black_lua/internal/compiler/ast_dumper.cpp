@@ -2,11 +2,10 @@
 
 namespace BlackLua::Internal {
 
-    ASTDumper ASTDumper::DumpAST(ASTNodes* nodes) {
-        ASTDumper d;
-        d.m_ASTNodes = nodes;
-        d.DumpASTImpl();
-        return d;
+    ASTDumper::ASTDumper(ASTNodes* nodes) {
+        m_ASTNodes = nodes;
+
+        DumpASTImpl();
     }
 
     std::string& ASTDumper::GetOutput() {
@@ -121,7 +120,7 @@ namespace BlackLua::Internal {
         }
         
         if (ExprCast* cast = GetNode<ExprCast>(expr)) {
-            m_Output += fmt::format("CastExpr '{}'\n", VariableTypeToString(cast->ResolvedDstType));
+            m_Output += fmt::format("CastExpr '{}' <{}>\n", VariableTypeToString(cast->ResolvedDstType), CastTypeToString(cast->ResolvedCastType));
             DumpNodeExpr(cast->Expression, indentation + 4, expr->Loc.Line);
             return;
         }

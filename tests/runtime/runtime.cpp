@@ -134,7 +134,9 @@ TEST_CASE("Runtime Structs") {
 TEST_CASE("Runtime Arrays") {
     BlackLua::Context ctx = BlackLua::Context::Create();
     ctx.CompileFile("tests/runtime/arrays.bl", "Runtime Arrays");
+    fmt::print("{}\n", ctx.Disassemble("Runtime Arrays"));
     ctx.Run("Runtime Arrays");
+    ctx.Call("main", "Runtime Arrays");
 
     ctx.PushGlobal("result");
     REQUIRE(ctx.GetInt(-1) == 140);

@@ -10,7 +10,7 @@ namespace BlackLua::Internal {
 
     class Parser {
     public:
-        static Parser Parse(const Lexer::Tokens& tokens, Context* ctx);
+        Parser(const Lexer::Tokens& tokens, Context* ctx);
 
         ASTNodes* GetNodes();
         bool IsValid() const;

@@ -31,12 +31,10 @@
 
 namespace BlackLua::Internal {
 
-    Lexer Lexer::Lex(const StringView source) {
-        Lexer l;
-        l.m_Source = source;
-        l.LexImpl();
-        
-        return l;
+    Lexer::Lexer(StringView source) {
+        m_Source = source;
+
+        LexImpl();
     }
 
     const Lexer::Tokens& Lexer::GetTokens() const {

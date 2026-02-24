@@ -9,13 +9,11 @@
 
 namespace BlackLua::Internal {
 
-    Parser Parser::Parse(const Lexer::Tokens& tokens, Context* ctx) {
-        Parser p;
-        p.m_Tokens = tokens;
-        p.m_Context = ctx;
-        p.ParseImpl();
-        
-        return p;
+    Parser::Parser(const Lexer::Tokens& tokens, Context* ctx) {
+        m_Tokens = tokens;
+        m_Context = ctx;
+
+        ParseImpl();
     }
 
     ASTNodes* Parser::GetNodes() {

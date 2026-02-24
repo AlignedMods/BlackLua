@@ -1,7 +1,7 @@
 #include "context.hpp"
 #include "internal/compiler/lexer.hpp"
 #include "internal/compiler/parser.hpp"
-#include "internal/compiler/type_checker.hpp"
+#include "internal/compiler/semantic_analyzer/semantic_analyzer.hpp"
 #include "internal/compiler/emitter.hpp"
 #include "internal/compiler/disassembler.hpp"
 #include "internal/compiler/ast_dumper.hpp"
@@ -62,18 +62,17 @@ namespace BlackLua {
         src->Module = module;
         m_CurrentCompiledSource = src;
 
-        Internal::Lexer l = Internal::Lexer::Lex({ src->SourceCode.c_str(), src->SourceCode.size() });
+        Internal::Lexer l({ src->SourceCode.c_str(), src->SourceCode.size() });
 
-        Internal::Parser p = Internal::Parser::Parse(l.GetTokens(), this);
+        Internal::Parser p(l.GetTokens(), this);
         valid = p.IsValid();
         if (!valid) { delete src->Allocator; return; }
         src->ASTNodes = *p.GetNodes();
 
-        Internal::TypeChecker c = Internal::TypeChecker::Check(&src->ASTNodes, this);
-        valid = c.IsValid();
+        Internal::SemanticAnalyzer c(&src->ASTNodes, this);
         if (!valid) { BLUA_ASSERT(false, "f"); delete src->Allocator; return; }
 
-        Internal::Emitter e = Internal::Emitter::Emit(p.GetNodes(), this);
+        Internal::Emitter e(p.GetNodes(), this);
         src->ReflectionData = e.GetReflectionData();
         src->OpCodes = e.GetOpCodes();
 
@@ -111,14 +110,14 @@ namespace BlackLua {
     std::string Context::DumpAST(const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
 
-        Internal::ASTDumper d = Internal::ASTDumper::DumpAST(&src->ASTNodes);
+        Internal::ASTDumper d(&src->ASTNodes);
         return d.GetOutput();
     }
 
     std::string Context::Disassemble(const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
 
-        Internal::Disassembler d = Internal::Disassembler::Disassemble(&src->OpCodes);
+        Internal::Disassembler d(&src->OpCodes);
         return d.GetDisassembly();
     }
 

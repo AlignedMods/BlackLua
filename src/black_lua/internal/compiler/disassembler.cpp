@@ -5,11 +5,10 @@
 
 namespace BlackLua::Internal {
 
-    Disassembler Disassembler::Disassemble(const std::vector<OpCode>* opcodes) {
-        Disassembler d;
-        d.m_OpCodes = opcodes;
-        d.DisassembleImpl();
-        return d;
+    Disassembler::Disassembler(const std::vector<OpCode>* opcodes) {
+        m_OpCodes = opcodes;
+
+        DisassembleImpl();
     }
 
     std::string& Disassembler::GetDisassembly() {

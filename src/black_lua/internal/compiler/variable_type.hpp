@@ -8,9 +8,7 @@
 #include <vector>
 
 namespace BlackLua {
-
     struct Context;
-
 } // namespace BlackLua
 
 namespace BlackLua::Internal {
@@ -53,6 +51,7 @@ namespace BlackLua::Internal {
 
     struct VariableType {
         PrimitiveType Type = PrimitiveType::Invalid;
+        bool LValue = false;
         std::variant<bool, VariableType*, ArrayDeclaration, StructDeclaration> Data;
 
         bool operator==(const VariableType& other) {
@@ -80,7 +79,7 @@ namespace BlackLua::Internal {
         }
     };
 
-    VariableType* CreateVarType(Context* ctx, PrimitiveType type, decltype(VariableType::Data) data = {});
+    VariableType* CreateVarType(Context* ctx, PrimitiveType type, bool lvalue = false, decltype(VariableType::Data) data = {});
 
     inline std::string VariableTypeToString(VariableType* type) {
         std::string str;
@@ -113,6 +112,10 @@ namespace BlackLua::Internal {
 
                 break;
             }
+        }
+
+        if (type->LValue) {
+            str += " lvalue";
         }
 
         return str;

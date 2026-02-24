@@ -51,8 +51,21 @@ namespace BlackLua::Internal {
         Integral,
         Floating,
         IntegralToFloating,
-        FloatingToIntegral
+        FloatingToIntegral,
+
+        LValueToRValue
     };
+
+    inline const char* CastTypeToString(CastType type) {
+        switch (type) {
+            case CastType::Integral: return "Integral";
+            case CastType::Floating: return "Floating";
+            case CastType::IntegralToFloating: return "IntegralToFloating";
+            case CastType::FloatingToIntegral: return "FloatingToIntegral";
+            case CastType::LValueToRValue: return "LValueToRValue";
+            default: BLUA_ASSERT(false, "Unreachable");
+        }
+    }
 
 #pragma endregion
 
@@ -96,7 +109,7 @@ namespace BlackLua::Internal {
 
         And, AndInPlace, BitAnd,
         Or, OrInPlace, BitOr,
-        Xor, XorInPlace, BitXor,
+        Xor, XorInPlace,
     
         Eq,
         IsEq,
@@ -130,7 +143,6 @@ namespace BlackLua::Internal {
             case BinaryOperatorType::BitOr: return "||";
             case BinaryOperatorType::Xor: return "^";
             case BinaryOperatorType::XorInPlace: return "^=";
-            case BinaryOperatorType::BitXor: return "^^";
     
             case BinaryOperatorType::Eq: return "=";
             case BinaryOperatorType::IsEq: return "==";

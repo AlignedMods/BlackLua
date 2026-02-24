@@ -192,7 +192,8 @@ namespace BlackLua::Internal {
     public:
         using Tokens = std::vector<Token>;
 
-        static Lexer Lex(StringView sourse);
+        Lexer(StringView source);
+
         const Tokens& GetTokens() const;
 
     private:

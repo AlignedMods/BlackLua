@@ -7,7 +7,8 @@ namespace BlackLua::Internal {
 
     class ASTDumper {
     public:
-        static ASTDumper DumpAST(ASTNodes* nodes);
+        ASTDumper(ASTNodes* nodes);
+
         std::string& GetOutput();
 
     private:

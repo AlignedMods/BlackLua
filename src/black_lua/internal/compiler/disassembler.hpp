@@ -6,7 +6,8 @@ namespace BlackLua::Internal {
 
     class Disassembler {
     public:
-        static Disassembler Disassemble(const std::vector<OpCode>* opcodes);
+        Disassembler(const std::vector<OpCode>* opcodes);
+
         std::string& GetDisassembly();
 
     private:

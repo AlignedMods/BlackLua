@@ -61,4 +61,44 @@ namespace BlackLua::Internal {
         return type;
     }
 
+    ConversionCost TypeChecker::GetConversionCost(VariableType* type1, VariableType* type2) {
+        BLUA_ASSERT(false, "todo");
+    }
+
+    void TypeChecker::InsertImplicitCast() {
+        BLUA_ASSERT(false, "todo");
+    }
+
+    VariableType* TypeChecker::RequireRValue(VariableType* type, NodeExpr* expr) {
+        // Perform an implicit cast if needed
+        if (type->LValue) {
+            NodeExpr* copy = Allocate<NodeExpr>(*expr);
+            
+            ExprImplicitCast* cast = Allocate<ExprImplicitCast>();
+            cast->Expression = copy;
+            cast->ResolvedCastType = CastType::LValueToRValue;
+            cast->ResolvedSrcType = type;
+            cast->ResolvedDstType = CreateVarType(m_Context, type->Type, false, type->Data);
+
+            expr->Data = cast;
+
+            return cast->ResolvedDstType;
+        }
+
+        return type;
+    }
+
+    VariableType* TypeChecker::RequireLValue(VariableType* type, NodeExpr* expr) {
+        if (!type->LValue) {
+            m_Context->ReportCompilerError(expr->Range.Start.Line, expr->Range.Start.Column,
+                                           expr->Range.End.Line, expr->Range.End.Column,
+                                           expr->Loc.Line, expr->Loc.Column,
+                                           "Expression must be a modifiable lvalue");
+
+            return nullptr;
+        }
+
+        return type;
+    }
+
 } // namespace BlackLua::Internal

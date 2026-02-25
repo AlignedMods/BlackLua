@@ -124,6 +124,12 @@ namespace BlackLua::Internal {
             DumpNodeExpr(cast->Expression, indentation + 4, expr->Loc.Line);
             return;
         }
+
+        if (ExprImplicitCast* cast = GetNode<ExprImplicitCast>(expr)) {
+            m_Output += fmt::format("ImplicitCastExpr '{}' <{}>\n", VariableTypeToString(cast->ResolvedDstType), CastTypeToString(cast->ResolvedCastType));
+            DumpNodeExpr(cast->Expression, indentation + 4, expr->Loc.Line);
+            return;
+        }
         
         if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
             m_Output += fmt::format("UnaryOperatorExpr '{}' '{}'\n", UnaryOperatorTypeToString(unOp->Type), VariableTypeToString(unOp->ResolvedType));

@@ -70,6 +70,8 @@ namespace BlackLua::Internal {
                     memberExpr->ResolvedMemberType = field.ResolvedType;
                     memberExpr->ResolvedParentType = CreateVarType(m_Context, PrimitiveType::Structure, true, *m_ActiveStruct);
 
+                    BLUA_ASSERT(false, "todo");
+
                     expr->Data = memberExpr;
                     return memberExpr->ResolvedMemberType;
                 }
@@ -84,7 +86,7 @@ namespace BlackLua::Internal {
                 if (m_Scopes[static_cast<size_t>(currentScopeIndex)].DeclaredSymbols.contains(ident)) {
                     Declaration decl = m_Scopes[static_cast<size_t>(currentScopeIndex)].DeclaredSymbols.at(ident);
 
-                    ref->ResolvedType = decl.Type;
+                    ref->ResolvedType = CreateVarType(m_Context, decl.Type->Type, true, decl.Type->Data);
                     return ref->ResolvedType;
                 }
 
@@ -96,7 +98,7 @@ namespace BlackLua::Internal {
         if (m_DeclaredSymbols.contains(ident)) {
             Declaration decl = m_DeclaredSymbols.at(ident);
 
-            ref->ResolvedType = decl.Type;
+            ref->ResolvedType = CreateVarType(m_Context, decl.Type->Type, true, decl.Type->Data);
             return ref->ResolvedType;
         }
 
@@ -125,7 +127,24 @@ namespace BlackLua::Internal {
     }
 
     VariableType* SemanticAnalyzer::HandleExprCall(NodeExpr* expr) {
-        BLUA_ASSERT(false, "todo");
+        ExprCall* call = GetNode<ExprCall>(expr);
+
+        std::string ident = fmt::format("{}", call->Name);
+
+        if (!m_DeclaredSymbols.contains(ident)) {
+            m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
+                                           expr->Range.Start.Line, expr->Range.Start.Column,
+                                           expr->Range.End.Line, expr->Range.End.Column,
+                                           fmt::format("Calling undeclared identifier {}", ident));
+
+            return nullptr;
+        }
+
+        Declaration decl = m_DeclaredSymbols.at(ident);
+
+        call->Extern = decl.Extern;
+        call->ResolvedReturnType = decl.Type;
+        return call->ResolvedReturnType;
     }
 
     VariableType* SemanticAnalyzer::HandleExprParen(NodeExpr* expr) {
@@ -138,7 +157,11 @@ namespace BlackLua::Internal {
     }
 
     VariableType* SemanticAnalyzer::HandleExprUnaryOperator(NodeExpr* expr) {
-        BLUA_ASSERT(false, "todo");
+        ExprUnaryOperator* unop = GetNode<ExprUnaryOperator>(expr);
+
+        VariableType* type = HandleNodeExpression(unop->Expression);
+        unop->ResolvedType = type;
+        return type;
     }
 
     VariableType* SemanticAnalyzer::HandleExprBinaryOperator(NodeExpr* expr) {
@@ -150,57 +173,47 @@ namespace BlackLua::Internal {
             BLUA_ASSERT(false, "todo");
         }
 
+        // First we transform the AST with any needed implicit casts
+        if (binop->Type == BinaryOperatorType::Eq) {
+            LHSType = m_TypeChecker.RequireLValue(LHSType, binop->LHS);
+            RHSType = m_TypeChecker.RequireRValue(RHSType, binop->RHS);
+        } else {
+            LHSType = m_TypeChecker.RequireRValue(LHSType, binop->LHS);
+            RHSType = m_TypeChecker.RequireRValue(RHSType, binop->RHS);
+        }
+
         switch (binop->Type) {
-            case BinaryOperatorType::Add:
-            case BinaryOperatorType::AddInPlace:
-            case BinaryOperatorType::Sub:
-            case BinaryOperatorType::SubInPlace:
-            case BinaryOperatorType::Mul:
-            case BinaryOperatorType::MulInPlace:
-            case BinaryOperatorType::Div:
-            case BinaryOperatorType::DivInPlace:
-            case BinaryOperatorType::Mod:
-            case BinaryOperatorType::ModInPlace:
-            case BinaryOperatorType::And:
-            case BinaryOperatorType::AndInPlace:
-            case BinaryOperatorType::Or:
-            case BinaryOperatorType::OrInPlace:
-            case BinaryOperatorType::Xor:
-            case BinaryOperatorType::XorInPlace: {
+            case BinaryOperatorType::Add:     case BinaryOperatorType::AddInPlace:
+            case BinaryOperatorType::Sub:     case BinaryOperatorType::SubInPlace:
+            case BinaryOperatorType::Mul:     case BinaryOperatorType::MulInPlace:
+            case BinaryOperatorType::Div:     case BinaryOperatorType::DivInPlace:
+            case BinaryOperatorType::Mod:     case BinaryOperatorType::ModInPlace:
+            case BinaryOperatorType::And:     case BinaryOperatorType::AndInPlace:
+            case BinaryOperatorType::Or:      case BinaryOperatorType::OrInPlace:
+            case BinaryOperatorType::Xor:     case BinaryOperatorType::XorInPlace: {
+                binop->ResolvedType = LHSType;
                 binop->ResolvedSourceType = LHSType;
-                binop->ResolvedType = binop->ResolvedSourceType;
-                return binop->ResolvedType;
+                break;
             }
 
-            case BinaryOperatorType::IsEq:
-            case BinaryOperatorType::IsNotEq:
-            case BinaryOperatorType::Less:
-            case BinaryOperatorType::LessOrEq:
-            case BinaryOperatorType::Greater:
-            case BinaryOperatorType::GreaterOrEq:
+            case BinaryOperatorType::IsEq:    case BinaryOperatorType::IsNotEq:
+            case BinaryOperatorType::Less:    case BinaryOperatorType::LessOrEq:
+            case BinaryOperatorType::Greater: case BinaryOperatorType::GreaterOrEq:
             case BinaryOperatorType::BitAnd:
             case BinaryOperatorType::BitOr: {
-                binop->ResolvedSourceType = LHSType;
                 binop->ResolvedType = CreateVarType(m_Context, PrimitiveType::Bool, false, true);
-                return binop->ResolvedType;
+                binop->ResolvedSourceType = LHSType;
+                break;
             }
 
             case BinaryOperatorType::Eq: {
-                if (!LHSType->LValue) {
-                    m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
-                                                   expr->Range.Start.Line, expr->Range.Start.Column,
-                                                   expr->Range.End.Line, expr->Range.End.Column,
-                                                   "Expression must be a modifiable lvalue");
-                }
-
-                binop->ResolvedSourceType = LHSType;
                 binop->ResolvedType = LHSType;
-                return binop->ResolvedType;
+                binop->ResolvedSourceType = RHSType;
+                break;
             }
         }
 
-        BLUA_UNREACHABLE();
-        return nullptr;
+        return binop->ResolvedType;
     }
 
     VariableType* SemanticAnalyzer::HandleNodeExpression(NodeExpr* expr) {
@@ -265,7 +278,8 @@ namespace BlackLua::Internal {
 
         // Handle potential initilization
         if (decl->Value) {
-            HandleNodeExpression(decl->Value);
+            VariableType* valType = HandleNodeExpression(decl->Value);
+            valType = m_TypeChecker.RequireRValue(valType, decl->Value);
         }
     }
 
@@ -322,6 +336,8 @@ namespace BlackLua::Internal {
         d.Extern = decl->Extern;
         d.Type = m_TypeChecker.GetVariableTypeFromString(StringView(decl->ReturnType.Data(), decl->ReturnType.Size()));
         m_DeclaredSymbols[ident] = d;
+
+        decl->ResolvedType = d.Type;
     }
 
     void SemanticAnalyzer::HandleStmtStructDecl(NodeStmt* stmt) {

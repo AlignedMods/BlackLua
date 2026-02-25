@@ -369,7 +369,107 @@ namespace BlackLua::Internal {
                     CASE_CAST_OUTER_INTEGRAL(Float, F32)
                     CASE_CAST_OUTER_INTEGRAL(Double, F64)
                 }
+            } else if (cast->ResolvedCastType == CastType::LValueToRValue) {
+                return GetStackTop();
             }
+
+            #undef CASE_CAST
+            #undef CASE_CAST_OUTER_INTEGRAL
+            #undef CASE_CAST_OUTER_FLOATING
+            
+            IncrementStackSlotCount();
+            return GetStackTop();
+        }
+
+        if (ExprImplicitCast* cast = GetNode<ExprImplicitCast>(expr)) {
+            CompileStackSlot slot = EmitNodeExpression(cast->Expression);
+        
+            #define CASE_CAST(name) m_OpCodes.emplace_back(OpCodeType::name, CompileToRuntimeStackSlot(slot)); break
+
+            #define CASE_CAST_OUTER_INTEGRAL(src, srcName) \
+                case PrimitiveType::src: {\
+                    if (cast->ResolvedDstType->IsSigned()) { \
+                        switch (cast->ResolvedDstType->Type) { \
+                            case PrimitiveType::Bool: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Char: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Short: CASE_CAST(Cast##srcName##ToI16); break; \
+                            case PrimitiveType::Int: CASE_CAST(Cast##srcName##ToI32); break; \
+                            case PrimitiveType::Long: CASE_CAST(Cast##srcName##ToI64); break; \
+                        } \
+                    } else { \
+                        switch (cast->ResolvedDstType->Type) { \
+                            case PrimitiveType::Bool: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Char: CASE_CAST(Cast##srcName##ToI8); break; \
+                            case PrimitiveType::Short: CASE_CAST(Cast##srcName##ToI16); break; \
+                            case PrimitiveType::Int: CASE_CAST(Cast##srcName##ToI32); break; \
+                            case PrimitiveType::Long: CASE_CAST(Cast##srcName##ToI64); break; \
+                        } \
+                    } \
+                    break; \
+                }
+
+            #define CASE_CAST_OUTER_FLOATING(src, srcName) \
+                case PrimitiveType::src: {\
+                    switch (cast->ResolvedDstType->Type) { \
+                        case PrimitiveType::Float: CASE_CAST(Cast##srcName##ToF32); break; \
+                        case PrimitiveType::Double: CASE_CAST(Cast##srcName##ToF64); break; \
+                    } \
+                    break; \
+                }
+
+            if (cast->ResolvedCastType == CastType::Integral) {
+                if (cast->ResolvedSrcType->IsSigned()) {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_CAST_OUTER_INTEGRAL(Bool, I8)
+                        CASE_CAST_OUTER_INTEGRAL(Char, I8)
+                        CASE_CAST_OUTER_INTEGRAL(Short, I16)
+                        CASE_CAST_OUTER_INTEGRAL(Int, I32)
+                        CASE_CAST_OUTER_INTEGRAL(Long, I64)
+                    }
+                } else {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_CAST_OUTER_INTEGRAL(Bool, U8)
+                        CASE_CAST_OUTER_INTEGRAL(Char, U8)
+                        CASE_CAST_OUTER_INTEGRAL(Short, U16)
+                        CASE_CAST_OUTER_INTEGRAL(Int, U32)
+                        CASE_CAST_OUTER_INTEGRAL(Long, U64)
+                    }
+                }
+            } else if (cast->ResolvedCastType == CastType::Floating) {
+                switch (cast->ResolvedSrcType->Type) {
+                    CASE_CAST_OUTER_FLOATING(Float, F32)
+                    CASE_CAST_OUTER_FLOATING(Double, F64)
+                }
+            } else if (cast->ResolvedCastType == CastType::IntegralToFloating) {
+                if (cast->ResolvedSrcType->IsSigned()) {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_CAST_OUTER_FLOATING(Bool, I8)
+                        CASE_CAST_OUTER_FLOATING(Char, I8)
+                        CASE_CAST_OUTER_FLOATING(Short, I16)
+                        CASE_CAST_OUTER_FLOATING(Int, I32)
+                        CASE_CAST_OUTER_FLOATING(Long, I64)
+                    }
+                } else {
+                    switch (cast->ResolvedSrcType->Type) {
+                        CASE_CAST_OUTER_FLOATING(Bool, U8)
+                        CASE_CAST_OUTER_FLOATING(Char, U8)
+                        CASE_CAST_OUTER_FLOATING(Short, U16)
+                        CASE_CAST_OUTER_FLOATING(Int, U32)
+                        CASE_CAST_OUTER_FLOATING(Long, U64)
+                    }
+                }
+            } else if (cast->ResolvedCastType == CastType::FloatingToIntegral) {
+                switch (cast->ResolvedSrcType->Type) {
+                    CASE_CAST_OUTER_INTEGRAL(Float, F32)
+                    CASE_CAST_OUTER_INTEGRAL(Double, F64)
+                }
+            } else if (cast->ResolvedCastType == CastType::LValueToRValue) {
+                return GetStackTop();
+            }
+
+            #undef CASE_CAST
+            #undef CASE_CAST_OUTER_INTEGRAL
+            #undef CASE_CAST_OUTER_FLOATING
             
             IncrementStackSlotCount();
             return GetStackTop();

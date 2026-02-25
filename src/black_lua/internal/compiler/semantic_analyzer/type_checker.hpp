@@ -2,6 +2,7 @@
 
 #include "internal/compiler/variable_type.hpp"
 #include "internal/compiler/core/string_builder.hpp"
+#include "internal/compiler/ast/expr.hpp"
 
 namespace BlackLua::Internal {
     
@@ -29,6 +30,23 @@ namespace BlackLua::Internal {
         TypeChecker(Context* ctx);
 
         VariableType* GetVariableTypeFromString(StringView str);
+
+        ConversionCost GetConversionCost(VariableType* type1, VariableType* type2);
+        void InsertImplicitCast();
+
+        VariableType* RequireRValue(VariableType* type, NodeExpr* expr); // Inserts an implicit cast for lvalue to rvalue conversion (returns the new type)
+        VariableType* RequireLValue(VariableType* type, NodeExpr* expr); // This will not insert any implicit cast, just issues an error (returns the same type)
+
+    private:
+        template <typename T>
+        T* Allocate() {
+            return m_Context->GetAllocator()->AllocateNamed<T>();
+        }
+
+        template <typename T, typename... Args>
+        T* Allocate(Args&&... args) {
+            return m_Context->GetAllocator()->AllocateNamed<T>(std::forward<Args>(args)...);
+        }
 
     private:
         Context* m_Context = nullptr;

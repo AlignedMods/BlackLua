@@ -83,21 +83,25 @@ namespace BlackLua::Internal {
 
     inline std::string VariableTypeToString(VariableType* type) {
         std::string str;
-        if (!type->IsSigned()) {
+        if (type->LValue) {
+            str += "lvalue ";
+        }
+
+        if (!type->IsSigned() && type->IsIntegral()) {
             str = "u";
         }
 
         switch (type->Type) {
             case PrimitiveType::Invalid: str = "invalid"; break;
             case PrimitiveType::Void:    str = "void"; break;
-            case PrimitiveType::Bool:    str = "bool"; break;
+            case PrimitiveType::Bool:    str += "bool"; break;
             case PrimitiveType::Char:    str += "char"; break;
             case PrimitiveType::Short:   str += "short"; break;
             case PrimitiveType::Int:     str += "int"; break;
             case PrimitiveType::Long:    str += "long"; break;
-            case PrimitiveType::Float:   str = "float"; break;
-            case PrimitiveType::Double:  str = "double"; break;
-            case PrimitiveType::String:  str = "string"; break;
+            case PrimitiveType::Float:   str += "float"; break;
+            case PrimitiveType::Double:  str += "double"; break;
+            case PrimitiveType::String:  str += "string"; break;
 
             case PrimitiveType::Array: {
                 ArrayDeclaration decl = std::get<ArrayDeclaration>(type->Data);
@@ -112,10 +116,6 @@ namespace BlackLua::Internal {
 
                 break;
             }
-        }
-
-        if (type->LValue) {
-            str += " lvalue";
         }
 
         return str;

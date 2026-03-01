@@ -48,7 +48,7 @@ namespace BlackLua::Internal {
         m_Context = ctx;
     }
 
-    void VM::PushBytes(size_t amount, VariableType* type) {
+    void VM::PushBytes(size_t amount, TypeInfo* type) {
         size_t alignedAmount = ((amount + 8 - 1) / 8) * 8; // We need to handle 8 byte alignment since some CPU's will require it
         
         BLUA_ASSERT(alignedAmount % 8 == 0, "Memory not aligned to 8 bytes correctly!");
@@ -214,7 +214,7 @@ namespace BlackLua::Internal {
         memcpy(dst.Memory, src.Memory, src.Size);
     }
 
-    void VM::Ref(StackSlotIndex srcSlot, VariableType* type) {
+    void VM::Ref(StackSlotIndex srcSlot, TypeInfo* type) {
         StackSlot src = GetStackSlot(srcSlot);
 
         StackSlot newSlot;
@@ -366,7 +366,7 @@ namespace BlackLua::Internal {
             memcpy(&lhs, GetStackSlot(m.LHSSlot).Memory, sizeof(builtinType)); \
             memcpy(&rhs, GetStackSlot(m.RHSSlot).Memory, sizeof(builtinType)); \
             bool result = builtinOp(lhs, rhs); \
-            PushBytes(1, CreateVarType(m_Context, PrimitiveType::Bool)); \
+            PushBytes(1, TypeInfo::Create(m_Context, PrimitiveType::Bool)); \
             StackSlot s = GetStackSlot(-1); \
             memcpy(s.Memory, &result, 1); \
             break; \
@@ -419,16 +419,16 @@ namespace BlackLua::Internal {
         }
 
         #define CASE_CAST_GROUP(_cast, _builtinType) \
-            CASE_CAST(Cast##_cast##ToI8,  _builtinType, int8_t,   CreateVarType(m_Context, PrimitiveType::Char, true)) \
-            CASE_CAST(Cast##_cast##ToI16, _builtinType, int16_t,  CreateVarType(m_Context, PrimitiveType::Short, true)) \
-            CASE_CAST(Cast##_cast##ToI32, _builtinType, int32_t,  CreateVarType(m_Context, PrimitiveType::Int, true)) \
-            CASE_CAST(Cast##_cast##ToI64, _builtinType, int64_t,  CreateVarType(m_Context, PrimitiveType::Long, true)) \
-            CASE_CAST(Cast##_cast##ToU8,  _builtinType, uint8_t,  CreateVarType(m_Context, PrimitiveType::Char, false)) \
-            CASE_CAST(Cast##_cast##ToU16, _builtinType, uint16_t, CreateVarType(m_Context, PrimitiveType::Short, false)) \
-            CASE_CAST(Cast##_cast##ToU32, _builtinType, uint32_t, CreateVarType(m_Context, PrimitiveType::Int, false)) \
-            CASE_CAST(Cast##_cast##ToU64, _builtinType, uint64_t, CreateVarType(m_Context, PrimitiveType::Long, false)) \
-            CASE_CAST(Cast##_cast##ToF32, _builtinType, float,    CreateVarType(m_Context, PrimitiveType::Float)) \
-            CASE_CAST(Cast##_cast##ToF64, _builtinType, double,   CreateVarType(m_Context, PrimitiveType::Double))
+            CASE_CAST(Cast##_cast##ToI8,  _builtinType, int8_t,   TypeInfo::Create(m_Context, PrimitiveType::Char, true)) \
+            CASE_CAST(Cast##_cast##ToI16, _builtinType, int16_t,  TypeInfo::Create(m_Context, PrimitiveType::Short, true)) \
+            CASE_CAST(Cast##_cast##ToI32, _builtinType, int32_t,  TypeInfo::Create(m_Context, PrimitiveType::Int, true)) \
+            CASE_CAST(Cast##_cast##ToI64, _builtinType, int64_t,  TypeInfo::Create(m_Context, PrimitiveType::Long, true)) \
+            CASE_CAST(Cast##_cast##ToU8,  _builtinType, uint8_t,  TypeInfo::Create(m_Context, PrimitiveType::Char, false)) \
+            CASE_CAST(Cast##_cast##ToU16, _builtinType, uint16_t, TypeInfo::Create(m_Context, PrimitiveType::Short, false)) \
+            CASE_CAST(Cast##_cast##ToU32, _builtinType, uint32_t, TypeInfo::Create(m_Context, PrimitiveType::Int, false)) \
+            CASE_CAST(Cast##_cast##ToU64, _builtinType, uint64_t, TypeInfo::Create(m_Context, PrimitiveType::Long, false)) \
+            CASE_CAST(Cast##_cast##ToF32, _builtinType, float,    TypeInfo::Create(m_Context, PrimitiveType::Float)) \
+            CASE_CAST(Cast##_cast##ToF64, _builtinType, double,   TypeInfo::Create(m_Context, PrimitiveType::Double))
 
         for (; m_ProgramCounter < m_ProgramSize; m_ProgramCounter++) {
             const OpCode& op = m_Program[m_ProgramCounter];
@@ -463,22 +463,22 @@ namespace BlackLua::Internal {
                     break;
                 }
 
-                CASE_LOAD(LoadI8,  i8,  CreateVarType(m_Context, PrimitiveType::Char, true))
-                CASE_LOAD(LoadI16, i16, CreateVarType(m_Context, PrimitiveType::Short, true))
-                CASE_LOAD(LoadI32, i32, CreateVarType(m_Context, PrimitiveType::Int, true))
-                CASE_LOAD(LoadI64, i64, CreateVarType(m_Context, PrimitiveType::Long, true))
+                CASE_LOAD(LoadI8,  i8,  TypeInfo::Create(m_Context, PrimitiveType::Char, true))
+                CASE_LOAD(LoadI16, i16, TypeInfo::Create(m_Context, PrimitiveType::Short, true))
+                CASE_LOAD(LoadI32, i32, TypeInfo::Create(m_Context, PrimitiveType::Int, true))
+                CASE_LOAD(LoadI64, i64, TypeInfo::Create(m_Context, PrimitiveType::Long, true))
 
-                CASE_LOAD(LoadU8,  u8,  CreateVarType(m_Context, PrimitiveType::Char, false))
-                CASE_LOAD(LoadU16, u16, CreateVarType(m_Context, PrimitiveType::Short, false))
-                CASE_LOAD(LoadU32, u32, CreateVarType(m_Context, PrimitiveType::Int, false))
-                CASE_LOAD(LoadU64, u64, CreateVarType(m_Context, PrimitiveType::Long, false))
+                CASE_LOAD(LoadU8,  u8,  TypeInfo::Create(m_Context, PrimitiveType::Char, false))
+                CASE_LOAD(LoadU16, u16, TypeInfo::Create(m_Context, PrimitiveType::Short, false))
+                CASE_LOAD(LoadU32, u32, TypeInfo::Create(m_Context, PrimitiveType::Int, false))
+                CASE_LOAD(LoadU64, u64, TypeInfo::Create(m_Context, PrimitiveType::Long, false))
 
-                CASE_LOAD(LoadF32, f32, CreateVarType(m_Context, PrimitiveType::Float))
-                CASE_LOAD(LoadF64, f64, CreateVarType(m_Context, PrimitiveType::Double))
+                CASE_LOAD(LoadF32, f32, TypeInfo::Create(m_Context, PrimitiveType::Float))
+                CASE_LOAD(LoadF64, f64, TypeInfo::Create(m_Context, PrimitiveType::Double))
                 case OpCodeType::LoadStr: {
                     OpCodeLoad l = std::get<OpCodeLoad>(op.Data);
                     StringView str = std::get<StringView>(l.Data);
-                    PushBytes(str.Size(), CreateVarType(m_Context, PrimitiveType::String));
+                    PushBytes(str.Size(), TypeInfo::Create(m_Context, PrimitiveType::String));
                     memcpy(GetStackSlot(-1).Memory, str.Data(), str.Size());
                     break;
                 }

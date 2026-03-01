@@ -1,6 +1,6 @@
 #pragma once
 
-#include "internal/compiler/variable_type.hpp"
+#include "internal/compiler/type_info.hpp"
 
 #include <unordered_map>
 #include <string>
@@ -13,7 +13,7 @@ namespace BlackLua::Internal {
     };
 
     struct CompilerReflectionDeclaration {
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
         ReflectionType Type = ReflectionType::Variable;
         std::variant<int32_t> Data;
     };

@@ -1,8 +1,9 @@
 #pragma once
 
-#include "internal/compiler/variable_type.hpp"
+#include "internal/compiler/type_info.hpp"
 #include "internal/compiler/core/string_builder.hpp"
 #include "internal/compiler/ast/expr.hpp"
+#include "internal/compiler/ast/stmt.hpp"
 
 namespace BlackLua::Internal {
     
@@ -10,7 +11,8 @@ namespace BlackLua::Internal {
         None,
         Promotion,
         Narrowing,
-        SignChange
+        SignChange,
+        LValueToRValue
     };
 
     struct ConversionCost {
@@ -22,25 +24,54 @@ namespace BlackLua::Internal {
         bool LValueMismatch = false;
         bool ImplicitCastPossible = false;
         bool ExplicitCastPossible = false;
-
-        VariableType* Source = nullptr;
-        VariableType* Destination = nullptr;
     };
 
+    // NOTE: The type checker serves as a prepass to the main semantic analysis
+    // Its job is to resolve all type ambiguities and implicit casts
     class TypeChecker {
     public:
-        TypeChecker(Context* ctx);
-
-        VariableType* GetVariableTypeFromString(StringView str);
-
-        // type1 is the destination type and type2 is the source type
-        ConversionCost GetConversionCost(VariableType* dst, VariableType* src);
-        void InsertImplicitCast(VariableType* type1, VariableType* type2, NodeExpr* expr1, NodeExpr* expr2);
-
-        VariableType* RequireRValue(VariableType* type, NodeExpr* expr); // Inserts an implicit cast for lvalue to rvalue conversion (returns the new type)
-        VariableType* RequireLValue(VariableType* type, NodeExpr* expr); // This will not insert any implicit cast, just issues an error (returns the same type)
+        TypeChecker(Context* ctx, ASTNodes* nodes);
 
     private:
+        void CheckImpl();
+
+        TypeInfo* HandleExprConstant(NodeExpr* expr);
+        TypeInfo* HandleExprVarRef(NodeExpr* expr);
+        TypeInfo* HandleExprArrayAccess(NodeExpr* expr);
+        TypeInfo* HandleExprSelf(NodeExpr* expr);
+        TypeInfo* HandleExprMember(NodeExpr* expr);
+        TypeInfo* HandleExprMethodCall(NodeExpr* expr);
+        TypeInfo* HandleExprCall(NodeExpr* expr);
+        TypeInfo* HandleExprParen(NodeExpr* expr);
+        TypeInfo* HandleExprCast(NodeExpr* expr);
+        TypeInfo* HandleExprUnaryOperator(NodeExpr* expr);
+        TypeInfo* HandleExprBinaryOperator(NodeExpr* expr);
+
+        TypeInfo* HandleNodeExpression(NodeExpr* expr);
+
+        void HandleStmtCompound(NodeStmt* stmt);
+        void HandleStmtVarDecl(NodeStmt* stmt);
+        void HandleStmtParamDecl(NodeStmt* stmt);
+        void HandleStmtFunctionDecl(NodeStmt* stmt);
+        void HandleStmtStructDecl(NodeStmt* stmt);
+        void HandleStmtFieldDecl(NodeStmt* stmt);
+        void HandleStmtMethodDecl(NodeStmt* stmt);
+        void HandleStmtWhile(NodeStmt* stmt);
+        void HandleStmtDoWhile(NodeStmt* stmt);
+        void HandleStmtFor(NodeStmt* stmt);
+        void HandleStmtIf(NodeStmt* stmt);
+        void HandleStmtReturn(NodeStmt* stmt);
+
+        void HandleNodeStatement(NodeStmt* stmt);
+
+        void HandleNode(Node* node);
+
+        TypeInfo* GetTypeInfoFromString(StringView str, bool lvalue);
+
+        // type1 is the destination type and type2 is the source type
+        ConversionCost GetConversionCost(TypeInfo* dst, TypeInfo* src, bool srcLValue);
+        TypeInfo* InsertImplicitCast(TypeInfo* dstType, TypeInfo* srcType, NodeExpr* srcExpr, CastType castType);
+
         template <typename T>
         T* Allocate() {
             return m_Context->GetAllocator()->AllocateNamed<T>();
@@ -52,7 +83,13 @@ namespace BlackLua::Internal {
         }
 
     private:
+        ASTNodes* m_Nodes = nullptr;
+
+        std::vector<std::unordered_map<std::string, TypeInfo*>> m_Declarations;
+        TypeInfo* m_ActiveReturnType = nullptr;
+
         Context* m_Context = nullptr;
+        friend class SemanticAnalyzer;
     };
 
 } // namespace BlackLua::Internal

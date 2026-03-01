@@ -42,48 +42,48 @@ namespace BlackLua::Internal {
         
         if (ExprConstant* con = GetNode<ExprConstant>(expr)) {
             if (ConstantBool* cb = GetNode<ConstantBool>(con)) {
-                m_Output += fmt::format("BooleanConstantExpr {} '{}'\n", cb->Value, VariableTypeToString(con->ResolvedType));
+                m_Output += fmt::format("BooleanConstantExpr {} '{}'\n", cb->Value, TypeInfoToString(con->ResolvedType));
                 return;
             }
         
             if (ConstantChar* cc = GetNode<ConstantChar>(con)) {
-                m_Output += fmt::format("CharacterConstantExpr {} '{}'\n", cc->Char, VariableTypeToString(con->ResolvedType));
+                m_Output += fmt::format("CharacterConstantExpr {} '{}'\n", cc->Char, TypeInfoToString(con->ResolvedType));
                 return;
             }
         
             if (ConstantInt* ci = GetNode<ConstantInt>(con)) {
-                m_Output += fmt::format("IntegerConstantExpr {} '{}'\n", ci->Int, VariableTypeToString(con->ResolvedType));
+                m_Output += fmt::format("IntegerConstantExpr {} '{}'\n", ci->Int, TypeInfoToString(con->ResolvedType));
                 return;
             }
         
             if (ConstantLong* cl = GetNode<ConstantLong>(con)) {
-                m_Output += fmt::format("IntegerConstantExpr {} '{}'\n", cl->Long, VariableTypeToString(con->ResolvedType));
+                m_Output += fmt::format("IntegerConstantExpr {} '{}'\n", cl->Long, TypeInfoToString(con->ResolvedType));
                 return;
             }
         
             if (ConstantFloat* cf = GetNode<ConstantFloat>(con)) {
-                m_Output += fmt::format("FloatingPointConstantExpr {} '{}'\n", cf->Float, VariableTypeToString(con->ResolvedType));
+                m_Output += fmt::format("FloatingPointConstantExpr {} '{}'\n", cf->Float, TypeInfoToString(con->ResolvedType));
                 return;
             }
         
             if (ConstantDouble* cd = GetNode<ConstantDouble>(con)) {
-                m_Output += fmt::format("FloatingPointConstantExpr {} '{}'\n", cd->Double, VariableTypeToString(con->ResolvedType));
+                m_Output += fmt::format("FloatingPointConstantExpr {} '{}'\n", cd->Double, TypeInfoToString(con->ResolvedType));
                 return;
             }
         
             if (ConstantString* cs = GetNode<ConstantString>(con)) {
-                m_Output += fmt::format("StringConstantExpr \"{}\" '{}'\n", cs->String, VariableTypeToString(con->ResolvedType));
+                m_Output += fmt::format("StringConstantExpr \"{}\" '{}'\n", cs->String, TypeInfoToString(con->ResolvedType));
                 return;
             }
         }
         
         if (ExprVarRef* varRef = GetNode<ExprVarRef>(expr)) {
-            m_Output += fmt::format("VarRefExpr \"{}\" '{}'\n", varRef->Identifier, VariableTypeToString(varRef->ResolvedType));
+            m_Output += fmt::format("VarRefExpr \"{}\" lvalue '{}'\n", varRef->Identifier, TypeInfoToString(varRef->ResolvedType));
             return;
         }
         
         if (ExprArrayAccess* arrAccess = GetNode<ExprArrayAccess>(expr)) {
-            m_Output += fmt::format("ArrayAccessExpr '{}'\n", VariableTypeToString(arrAccess->ResolvedType));
+            m_Output += fmt::format("ArrayAccessExpr '{}'\n", TypeInfoToString(arrAccess->ResolvedType));
             DumpNodeExpr(arrAccess->Index, indentation + 4, expr->Loc.Line);
             DumpNodeExpr(arrAccess->Parent, indentation + 4, expr->Loc.Line);
             return;
@@ -95,7 +95,7 @@ namespace BlackLua::Internal {
         }
 
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
-            m_Output += fmt::format("MemberExpr {} '{}'\n", mem->Member, VariableTypeToString(mem->ResolvedMemberType));
+            m_Output += fmt::format("MemberExpr {} '{}'\n", mem->Member, TypeInfoToString(mem->ResolvedMemberType));
             DumpNodeExpr(mem->Parent, indentation + 4, expr->Loc.Line);
             return;
         }
@@ -108,7 +108,7 @@ namespace BlackLua::Internal {
         }
         
         if (ExprCall* call = GetNode<ExprCall>(expr)) {
-            m_Output += fmt::format("CallExpr \"{}\" '{}' {}\n", call->Name, VariableTypeToString(call->ResolvedReturnType), (call->Extern) ? "extern" : "");
+            m_Output += fmt::format("CallExpr \"{}\" '{}' {}\n", call->Name, TypeInfoToString(call->ResolvedReturnType), (call->Extern) ? "extern" : "");
             DumpNodeList(call->Arguments, indentation + 4);
             return;
         }
@@ -120,25 +120,25 @@ namespace BlackLua::Internal {
         }
         
         if (ExprCast* cast = GetNode<ExprCast>(expr)) {
-            m_Output += fmt::format("CastExpr '{}' <{}>\n", VariableTypeToString(cast->ResolvedDstType), CastTypeToString(cast->ResolvedCastType));
+            m_Output += fmt::format("CastExpr '{}' <{}>\n", TypeInfoToString(cast->ResolvedDstType), CastTypeToString(cast->ResolvedCastType));
             DumpNodeExpr(cast->Expression, indentation + 4, expr->Loc.Line);
             return;
         }
 
         if (ExprImplicitCast* cast = GetNode<ExprImplicitCast>(expr)) {
-            m_Output += fmt::format("ImplicitCastExpr '{}' <{}>\n", VariableTypeToString(cast->ResolvedDstType), CastTypeToString(cast->ResolvedCastType));
+            m_Output += fmt::format("ImplicitCastExpr '{}' <{}>\n", TypeInfoToString(cast->ResolvedDstType), CastTypeToString(cast->ResolvedCastType));
             DumpNodeExpr(cast->Expression, indentation + 4, expr->Loc.Line);
             return;
         }
         
         if (ExprUnaryOperator* unOp = GetNode<ExprUnaryOperator>(expr)) {
-            m_Output += fmt::format("UnaryOperatorExpr '{}' '{}'\n", UnaryOperatorTypeToString(unOp->Type), VariableTypeToString(unOp->ResolvedType));
+            m_Output += fmt::format("UnaryOperatorExpr '{}' '{}'\n", UnaryOperatorTypeToString(unOp->Type), TypeInfoToString(unOp->ResolvedType));
             DumpNodeExpr(unOp->Expression, indentation + 4, expr->Loc.Line);
             return;
         }
         
         if (ExprBinaryOperator* binOp = GetNode<ExprBinaryOperator>(expr)) {
-            m_Output += fmt::format("BinaryOperatorExpr '{}' '{}'\n", BinaryOperatorTypeToString(binOp->Type), VariableTypeToString(binOp->ResolvedType));
+            m_Output += fmt::format("BinaryOperatorExpr '{}' '{}'\n", BinaryOperatorTypeToString(binOp->Type), TypeInfoToString(binOp->ResolvedType));
             DumpNodeExpr(binOp->LHS, indentation + 4, expr->Loc.Line);
             DumpNodeExpr(binOp->RHS, indentation + 4, expr->Loc.Line);
             return;
@@ -168,7 +168,7 @@ namespace BlackLua::Internal {
         }
 
         if (StmtVarDecl* decl = GetNode<StmtVarDecl>(stmt)) {
-            m_Output += fmt::format("VarDeclStmt \"{}\" '{}'\n", decl->Identifier, VariableTypeToString(decl->ResolvedType));
+            m_Output += fmt::format("VarDeclStmt \"{}\" '{}'\n", decl->Identifier, TypeInfoToString(decl->ResolvedType));
             if (decl->Value) {
                 DumpNodeExpr(decl->Value, indentation + 4, stmt->Loc.Line);
             }
@@ -176,12 +176,12 @@ namespace BlackLua::Internal {
         }
 
         if (StmtParamDecl* decl = GetNode<StmtParamDecl>(stmt)) {
-            m_Output += fmt::format("ParamDeclStmt \"{}\", '{}'\n", decl->Identifier, VariableTypeToString(decl->ResolvedType));
+            m_Output += fmt::format("ParamDeclStmt \"{}\", '{}'\n", decl->Identifier, TypeInfoToString(decl->ResolvedType));
             return;
         }
 
         if (StmtFunctionDecl* decl = GetNode<StmtFunctionDecl>(stmt)) {
-            m_Output += fmt::format("FunctionDeclStmt \"{}\" '{}' {}\n", decl->Name, VariableTypeToString(decl->ResolvedType), (decl->Extern) ? "extern" : "");
+            m_Output += fmt::format("FunctionDeclStmt \"{}\" '{}' {}\n", decl->Name, TypeInfoToString(decl->ResolvedType), (decl->Extern) ? "extern" : "");
             DumpNodeList(decl->Parameters, indentation + 4);
             if (decl->Body) {
                 DumpNodeStmt(decl->Body, indentation + 4, stmt->Loc.Line);
@@ -203,7 +203,7 @@ namespace BlackLua::Internal {
         }
 
         if (StmtMethodDecl* decl = GetNode<StmtMethodDecl>(stmt)) {
-            m_Output += fmt::format("MethodDeclStmt \"{}\" '{}'\n", decl->Name, VariableTypeToString(decl->ResolvedType));
+            m_Output += fmt::format("MethodDeclStmt \"{}\" '{}'\n", decl->Name, TypeInfoToString(decl->ResolvedType));
             DumpNodeList(decl->Parameters, indentation + 4);
             if (decl->Body) {
                 DumpNodeStmt(decl->Body, indentation + 4, stmt->Loc.Line);

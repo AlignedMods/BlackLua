@@ -2,7 +2,7 @@
 
 #include "internal/compiler/ast/node_list.hpp"
 #include "internal/compiler/core/string_view.hpp"
-#include "internal/compiler/variable_type.hpp"
+#include "internal/compiler/type_info.hpp"
 #include "internal/compiler/core/source_location.hpp"
 
 #include <variant>
@@ -154,23 +154,32 @@ namespace BlackLua::Internal {
     }
 
 #pragma endregion
+
+#pragma region ExprValueType
+
+    enum class ExprValueType {
+        LValue,
+        RValue
+    };
+
+#pragma endregion
     
     struct ExprConstant {
         std::variant<ConstantBool*, ConstantChar*, ConstantInt*, ConstantLong*, ConstantFloat*, ConstantDouble*, ConstantString*> Data;
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
 
     struct ExprVarRef {
         StringView Identifier;
     
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
 
     struct ExprArrayAccess {
         NodeExpr* Parent = nullptr;
         NodeExpr* Index = nullptr;
     
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
     
     struct ExprSelf {};
@@ -179,8 +188,8 @@ namespace BlackLua::Internal {
         NodeExpr* Parent = nullptr;
         StringView Member;
     
-        VariableType* ResolvedParentType = nullptr;
-        VariableType* ResolvedMemberType = nullptr;
+        TypeInfo* ResolvedParentType = nullptr;
+        TypeInfo* ResolvedMemberType = nullptr;
     };
 
     struct ExprMethodCall {
@@ -189,8 +198,8 @@ namespace BlackLua::Internal {
 
         NodeList Arguments;
 
-        VariableType* ResolvedParentType = nullptr;
-        VariableType* ResolvedMemberType = nullptr;
+        TypeInfo* ResolvedParentType = nullptr;
+        TypeInfo* ResolvedMemberType = nullptr;
     };
     
     struct ExprCall {
@@ -199,7 +208,7 @@ namespace BlackLua::Internal {
 
         bool Extern = false;
 
-        VariableType* ResolvedReturnType = nullptr;
+        TypeInfo* ResolvedReturnType = nullptr;
     };
     
     struct ExprParen {
@@ -213,8 +222,8 @@ namespace BlackLua::Internal {
         NodeExpr* Expression = nullptr;
 
         CastType ResolvedCastType = CastType::Integral;
-        VariableType* ResolvedSrcType = nullptr;
-        VariableType* ResolvedDstType = nullptr;
+        TypeInfo* ResolvedSrcType = nullptr;
+        TypeInfo* ResolvedDstType = nullptr;
     };
 
     // A node which is used only for implcit casts inserted by the semantic analyzer/type checker
@@ -223,15 +232,15 @@ namespace BlackLua::Internal {
         NodeExpr* Expression = nullptr;
 
         CastType ResolvedCastType = CastType::Integral;
-        VariableType* ResolvedSrcType = nullptr;
-        VariableType* ResolvedDstType = nullptr;
+        TypeInfo* ResolvedSrcType = nullptr;
+        TypeInfo* ResolvedDstType = nullptr;
     };
     
     struct ExprUnaryOperator {
         NodeExpr* Expression = nullptr;
         UnaryOperatorType Type = UnaryOperatorType::Invalid;
     
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
     
     struct ExprBinaryOperator {
@@ -239,8 +248,8 @@ namespace BlackLua::Internal {
         NodeExpr* RHS = nullptr;
         BinaryOperatorType Type = BinaryOperatorType::Invalid;
     
-        VariableType* ResolvedType = nullptr;
-        VariableType* ResolvedSourceType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
+        TypeInfo* ResolvedSourceType = nullptr;
     };
 
     struct NodeExpr {
@@ -254,6 +263,11 @@ namespace BlackLua::Internal {
 
         SourceRange Range;
         SourceLocation Loc;
+
+        ExprValueType Type = ExprValueType::RValue;
+
+        bool IsLValue() const { return Type == ExprValueType::LValue; }
+        bool IsRValue() const { return Type == ExprValueType::RValue; }
     };
 
     template <typename T>

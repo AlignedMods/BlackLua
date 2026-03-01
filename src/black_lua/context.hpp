@@ -1,10 +1,11 @@
 #pragma once
 
-#include "internal/compiler/variable_type.hpp"
+#include "core.hpp"
 
 #include <variant>
 #include <vector>
 #include <unordered_map>
+#include <string>
 
 namespace BlackLua::Internal {
     class Parser;
@@ -15,9 +16,12 @@ namespace BlackLua::Internal {
 
     class StringBuilder;
     struct NodeList;
+    struct TypeInfo;
 }
 
 namespace BlackLua {
+
+    struct Context;
 
     struct CompiledSource;
     class Allocator;
@@ -109,7 +113,7 @@ namespace BlackLua {
 
         friend class Internal::StringBuilder;
         friend struct Internal::NodeList;
-        friend Internal::VariableType* Internal::CreateVarType(Context* ctx, Internal::PrimitiveType type, bool lvalue, decltype(Internal::VariableType::Data) data);
+        friend struct Internal::TypeInfo;
 
     private:
         std::unordered_map<std::string, CompiledSource*> m_Modules;

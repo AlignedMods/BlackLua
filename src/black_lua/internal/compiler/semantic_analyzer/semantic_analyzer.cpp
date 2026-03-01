@@ -2,10 +2,11 @@
 
 namespace BlackLua::Internal {
 
-    SemanticAnalyzer::SemanticAnalyzer(ASTNodes* nodes, Context* ctx) : m_TypeChecker(ctx) {
+    SemanticAnalyzer::SemanticAnalyzer(ASTNodes* nodes, Context* ctx) : m_TypeChecker(ctx, nodes) {
         m_Nodes = nodes;
         m_Context = ctx;
 
+        m_TypeChecker.CheckImpl();
         AnalyzeImpl();
     }
 
@@ -28,193 +29,59 @@ namespace BlackLua::Internal {
         return m_Nodes->at(m_Index++);
     }
 
-    VariableType* SemanticAnalyzer::HandleExprConstant(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprConstant(NodeExpr* expr) {
         ExprConstant* con = GetNode<ExprConstant>(expr);
-
-        VariableType* type = nullptr;
-
-        if (GetNode<ConstantBool>(con)) {
-            type = CreateVarType(m_Context, PrimitiveType::Bool, false, true);
-        } else if (GetNode<ConstantChar>(con)) {
-            type = CreateVarType(m_Context, PrimitiveType::Char, false);
-        } else if (ConstantInt* ci = GetNode<ConstantInt>(con)) {
-            type = CreateVarType(m_Context, PrimitiveType::Int, false, !ci->Unsigned);
-        } else if (ConstantLong* cl = GetNode<ConstantLong>(con)) {
-            type = CreateVarType(m_Context, PrimitiveType::Long, false, !cl->Unsigned);
-        } else if (GetNode<ConstantFloat>(con)) {
-            type = CreateVarType(m_Context, PrimitiveType::Float, false);
-        } else if (GetNode<ConstantDouble>(con)) {
-            type = CreateVarType(m_Context, PrimitiveType::Double, false);
-        } else if (GetNode<ConstantString>(con)) {
-            type = CreateVarType(m_Context, PrimitiveType::String, false);
-        }
-        
-        con->ResolvedType = type;
-        
-        return type;
+        return con->ResolvedType;
     }
 
-    VariableType* SemanticAnalyzer::HandleExprVarRef(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprVarRef(NodeExpr* expr) {
         ExprVarRef* ref = GetNode<ExprVarRef>(expr);
-
-        std::string ident = fmt::format("{}", ref->Identifier);
-
-        // Check whether this variable could be coming from "self"
-        if (m_ActiveStruct) {
-            for (const auto& field : m_ActiveStruct->Fields) {
-                if (field.Identifier == ref->Identifier) {
-                    // We have a match
-                    ExprMember* memberExpr = Allocate<ExprMember>();
-                    memberExpr->Member = ref->Identifier;
-                    memberExpr->Parent = Allocate<NodeExpr>(Allocate<ExprSelf>(), expr->Range, expr->Loc);
-                    memberExpr->ResolvedMemberType = field.ResolvedType;
-                    memberExpr->ResolvedParentType = CreateVarType(m_Context, PrimitiveType::Structure, true, *m_ActiveStruct);
-
-                    BLUA_ASSERT(false, "todo");
-
-                    expr->Data = memberExpr;
-                    return memberExpr->ResolvedMemberType;
-                }
-            }
-        }
-
-        // Next we check all the active scopes
-        {
-            ptrdiff_t currentScopeIndex = static_cast<ptrdiff_t>(m_Scopes.size() - 1);
-
-            while (currentScopeIndex > 0) {
-                if (m_Scopes[static_cast<size_t>(currentScopeIndex)].DeclaredSymbols.contains(ident)) {
-                    Declaration decl = m_Scopes[static_cast<size_t>(currentScopeIndex)].DeclaredSymbols.at(ident);
-
-                    ref->ResolvedType = CreateVarType(m_Context, decl.Type->Type, true, decl.Type->Data);
-                    return ref->ResolvedType;
-                }
-
-                currentScopeIndex--;
-            }
-        }
-
-        // Lastly we check the global variables
-        if (m_DeclaredSymbols.contains(ident)) {
-            Declaration decl = m_DeclaredSymbols.at(ident);
-
-            ref->ResolvedType = CreateVarType(m_Context, decl.Type->Type, true, decl.Type->Data);
-            return ref->ResolvedType;
-        }
-
-        // If all else fails, there is no such variable declared anywhere
-        m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
-                                       expr->Range.Start.Line, expr->Range.Start.Column,
-                                       expr->Range.End.Line, expr->Range.End.Column,
-                                       fmt::format("Undeclared identifier {}", ident));
-        return nullptr;
+        return ref->ResolvedType;
     }
 
-    VariableType* SemanticAnalyzer::HandleExprArrayAccess(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprArrayAccess(NodeExpr* expr) {
         BLUA_ASSERT(false, "todo");
     }
 
-    VariableType* SemanticAnalyzer::HandleExprSelf(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprSelf(NodeExpr* expr) {
         BLUA_ASSERT(false, "todo");
     }
 
-    VariableType* SemanticAnalyzer::HandleExprMember(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprMember(NodeExpr* expr) {
         BLUA_ASSERT(false, "todo");
     }
 
-    VariableType* SemanticAnalyzer::HandleExprMethodCall(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprMethodCall(NodeExpr* expr) {
         BLUA_ASSERT(false, "todo");
     }
 
-    VariableType* SemanticAnalyzer::HandleExprCall(NodeExpr* expr) {
-        ExprCall* call = GetNode<ExprCall>(expr);
-
-        std::string ident = fmt::format("{}", call->Name);
-
-        if (!m_DeclaredSymbols.contains(ident)) {
-            m_Context->ReportCompilerError(expr->Loc.Line, expr->Loc.Column, 
-                                           expr->Range.Start.Line, expr->Range.Start.Column,
-                                           expr->Range.End.Line, expr->Range.End.Column,
-                                           fmt::format("Calling undeclared identifier {}", ident));
-
-            return nullptr;
-        }
-
-        Declaration decl = m_DeclaredSymbols.at(ident);
-
-        call->Extern = decl.Extern;
-        call->ResolvedReturnType = decl.Type;
-        return call->ResolvedReturnType;
+    TypeInfo* SemanticAnalyzer::HandleExprCall(NodeExpr* expr) {
+        BLUA_ASSERT(false, "todo");
     }
 
-    VariableType* SemanticAnalyzer::HandleExprParen(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprParen(NodeExpr* expr) {
         ExprParen* paren = GetNode<ExprParen>(expr);
         return HandleNodeExpression(paren->Expression);
     }
 
-    VariableType* SemanticAnalyzer::HandleExprCast(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprCast(NodeExpr* expr) {
         BLUA_ASSERT(false, "todo");
     }
 
-    VariableType* SemanticAnalyzer::HandleExprUnaryOperator(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprUnaryOperator(NodeExpr* expr) {
         ExprUnaryOperator* unop = GetNode<ExprUnaryOperator>(expr);
 
-        VariableType* type = HandleNodeExpression(unop->Expression);
+        TypeInfo* type = HandleNodeExpression(unop->Expression);
         unop->ResolvedType = type;
         return type;
     }
 
-    VariableType* SemanticAnalyzer::HandleExprBinaryOperator(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleExprBinaryOperator(NodeExpr* expr) {
         ExprBinaryOperator* binop = GetNode<ExprBinaryOperator>(expr);
-        VariableType* LHSType = HandleNodeExpression(binop->LHS);
-        VariableType* RHSType = HandleNodeExpression(binop->RHS);
-
-        // First we transform the AST with any needed implicit casts
-        if (binop->Type == BinaryOperatorType::Eq) {
-            LHSType = m_TypeChecker.RequireLValue(LHSType, binop->LHS);
-            RHSType = m_TypeChecker.RequireRValue(RHSType, binop->RHS);
-        } else {
-            LHSType = m_TypeChecker.RequireRValue(LHSType, binop->LHS);
-            RHSType = m_TypeChecker.RequireRValue(RHSType, binop->RHS);
-        }
-
-        m_TypeChecker.InsertImplicitCast(LHSType, RHSType, binop->LHS, binop->RHS);
-
-        switch (binop->Type) {
-            case BinaryOperatorType::Add:     case BinaryOperatorType::AddInPlace:
-            case BinaryOperatorType::Sub:     case BinaryOperatorType::SubInPlace:
-            case BinaryOperatorType::Mul:     case BinaryOperatorType::MulInPlace:
-            case BinaryOperatorType::Div:     case BinaryOperatorType::DivInPlace:
-            case BinaryOperatorType::Mod:     case BinaryOperatorType::ModInPlace:
-            case BinaryOperatorType::And:     case BinaryOperatorType::AndInPlace:
-            case BinaryOperatorType::Or:      case BinaryOperatorType::OrInPlace:
-            case BinaryOperatorType::Xor:     case BinaryOperatorType::XorInPlace: {
-                binop->ResolvedType = LHSType;
-                binop->ResolvedSourceType = LHSType;
-                break;
-            }
-
-            case BinaryOperatorType::IsEq:    case BinaryOperatorType::IsNotEq:
-            case BinaryOperatorType::Less:    case BinaryOperatorType::LessOrEq:
-            case BinaryOperatorType::Greater: case BinaryOperatorType::GreaterOrEq:
-            case BinaryOperatorType::BitAnd:
-            case BinaryOperatorType::BitOr: {
-                binop->ResolvedType = CreateVarType(m_Context, PrimitiveType::Bool, false, true);
-                binop->ResolvedSourceType = LHSType;
-                break;
-            }
-
-            case BinaryOperatorType::Eq: {
-                binop->ResolvedType = LHSType;
-                binop->ResolvedSourceType = RHSType;
-                break;
-            }
-        }
-
         return binop->ResolvedType;
     }
 
-    VariableType* SemanticAnalyzer::HandleNodeExpression(NodeExpr* expr) {
+    TypeInfo* SemanticAnalyzer::HandleNodeExpression(NodeExpr* expr) {
         if (GetNode<ExprConstant>(expr)) {
             return HandleExprConstant(expr);
         } else if (GetNode<ExprVarRef>(expr)) {
@@ -264,22 +131,12 @@ namespace BlackLua::Internal {
             return;
         }
 
-        VariableType* type = m_TypeChecker.GetVariableTypeFromString(StringView(decl->Type.Data(), decl->Type.Size()));
-        decl->ResolvedType = type;
-
         Declaration d;
         d.Decl = stmt;
         d.Extern = false;
-        d.Type = type;
+        d.Type = decl->ResolvedType;
 
         symbolTable[ident] = d;
-
-        // Handle potential initilization
-        if (decl->Value) {
-            VariableType* valType = HandleNodeExpression(decl->Value);
-            valType = m_TypeChecker.RequireRValue(valType, decl->Value);
-            m_TypeChecker.InsertImplicitCast(d.Type, valType, nullptr, decl->Value);
-        }
     }
 
     void SemanticAnalyzer::HandleStmtParamDecl(NodeStmt* stmt) {
@@ -333,10 +190,8 @@ namespace BlackLua::Internal {
         Declaration d;
         d.Decl = stmt;
         d.Extern = decl->Extern;
-        d.Type = m_TypeChecker.GetVariableTypeFromString(StringView(decl->ReturnType.Data(), decl->ReturnType.Size()));
+        d.Type = decl->ResolvedType;
         m_DeclaredSymbols[ident] = d;
-
-        decl->ResolvedType = d.Type;
     }
 
     void SemanticAnalyzer::HandleStmtStructDecl(NodeStmt* stmt) {
@@ -422,7 +277,7 @@ namespace BlackLua::Internal {
         BLUA_UNREACHABLE();
     }
 
-    void SemanticAnalyzer::PushScope(VariableType* returnType) {
+    void SemanticAnalyzer::PushScope(TypeInfo* returnType) {
         Scope scope;
         if (returnType) {
             scope.ReturnType = returnType;

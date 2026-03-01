@@ -29,17 +29,17 @@ namespace BlackLua::Internal {
         Structure
     };
 
-    struct VariableType;
+    struct TypeInfo;
 
     struct ArrayDeclaration {
-        VariableType* Type = nullptr;
+        TypeInfo* Type = nullptr;
     };
 
     struct StructFieldDeclaration {
         StringView Identifier;
         size_t Offset = 0;
 
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
 
     struct StructDeclaration {
@@ -49,21 +49,24 @@ namespace BlackLua::Internal {
         size_t Size = 0;
     };
 
-    struct VariableType {
+    struct TypeInfo {
         PrimitiveType Type = PrimitiveType::Invalid;
-        bool LValue = false;
-        std::variant<bool, VariableType*, ArrayDeclaration, StructDeclaration> Data;
+        std::variant<bool, TypeInfo*, ArrayDeclaration, StructDeclaration> Data;
 
-        bool operator==(const VariableType& other) {
-            return Type == other.Type;
-        }
+        static TypeInfo* Create(Context* ctx, PrimitiveType type, decltype(TypeInfo::Data) data = {});
 
-        bool operator!=(const VariableType& other) {
-            return !(operator==(other));
+        static bool IsEqual(TypeInfo* lhs, TypeInfo* rhs) {
+            if (lhs->Type != rhs->Type) { return false; }
+
+            if (lhs->IsIntegral() && rhs->IsIntegral()) {
+                return lhs->IsSigned() == rhs->IsSigned();
+            }
+
+            return true;
         }
 
         bool IsIntegral() const {
-            return Type == PrimitiveType::Bool || Type == PrimitiveType::Char || Type == PrimitiveType::Short || Type == PrimitiveType::Int || Type == PrimitiveType::Long;
+            return Type == PrimitiveType::Char || Type == PrimitiveType::Short || Type == PrimitiveType::Int || Type == PrimitiveType::Long;
         }
 
         bool IsFloatingPoint() const {
@@ -77,23 +80,48 @@ namespace BlackLua::Internal {
 
             return std::get<bool>(Data);
         }
+
+        size_t GetSize() const {
+            switch (Type) {
+                case PrimitiveType::Void: return 0;
+                case PrimitiveType::Bool: return 1;
+                case PrimitiveType::Char: return 1;
+                case PrimitiveType::Short: return 2;
+                case PrimitiveType::Int: return 4;
+                case PrimitiveType::Float: return 4;
+                case PrimitiveType::Long: return 8;
+                case PrimitiveType::Double: return 8;
+
+                case PrimitiveType::String: {
+                    return sizeof(void*);
+                }
+
+                case PrimitiveType::Array: {
+                    return sizeof(void*);
+                }
+
+                case PrimitiveType::Structure: {
+                    StructDeclaration decl = std::get<StructDeclaration>(Data);
+                    return decl.Size;
+                }
+
+                default: BLUA_UNREACHABLE();
+            }
+
+            return 0;
+        }
     };
 
-    VariableType* CreateVarType(Context* ctx, PrimitiveType type, bool lvalue = false, decltype(VariableType::Data) data = {});
-
-    inline std::string VariableTypeToString(VariableType* type) {
+    inline std::string TypeInfoToString(TypeInfo* type) {
         std::string str;
-        if (type->LValue) {
-            str += "lvalue ";
-        }
 
         if (!type->IsSigned() && type->IsIntegral()) {
             str = "u";
         }
 
         switch (type->Type) {
-            case PrimitiveType::Invalid: str = "invalid"; break;
-            case PrimitiveType::Void:    str = "void"; break;
+            case PrimitiveType::Invalid: str += "invalid"; break;
+            case PrimitiveType::Void:    str += "void"; break;
             case PrimitiveType::Bool:    str += "bool"; break;
             case PrimitiveType::Char:    str += "char"; break;
             case PrimitiveType::Short:   str += "short"; break;
@@ -106,49 +134,19 @@ namespace BlackLua::Internal {
             case PrimitiveType::Array: {
                 ArrayDeclaration decl = std::get<ArrayDeclaration>(type->Data);
 
-                str = fmt::format("{}[]", VariableTypeToString(decl.Type));
+                str = fmt::format("{}[]", TypeInfoToString(decl.Type));
                 break;
             }
 
             case PrimitiveType::Structure: {
                 StructDeclaration decl = std::get<StructDeclaration>(type->Data);
-                str = fmt::format("struct {}", decl.Identifier);
 
+                str = fmt::format("struct {}", decl.Identifier);
                 break;
             }
         }
 
         return str;
-    }
-
-    inline size_t GetTypeSize(VariableType* type) {
-        switch (type->Type) {
-            case PrimitiveType::Void: return 0;
-            case PrimitiveType::Bool: return 1;
-            case PrimitiveType::Char: return 1;
-            case PrimitiveType::Short: return 2;
-            case PrimitiveType::Int: return 4;
-            case PrimitiveType::Float: return 4;
-            case PrimitiveType::Long: return 8;
-            case PrimitiveType::Double: return 8;
-
-            case PrimitiveType::String: {
-                return sizeof(void*);
-            }
-
-            case PrimitiveType::Array: {
-                return sizeof(void*);
-            }
-
-            case PrimitiveType::Structure: {
-                StructDeclaration decl = std::get<StructDeclaration>(type->Data);
-                return decl.Size;
-            }
-
-            default: BLUA_ASSERT(false, "Unreachable!");
-        }
-
-        return 0;
     }
 
 } // namespace BlackLua::Internal

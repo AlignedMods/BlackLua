@@ -62,7 +62,7 @@ namespace BlackLua::Internal {
         return static_cast<int32_t>(m_LabelCount - 1);
     }
 
-    void Emitter::PushBytes(size_t bytes, VariableType* type, const std::string& debugData) {
+    void Emitter::PushBytes(size_t bytes, TypeInfo* type, const std::string& debugData) {
         m_OpCodes.emplace_back(OpCodeType::Push, OpCodePush(bytes, type), debugData);
     }
 
@@ -177,7 +177,7 @@ namespace BlackLua::Internal {
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeStackSlot(index));
             IncrementStackSlotCount();
-            PushBytes(GetTypeSize(arrAccess->ResolvedType), arrAccess->ResolvedType);
+            PushBytes(arrAccess->ResolvedType->GetSize(), arrAccess->ResolvedType);
             IncrementStackSlotCount();
             m_OpCodes.emplace_back(OpCodeType::CallExtern, "bl__array__index__");
         
@@ -191,12 +191,12 @@ namespace BlackLua::Internal {
         if (ExprMember* mem = GetNode<ExprMember>(expr)) {
             CompileStackSlot slot = EmitNodeExpression(mem->Parent);
         
-            VariableType* structType = mem->ResolvedParentType;
+            TypeInfo* structType = mem->ResolvedParentType;
             for (const auto& field : std::get<StructDeclaration>(structType->Data).Fields) {
                 if (field.Identifier == mem->Member) {
                     CompileStackSlot s = slot;
                     s.Slot.Offset += field.Offset;
-                    s.Slot.Size = GetTypeSize(field.ResolvedType);
+                    s.Slot.Size = field.ResolvedType->GetSize();
                     return s;
                 }
             }
@@ -208,7 +208,7 @@ namespace BlackLua::Internal {
 
         if (ExprMethodCall* call = GetNode<ExprMethodCall>(expr)) {
             CompileStackSlot slot = EmitNodeExpression(call->Parent);
-            VariableType* structType = call->ResolvedParentType;
+            TypeInfo* structType = call->ResolvedParentType;
             Declaration decl = m_DeclaredSymbols[m_DeclaredSymbolMap.at(fmt::format("{}::{}", std::get<StructDeclaration>(structType->Data).Identifier, call->Member))];
         
             std::vector<CompileStackSlot> parameters; 
@@ -252,7 +252,7 @@ namespace BlackLua::Internal {
                 }
         
                 if (call->ResolvedReturnType->Type != PrimitiveType::Void) {
-                    PushBytes(GetTypeSize(call->ResolvedReturnType), call->ResolvedReturnType, "return slot");
+                    PushBytes(call->ResolvedReturnType->GetSize(), call->ResolvedReturnType, "return slot");
                     IncrementStackSlotCount();
                 }
 
@@ -273,7 +273,7 @@ namespace BlackLua::Internal {
                 }
         
                 if (call->ResolvedReturnType->Type != PrimitiveType::Void) {
-                    PushBytes(GetTypeSize(call->ResolvedReturnType), call->ResolvedReturnType, "return slot");
+                    PushBytes(call->ResolvedReturnType->GetSize(), call->ResolvedReturnType, "return slot");
                     IncrementStackSlotCount();
                 }
 
@@ -464,7 +464,7 @@ namespace BlackLua::Internal {
                     CASE_CAST_OUTER_INTEGRAL(Double, F64)
                 }
             } else if (cast->ResolvedCastType == CastType::LValueToRValue) {
-                return GetStackTop();
+                return slot;
             }
 
             #undef CASE_CAST
@@ -584,7 +584,7 @@ namespace BlackLua::Internal {
                     int32_t ifEnd = m_LabelCount;
                     m_LabelCount++;
                     
-                    PushBytes(1, CreateVarType(m_Context, PrimitiveType::Bool));
+                    PushBytes(1, TypeInfo::Create(m_Context, PrimitiveType::Bool));
                     IncrementStackSlotCount();
                     CompileStackSlot result = GetStackTop();
 
@@ -621,7 +621,7 @@ namespace BlackLua::Internal {
                     int32_t ifEnd = m_LabelCount;
                     m_LabelCount++;
                     
-                    PushBytes(1, CreateVarType(m_Context, PrimitiveType::Bool));
+                    PushBytes(1, TypeInfo::Create(m_Context, PrimitiveType::Bool));
                     IncrementStackSlotCount();
                     CompileStackSlot result = GetStackTop();
 
@@ -680,7 +680,7 @@ namespace BlackLua::Internal {
         if (decl->Value) {
             EmitNodeExpression(decl->Value);
         } else {
-            PushBytes(GetTypeSize(decl->ResolvedType), decl->ResolvedType, fmt::format("Declaration of {}", decl->Identifier));
+            PushBytes(decl->ResolvedType->GetSize(), decl->ResolvedType, fmt::format("Declaration of {}", decl->Identifier));
             IncrementStackSlotCount();
         }
         
@@ -701,7 +701,7 @@ namespace BlackLua::Internal {
             dd.ResolvedType = decl->ResolvedType;
             m_ReflectionData.Declarations[fmt::format("{}", decl->Identifier)] = dd;
         }
-        d.Size = GetTypeSize(decl->ResolvedType);
+        d.Size = decl->ResolvedType->GetSize();
         d.Type = decl->ResolvedType;
         d.Destruct = true;
         d.Identifier = decl->Identifier;
@@ -713,7 +713,7 @@ namespace BlackLua::Internal {
     void Emitter::EmitNodeParamDecl(NodeStmt* stmt) {
         StmtParamDecl* decl = GetNode<StmtParamDecl>(stmt);
         
-        PushBytes(GetTypeSize(decl->ResolvedType), decl->ResolvedType, fmt::format("Declaration of {}", decl->Identifier));
+        PushBytes(decl->ResolvedType->GetSize(), decl->ResolvedType, fmt::format("Declaration of {}", decl->Identifier));
         auto& map = (m_CurrentStackFrame != 0) ? m_CurrentStackFrame->DeclaredSymbolMap : m_DeclaredSymbolMap;
         auto& vector = (m_CurrentStackFrame != 0) ? m_CurrentStackFrame->DeclaredSymbols : m_DeclaredSymbols;
         
@@ -726,7 +726,7 @@ namespace BlackLua::Internal {
             d.Slot.Slot = m_SlotCount;
             d.Slot.Relative = false; 
         }
-        d.Size = GetTypeSize(decl->ResolvedType);
+        d.Size = decl->ResolvedType->GetSize();
         d.Type = decl->ResolvedType;
         d.Destruct = true;
         d.Identifier = decl->Identifier;
@@ -743,7 +743,7 @@ namespace BlackLua::Internal {
         std::string ident = fmt::format("{}", decl->Name);
         Declaration d;
         d.Slot.Slot = m_LabelCount++;
-        d.Size = GetTypeSize(decl->ResolvedType);
+        d.Size = decl->ResolvedType->GetSize();
         d.Extern = decl->Extern;
         d.Type = decl->ResolvedType;
         d.Identifier = decl->Name;
@@ -762,7 +762,7 @@ namespace BlackLua::Internal {
                 std::string ident = fmt::format("{}::{}", decl->Identifier, mdecl->Name);
                 Declaration d;
                 d.Slot.Slot = m_LabelCount++;
-                d.Size = GetTypeSize(mdecl->ResolvedType);
+                d.Size = mdecl->ResolvedType->GetSize();
                 d.Type = mdecl->ResolvedType;
                 d.Identifier = mdecl->Name;
                 m_DeclaredSymbols.push_back(d);

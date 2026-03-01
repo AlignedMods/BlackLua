@@ -17,7 +17,7 @@ namespace BlackLua::Internal {
         struct Declaration {
             CompileStackSlot Slot;
             size_t Size = 0;
-            VariableType* Type = nullptr;
+            TypeInfo* Type = nullptr;
             bool Extern = false;
             bool Destruct = false;
 
@@ -41,7 +41,7 @@ namespace BlackLua::Internal {
         StackSlotIndex CompileToRuntimeStackSlot(CompileStackSlot slot);
     
         int32_t CreateLabel(const std::string& debugData = {});
-        void PushBytes(size_t bytes, VariableType* type, const std::string& debugData = {});
+        void PushBytes(size_t bytes, TypeInfo* type, const std::string& debugData = {});
         void IncrementStackSlotCount();
         CompileStackSlot GetStackTop();
         void EmitDestructors(const std::vector<Declaration>& declarations);

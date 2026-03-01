@@ -13,13 +13,13 @@ namespace BlackLua::Internal {
     class SemanticAnalyzer {
     private:
         struct Declaration {
-            VariableType* Type = nullptr;
+            TypeInfo* Type = nullptr;
             NodeStmt* Decl = nullptr;
             bool Extern = false;
         };
 
         struct Scope {
-            VariableType* ReturnType = nullptr; // This is only a valid type in function scopes!
+            TypeInfo* ReturnType = nullptr; // This is only a valid type in function scopes!
             std::unordered_map<std::string, Declaration> DeclaredSymbols;
         };
 
@@ -32,19 +32,19 @@ namespace BlackLua::Internal {
         Node* Peek(size_t amount = 0);
         Node* Consume();
 
-        VariableType* HandleExprConstant(NodeExpr* expr);
-        VariableType* HandleExprVarRef(NodeExpr* expr);
-        VariableType* HandleExprArrayAccess(NodeExpr* expr);
-        VariableType* HandleExprSelf(NodeExpr* expr);
-        VariableType* HandleExprMember(NodeExpr* expr);
-        VariableType* HandleExprMethodCall(NodeExpr* expr);
-        VariableType* HandleExprCall(NodeExpr* expr);
-        VariableType* HandleExprParen(NodeExpr* expr);
-        VariableType* HandleExprCast(NodeExpr* expr);
-        VariableType* HandleExprUnaryOperator(NodeExpr* expr);
-        VariableType* HandleExprBinaryOperator(NodeExpr* expr);
+        TypeInfo* HandleExprConstant(NodeExpr* expr);
+        TypeInfo* HandleExprVarRef(NodeExpr* expr);
+        TypeInfo* HandleExprArrayAccess(NodeExpr* expr);
+        TypeInfo* HandleExprSelf(NodeExpr* expr);
+        TypeInfo* HandleExprMember(NodeExpr* expr);
+        TypeInfo* HandleExprMethodCall(NodeExpr* expr);
+        TypeInfo* HandleExprCall(NodeExpr* expr);
+        TypeInfo* HandleExprParen(NodeExpr* expr);
+        TypeInfo* HandleExprCast(NodeExpr* expr);
+        TypeInfo* HandleExprUnaryOperator(NodeExpr* expr);
+        TypeInfo* HandleExprBinaryOperator(NodeExpr* expr);
 
-        VariableType* HandleNodeExpression(NodeExpr* expr);
+        TypeInfo* HandleNodeExpression(NodeExpr* expr);
 
         void HandleStmtCompound(NodeStmt* stmt);
         void HandleStmtVarDecl(NodeStmt* stmt);
@@ -63,7 +63,7 @@ namespace BlackLua::Internal {
 
         void HandleNode(Node* node);
 
-        void PushScope(VariableType* returnType = nullptr);
+        void PushScope(TypeInfo* returnType = nullptr);
         void PopScope();
 
         template <typename T>

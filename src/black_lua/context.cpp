@@ -28,7 +28,7 @@ namespace BlackLua {
         Internal::CompilerReflectionData ReflectionData;
         Internal::VM VM;
 
-        Internal::VariableType* m_CurrentStackTop = nullptr;
+        Internal::TypeInfo* m_CurrentStackTop = nullptr;
     };
 
     Context::Context() {}
@@ -123,43 +123,43 @@ namespace BlackLua {
 
     void Context::PushBool(bool b, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(b), Internal::CreateVarType(this, Internal::PrimitiveType::Bool));
+        src->VM.PushBytes(sizeof(b), Internal::TypeInfo::Create(this, Internal::PrimitiveType::Bool));
         src->VM.StoreBool(-1, b);
     }
 
     void Context::PushChar(int8_t c, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(c), Internal::CreateVarType(this, Internal::PrimitiveType::Char));
+        src->VM.PushBytes(sizeof(c), Internal::TypeInfo::Create(this, Internal::PrimitiveType::Char));
         src->VM.StoreChar(-1, c);
     }
 
     void Context::PushShort(int16_t s, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(s), Internal::CreateVarType(this, Internal::PrimitiveType::Short));
+        src->VM.PushBytes(sizeof(s), Internal::TypeInfo::Create(this, Internal::PrimitiveType::Short));
         src->VM.StoreShort(-1, s);
     }
 
     void Context::PushInt(int32_t i, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(i), Internal::CreateVarType(this, Internal::PrimitiveType::Int));
+        src->VM.PushBytes(sizeof(i), Internal::TypeInfo::Create(this, Internal::PrimitiveType::Int));
         src->VM.StoreInt(-1, i);
     }
 
     void Context::PushLong(int64_t l, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(l), Internal::CreateVarType(this, Internal::PrimitiveType::Long));
+        src->VM.PushBytes(sizeof(l), Internal::TypeInfo::Create(this, Internal::PrimitiveType::Long));
         src->VM.StoreLong(-1, l);
     }
 
     void Context::PushFloat(float f, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(f), Internal::CreateVarType(this, Internal::PrimitiveType::Float));
+        src->VM.PushBytes(sizeof(f), Internal::TypeInfo::Create(this, Internal::PrimitiveType::Float));
         src->VM.StoreFloat(-1, f);
     }
 
     void Context::PushDouble(double d, const std::string& module) {
         CompiledSource* src = GetCompiledSource(module);
-        src->VM.PushBytes(sizeof(d), Internal::CreateVarType(this, Internal::PrimitiveType::Double));
+        src->VM.PushBytes(sizeof(d), Internal::TypeInfo::Create(this, Internal::PrimitiveType::Double));
         src->VM.StoreDouble(-1, d);
     }
 
@@ -235,11 +235,11 @@ namespace BlackLua {
         
         for (const auto& field : std::get<Internal::StructDeclaration>(slot.ResolvedType->Data).Fields) {
             if (Internal::StringView(name.data(), name.size()) == field.Identifier) {
-                src->VM.Ref({index, field.Offset, GetTypeSize(field.ResolvedType)}, field.ResolvedType);
+                src->VM.Ref({index, field.Offset, field.ResolvedType->GetSize()}, field.ResolvedType);
             }
         }
 
-        ReportRuntimeError(fmt::format("Could find field {} in {}", name, Internal::VariableTypeToString(slot.ResolvedType)));
+        ReportRuntimeError(fmt::format("Could find field {} in {}", name, Internal::TypeInfoToString(slot.ResolvedType)));
     }
 
     bool Context::GetBool(int32_t index, const std::string& module) {
@@ -299,7 +299,7 @@ namespace BlackLua {
 
         BLUA_ASSERT(src->ReflectionData.Declarations.contains(str), "Trying to call an unknown function");
         BLUA_ASSERT(src->ReflectionData.Declarations.at(str).Type == Internal::ReflectionType::Function, "Trying to call an non-function");
-        size_t size = GetTypeSize(src->ReflectionData.Declarations.at(str).ResolvedType);
+        size_t size = src->ReflectionData.Declarations.at(str).ResolvedType->GetSize();
         if (size > 0) {
             src->VM.PushBytes(size, src->ReflectionData.Declarations.at(str).ResolvedType);
         }

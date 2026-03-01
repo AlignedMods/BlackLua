@@ -3,7 +3,7 @@
 #include "internal/compiler/ast/node_list.hpp"
 #include "internal/compiler/core/string_view.hpp"
 #include "internal/compiler/core/string_builder.hpp"
-#include "internal/compiler/variable_type.hpp"
+#include "internal/compiler/type_info.hpp"
 #include "internal/compiler/core/source_location.hpp"
 
 #include <variant>
@@ -22,14 +22,14 @@ namespace BlackLua::Internal {
     
         NodeExpr* Value = nullptr;
     
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
 
     struct StmtParamDecl {
         StringView Identifier;
         StringBuilder Type;
 
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
 
     struct StmtFunctionDecl {
@@ -43,7 +43,7 @@ namespace BlackLua::Internal {
     
         NodeStmt* Body = nullptr;
 
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
     
     struct StmtStructDecl {
@@ -66,7 +66,7 @@ namespace BlackLua::Internal {
 
         NodeStmt* Body = nullptr;
     
-        VariableType* ResolvedType = nullptr;
+        TypeInfo* ResolvedType = nullptr;
     };
 
     struct StmtWhile {

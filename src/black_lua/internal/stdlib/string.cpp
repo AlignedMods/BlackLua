@@ -1,4 +1,5 @@
 #include "internal/stdlib/string.hpp"
+#include "core.hpp"
 
 namespace BlackLua::Internal {
 

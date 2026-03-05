@@ -1,5 +1,4 @@
 #pragma once
 
-#include "core.hpp"
-#include "internal/allocator.hpp"
-#include "context.hpp"
+#include "black_lua/core.hpp"
+#include "black_lua/context.hpp"

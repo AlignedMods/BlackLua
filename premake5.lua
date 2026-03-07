@@ -1,7 +1,7 @@
-workspace "BlackLua"
+workspace "Aria"
     configurations { "Debug", "Release" }
 
-    project "BlackLua"
+    project "AriaLib"
         language "C++"
         cppdialect "C++20"
         kind "StaticLib"
@@ -9,7 +9,7 @@ workspace "BlackLua"
         targetdir("build/bin/%{cfg.buildcfg}/")
         objdir("build/obj/%{cfg.buildcfg}/")
 
-        files {"src/**.cpp", "src/**.hpp"}
+        files {"src/aria/**.cpp", "src/aria/**.hpp"}
 
         includedirs { "src/", "src/vendor/fmt/include/" }
 
@@ -19,7 +19,7 @@ workspace "BlackLua"
         filter "configurations:Release"
             optimize "On"
 
-    project "BlackLuaTest"
+    project "AriaTest"
         language "C++"
         cppdialect "C++20"
         kind "ConsoleApp"
@@ -31,7 +31,7 @@ workspace "BlackLua"
 
         includedirs { "tests/", "src/", "src/vendor/catch2/", "src/vendor/fmt/include/" }
 
-        links { "BlackLua", "fmt" }
+        links { "AriaLib", "fmt" }
 
         filter "configurations:Debug"
             symbols "On"
@@ -39,7 +39,7 @@ workspace "BlackLua"
         filter "configurations:Release"
             optimize "On"
 
-    project "BlackLuaExample"
+    project "Aria"
         language "C++"
         cppdialect "C++20"
         kind "ConsoleApp"
@@ -47,11 +47,11 @@ workspace "BlackLua"
         targetdir("build/bin/%{cfg.buildcfg}/")
         objdir("build/obj/%{cfg.buildcfg}/")
 
-        files { "example/example.cpp" }
+        files { "frontend/aria.cpp" }
 
         includedirs { "src/", "src/vendor/fmt/include/" }
 
-        links { "BlackLua", "fmt" }
+        links { "AriaLib", "fmt" }
 
         filter "configurations:Debug"
             symbols "On"

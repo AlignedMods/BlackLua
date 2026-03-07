@@ -1,9 +1,9 @@
-#include "black_lua/context.hpp"
+#include "aria/context.hpp"
 
 #include "catch2.hpp"
 
 TEST_CASE("Runtime Variable Declaration") {
-    BlackLua::Context ctx = BlackLua::Context::Create();
+    Aria::Context ctx = Aria::Context::Create();
     ctx.CompileFile("tests/runtime/variable_declaration.bl", "Runtime Variable Declaration");
     ctx.Run("Runtime Variable Declaration");
     
@@ -16,9 +16,9 @@ TEST_CASE("Runtime Variable Declaration") {
 }
 
 TEST_CASE("Runtime Basic Expressions") {
-    BlackLua::Context ctx = BlackLua::Context::Create();
+    Aria::Context ctx = Aria::Context::Create();
     ctx.CompileFile("tests/runtime/basic_expressions.bl", "Runtime Basic Expressions");
-    ctx.AddExternalFunction("ShouldNeverBeCalled", [](BlackLua::Context* ctx) {
+    ctx.AddExternalFunction("ShouldNeverBeCalled", [](Aria::Context* ctx) {
         throw std::runtime_error("function that shouldn't be called was called");
     }, "Runtime Basic Expressions");
     ctx.Run("Runtime Basic Expressions");
@@ -50,9 +50,9 @@ TEST_CASE("Runtime Basic Expressions") {
 }
 
 TEST_CASE("Runtime Functions") {
-    // BlackLua::Context ctx = BlackLua::Context::Create();
+    // Aria::Context ctx = Aria::Context::Create();
     // ctx.CompileFile("tests/runtime/functions.bl", "Runtime Functions");
-    // ctx.AddExternalFunction("ExternalFunction", [](BlackLua::Context* ctx) {
+    // ctx.AddExternalFunction("ExternalFunction", [](Aria::Context* ctx) {
     //     REQUIRE(ctx->GetInt(-3) == 5);
     //     REQUIRE(ctx->GetInt(-2) == 66);
     //     REQUIRE(ctx->GetInt(-1) == 50);
@@ -68,7 +68,7 @@ TEST_CASE("Runtime Functions") {
 }
 
 TEST_CASE("Runtime Control Flow") {
-    // BlackLua::Context ctx = BlackLua::Context::Create();
+    // Aria::Context ctx = Aria::Context::Create();
     // ctx.CompileFile("tests/runtime/control_flow.bl", "Runtime Control Flow");
     // ctx.Run("Runtime Control Flow");
     // 
@@ -90,7 +90,7 @@ TEST_CASE("Runtime Control Flow") {
 }
 
 TEST_CASE("Runtime Recursion") {
-    // BlackLua::Context ctx = BlackLua::Context::Create();
+    // Aria::Context ctx = Aria::Context::Create();
     // ctx.CompileFile("tests/runtime/recursion.bl", "Runtime Recursion");
     // ctx.Run("Runtime Recursion");
     // 
@@ -106,7 +106,7 @@ TEST_CASE("Runtime Recursion") {
 }
 
 TEST_CASE("Runtime Casts") {
-    // BlackLua::Context ctx = BlackLua::Context::Create();
+    // Aria::Context ctx = Aria::Context::Create();
     // ctx.CompileFile("tests/runtime/casts.bl", "Runtime Casts");
     // ctx.Run("Runtime Casts");
     // 
@@ -119,7 +119,7 @@ TEST_CASE("Runtime Casts") {
 }
 
 TEST_CASE("Runtime Structs") {
-    // BlackLua::Context ctx = BlackLua::Context::Create();
+    // Aria::Context ctx = Aria::Context::Create();
     // ctx.CompileFile("tests/runtime/structs.bl", "Runtime Structs");
     // ctx.Run("Runtime Structs");
     // 
@@ -132,7 +132,7 @@ TEST_CASE("Runtime Structs") {
 }
 
 TEST_CASE("Runtime Arrays") {
-    // BlackLua::Context ctx = BlackLua::Context::Create();
+    // Aria::Context ctx = Aria::Context::Create();
     // ctx.CompileFile("tests/runtime/arrays.bl", "Runtime Arrays");
     // fmt::print("{}\n", ctx.Disassemble("Runtime Arrays"));
     // ctx.Run("Runtime Arrays");

@@ -1,9 +1,9 @@
-#include "black_lua/black_lua.hpp"
+#include "aria/aria.hpp"
 
 #include "catch2.hpp"
 
 TEST_CASE("AST Implicit Casts") {
-    BlackLua::Context ctx = BlackLua::Context::Create();
+    Aria::Context ctx = Aria::Context::Create();
     ctx.CompileFile("tests/ast/implicit_casts.bl", "AST Implicit Casts");
     
     fmt::println("{}", ctx.DumpAST("AST Implicit Casts"));

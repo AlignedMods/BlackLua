@@ -200,9 +200,9 @@ namespace Aria::Internal {
             }
 
             case OpCodeType::CallExtern: {
-                const std::string& name = std::get<std::string>(op.Data);
+                const OpCodeCall& call = std::get<OpCodeCall>(op.Data);
 
-                m_Output += fmt::format("{}call extern {}\n", m_Indentation, name);
+                m_Output += fmt::format("{}call extern {}\n", m_Indentation, call.Name);
                 break;
             }
 
@@ -250,7 +250,7 @@ namespace Aria::Internal {
     std::string Disassembler::DisassembleMemRef(const MemRef& mem) {
         if (mem.ContainsStackSlot()) {
             auto slot = mem.GetStackSlot();
-            return fmt::format("%[{}, {}, {}]", slot.Slot, slot.Offset, slot.Size);
+            return fmt::format("%[{}, {}, {}]", slot.Slot, slot.Size, slot.Offset);
         } else if (mem.ContainsGlobal()) {
             auto& global = mem.GetGlobal();
             return fmt::format("${}", global);

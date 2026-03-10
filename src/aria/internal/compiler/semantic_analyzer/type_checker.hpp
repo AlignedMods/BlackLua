@@ -20,7 +20,7 @@ namespace Aria::Internal {
 
     struct ConversionCost {
         ConversionType ConversionType = ConversionType::None;
-        CastType CastType = CastType::Integral;
+        CastType CastType = CastType::Invalid;
 
         bool CastNeeded = false;
         bool SignedMismatch = false;

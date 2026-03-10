@@ -26,41 +26,41 @@ namespace Aria::Internal {
         if (expr == nullptr) return;
         
         if (BooleanConstantExpr* bc = GetNode<BooleanConstantExpr>(expr)) {
-            m_Output += fmt::format("BooleanConstantExpr {} '{}'\n", bc->GetValue(), TypeInfoToString(bc->GetResolvedType())); return;
+            m_Output += fmt::format("BooleanConstantExpr {} '{}' {}\n", bc->GetValue(), TypeInfoToString(bc->GetResolvedType()), ExprValueTypeToString(bc->GetValueType())); return;
         } else if (CharacterConstantExpr* cc = GetNode<CharacterConstantExpr>(expr)) {
-            m_Output += fmt::format("BooleanConstantExpr '{}' '{}'\n", cc->GetValue(), TypeInfoToString(cc->GetResolvedType())); return;
+            m_Output += fmt::format("BooleanConstantExpr '{}' '{}' {}\n", cc->GetValue(), TypeInfoToString(cc->GetResolvedType()), ExprValueTypeToString(cc->GetValueType())); return;
         } else if (IntegerConstantExpr* ic = GetNode<IntegerConstantExpr>(expr)) {
-            m_Output += fmt::format("IntegerConstantExpr {} '{}'\n", ic->GetValue(), TypeInfoToString(ic->GetResolvedType())); return;
+            m_Output += fmt::format("IntegerConstantExpr {} '{}' {}\n", ic->GetValue(), TypeInfoToString(ic->GetResolvedType()), ExprValueTypeToString(ic->GetValueType())); return;
         } else if (FloatingConstantExpr* fc = GetNode<FloatingConstantExpr>(expr)) {
-            m_Output += fmt::format("FloatingConstantExpr {} '{}'\n", fc->GetValue(), TypeInfoToString(fc->GetResolvedType())); return;
+            m_Output += fmt::format("FloatingConstantExpr {} '{}' {}\n", fc->GetValue(), TypeInfoToString(fc->GetResolvedType()), ExprValueTypeToString(fc->GetValueType())); return;
         } else if (StringConstantExpr* sc = GetNode<StringConstantExpr>(expr)) {
-            m_Output += fmt::format("StringConstantExpr \"{}\" '{}'\n", sc->GetValue(), TypeInfoToString(sc->GetResolvedType())); return;
+            m_Output += fmt::format("StringConstantExpr \"{}\" '{}' {}\n", sc->GetValue(), TypeInfoToString(sc->GetResolvedType()), ExprValueTypeToString(sc->GetValueType())); return;
         } else if (VarRefExpr* varRef = GetNode<VarRefExpr>(expr)) {
-            m_Output += fmt::format("VarRefExpr '{}' '{}'\n", varRef->GetRawIdentifier(), TypeInfoToString(varRef->GetResolvedType())); return;
+            m_Output += fmt::format("VarRefExpr '{}' '{}' {}\n", varRef->GetRawIdentifier(), TypeInfoToString(varRef->GetResolvedType()), ExprValueTypeToString(varRef->GetValueType())); return;
         } else if (CallExpr* call = GetNode<CallExpr>(expr)) {
-            m_Output += fmt::format("CallExpr '{}' {}, '{}'\n", call->GetRawIdentifier(), call->IsExtern() ? "extern" : "", TypeInfoToString(call->GetResolvedType()));
+            m_Output += fmt::format("CallExpr '{}'{}, '{}' {}\n", call->GetRawIdentifier(), call->IsExtern() ? " extern" : "", TypeInfoToString(call->GetResolvedType()), ExprValueTypeToString(call->GetValueType()));
             for (Expr* e : call->GetArguments()) {
                 DumpExpr(e, indentation + 4);
             }
             return;
         } else if (ParenExpr* paren = GetNode<ParenExpr>(expr)) {
-            m_Output += fmt::format("ParenExpr '{}'\n", TypeInfoToString(paren->GetResolvedType()));
+            m_Output += fmt::format("ParenExpr '{}' {}\n", TypeInfoToString(paren->GetResolvedType()), ExprValueTypeToString(paren->GetValueType()));
             DumpExpr(paren->GetChildExpr(), indentation + 4);
             return;
         } else if (CastExpr* cast = GetNode<CastExpr>(expr)) {
-            m_Output += fmt::format("CastExpr '{}' <{}>\n", TypeInfoToString(cast->GetResolvedType()), CastTypeToString(cast->GetCastType()));
+            m_Output += fmt::format("CastExpr '{}' <{}> {}\n", TypeInfoToString(cast->GetResolvedType()), CastTypeToString(cast->GetCastType()), ExprValueTypeToString(cast->GetValueType()));
             DumpExpr(cast->GetChildExpr(), indentation + 4);
             return;
         } else if (ImplicitCastExpr* icast = GetNode<ImplicitCastExpr>(expr)) {
-            m_Output += fmt::format("ImplicitCastExpr '{}' <{}>\n", TypeInfoToString(icast->GetResolvedType()), CastTypeToString(icast->GetCastType()));
+            m_Output += fmt::format("ImplicitCastExpr '{}' <{}> {}\n", TypeInfoToString(icast->GetResolvedType()), CastTypeToString(icast->GetCastType()), ExprValueTypeToString(icast->GetValueType()));
             DumpExpr(icast->GetChildExpr(), indentation + 4);
             return;
         } else if (UnaryOperatorExpr* unOp = GetNode<UnaryOperatorExpr>(expr)) {
-            m_Output += fmt::format("UnaryOperatorExpr '{}' '{}'\n", UnaryOperatorTypeToString(unOp->GetUnaryOperator()), TypeInfoToString(unOp->GetResolvedType()));
+            m_Output += fmt::format("UnaryOperatorExpr '{}' '{}' {}\n", UnaryOperatorTypeToString(unOp->GetUnaryOperator()), TypeInfoToString(unOp->GetResolvedType()), ExprValueTypeToString(unOp->GetValueType()));
             DumpExpr(unOp->GetChildExpr(), indentation + 4);
             return;
         } else if (BinaryOperatorExpr* binOp = GetNode<BinaryOperatorExpr>(expr)) {
-            m_Output += fmt::format("BinaryOperatorExpr '{}' '{}'\n", BinaryOperatorTypeToString(binOp->GetBinaryOperator()), TypeInfoToString(binOp->GetResolvedType()));
+            m_Output += fmt::format("BinaryOperatorExpr '{}' '{}' {}\n", BinaryOperatorTypeToString(binOp->GetBinaryOperator()), TypeInfoToString(binOp->GetResolvedType()), ExprValueTypeToString(binOp->GetValueType()));
             DumpExpr(binOp->GetLHS(), indentation + 4);
             DumpExpr(binOp->GetRHS(), indentation + 4);
             return;

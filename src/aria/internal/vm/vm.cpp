@@ -63,6 +63,24 @@ namespace Aria::Internal {
         m_StackSlotPointer++;
     }
 
+    void VM::Copy(MemRef dstMem, MemRef srcMem) {
+        VMSlice dst = GetVMSlice(dstMem);
+        VMSlice src = GetVMSlice(srcMem);
+
+        ARIA_ASSERT(dst.Size == src.Size, "Invalid VM::Copy() call, sizes of both mems must be the same!");
+
+        memcpy(dst.Memory, src.Memory, src.Size);
+    }
+
+    void VM::Dup(MemRef mem) {
+        VMSlice src = GetVMSlice(mem);
+
+        Alloca(src.Size, src.ResolvedType);
+        VMSlice dst = GetVMSlice(MemRef(-1, src.Size));
+        
+        memcpy(dst.Memory, src.Memory, src.Size);
+    }
+
     void VM::PushStackFrame() {
         StackFrame newStackFrame;
         newStackFrame.Offset = m_StackPointer;
@@ -101,11 +119,17 @@ namespace Aria::Internal {
         // Run();
     }
 
-    void VM::CallExtern(const std::string& signature) {
+    void VM::CallExtern(const std::string& signature, size_t argCount, size_t retCount) {
         ARIA_ASSERT(m_ExternalFunctions.contains(signature), "Calling CallExtern() on a non-existent extern function!");
+
+        PushStackFrame();
+        for (int32_t i = 0; i < argCount; i++) {
+            Dup(MemRef(-(i + 1 + retCount), 0, 0));
+        }
 
         // Do the call
         m_ExternalFunctions.at(signature)(m_Context);
+        PopStackFrame();
     }
 
     void VM::StoreBool(MemRef mem, bool b) {
@@ -171,15 +195,6 @@ namespace Aria::Internal {
         ARIA_ASSERT(s.Size == sizeof(void*), "Cannot store a double in a stack mem with a size that isn't sizeof(void*)!");
 
         memcpy(s.Memory, &p, sizeof(void*));
-    }
-
-    void VM::Copy(MemRef dstMem, MemRef srcMem) {
-        VMSlice dst = GetVMSlice(dstMem);
-        VMSlice src = GetVMSlice(srcMem);
-
-        ARIA_ASSERT(dst.Size == src.Size, "Invalid VM::Copy() call, sizes of both mems must be the same!");
-
-        memcpy(dst.Memory, src.Memory, src.Size);
     }
 
     bool VM::GetBool(MemRef mem) {
@@ -416,12 +431,7 @@ namespace Aria::Internal {
 
                 case OpCodeType::Dup: {
                     MemRef mem = std::get<MemRef>(op.Data);
-                    VMSlice src = GetVMSlice(mem);
-
-                    Alloca(src.Size, src.ResolvedType);
-                    VMSlice dst = GetVMSlice(MemRef(-1, src.Size));
-                    
-                    memcpy(dst.Memory, src.Memory, src.Size);
+                    Dup(mem);
                     break;
                 }
 
@@ -515,9 +525,8 @@ namespace Aria::Internal {
                 }
 
                 case OpCodeType::CallExtern: {
-                    std::string sig = std::get<std::string>(op.Data);
-                    CallExtern(sig);
-
+                    const OpCodeCall& call = std::get<OpCodeCall>(op.Data);
+                    CallExtern(call.Name, call.ArgCount, call.RetCount);
                     break;
                 }
 
@@ -582,7 +591,7 @@ namespace Aria::Internal {
             StackSlot slot;
 
             if (s.Slot >= 0) {
-                slot = m_StackSlots[s.Slot];
+                slot = m_StackSlots[s.Slot + m_StackFrames.back().SlotOffset];
             } else {
                 slot = m_StackSlots[m_StackSlotPointer + s.Slot];
             }

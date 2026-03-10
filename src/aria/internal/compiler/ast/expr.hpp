@@ -23,6 +23,7 @@ namespace Aria::Internal {
 #pragma region CastType
 
     enum class CastType {
+        Invalid,
         Integral,
         Floating,
         IntegralToFloating,
@@ -33,6 +34,7 @@ namespace Aria::Internal {
 
     inline const char* CastTypeToString(CastType type) {
         switch (type) {
+        case CastType::Invalid: return "Invalid";
             case CastType::Integral: return "Integral";
             case CastType::Floating: return "Floating";
             case CastType::IntegralToFloating: return "IntegralToFloating";
@@ -136,6 +138,15 @@ namespace Aria::Internal {
         LValue,
         RValue
     };
+
+    inline const char* ExprValueTypeToString(ExprValueType type) {
+        switch (type) {
+            case ExprValueType::LValue: return "lvalue";
+            case ExprValueType::RValue: return "rvalue";
+        }
+
+        ARIA_UNREACHABLE();
+    }
 
 #pragma endregion
     

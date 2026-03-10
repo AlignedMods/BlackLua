@@ -91,6 +91,7 @@ namespace Aria::Internal {
             }
         }
 
+        call->SetExtern(fn->IsExtern());
         call->SetResolvedType(d.ResolvedType);
         return d.ResolvedType;
     }
@@ -128,8 +129,8 @@ namespace Aria::Internal {
                 ConversionCost costRHS = GetConversionCost(RHSType, LHSType, RHS->IsLValue());
 
                 if (costLHS.CastNeeded || costRHS.CastNeeded) {
-                    bool lhsCastNeeded = true;
-                    bool rhsCastNeeded = true;
+                    bool lhsCastNeeded = costLHS.CastNeeded;
+                    bool rhsCastNeeded = costRHS.CastNeeded;
 
                     if (costLHS.ConversionType == ConversionType::LValueToRValue) {
                         binop->SetLHS(InsertImplicitCast(LHSType, RHSType, LHS, costLHS.CastType));
@@ -138,7 +139,7 @@ namespace Aria::Internal {
                     }
                     
                     if (costRHS.ConversionType == ConversionType::LValueToRValue) {
-                        binop->SetRHS(InsertImplicitCast(RHSType, LHSType, RHS, costLHS.CastType));
+                        binop->SetRHS(InsertImplicitCast(RHSType, LHSType, RHS, costRHS.CastType));
                         LHSType = RHSType;
                         rhsCastNeeded = false;
                     }

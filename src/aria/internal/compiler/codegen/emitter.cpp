@@ -115,14 +115,22 @@ namespace Aria::Internal {
 
         for (auto& mem : args) {
             m_OpCodes.emplace_back(OpCodeType::Dup, CompileToRuntimeMemRef(mem));
+            IncrementStackSlotCount();
         }
         
+        bool retCount = 0;
         TypeInfo* retType = call->GetResolvedType();
         if (retType->Type != PrimitiveType::Void) {
             m_OpCodes.emplace_back(OpCodeType::Alloca, OpCodeAlloca(retType->GetSize(), retType));
+            IncrementStackSlotCount();
+            retCount = 1;
         }
 
-        m_OpCodes.emplace_back(OpCodeType::Call, fmt::format("{}()", call->GetRawIdentifier()));
+        if (call->IsExtern()) {
+            m_OpCodes.emplace_back(OpCodeType::CallExtern, OpCodeCall(fmt::format("{}()", call->GetRawIdentifier()), args.size(), retCount));
+        } else {
+            m_OpCodes.emplace_back(OpCodeType::Call, fmt::format("{}()", call->GetRawIdentifier()));
+        }
         return GetStackTop(retType->GetSize());
     }
 
@@ -351,14 +359,7 @@ namespace Aria::Internal {
     }
 
     MemRef Emitter::CompileToRuntimeMemRef(CompileMemRef slot) {
-        if (slot.Mem.ContainsStackSlot()) {
-            auto s = slot.Mem.GetStackSlot();
-            return MemRef(s.Slot, s.Offset, s.Size);
-        } else {
-            return slot.Mem;
-        }
-        
-        ARIA_UNREACHABLE();
+        return slot.Mem;
     }
 
     bool Emitter::IsStartStackFrame() {

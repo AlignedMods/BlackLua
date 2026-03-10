@@ -38,9 +38,9 @@ namespace Aria::Internal {
     public:
         explicit VM(Context* ctx);
 
-        // Increments the stack pointer by specified amount of bytes
-        // Also creates a new stack slot, which gets set as the current stack slot
         void Alloca(size_t size, TypeInfo* type);
+        void Copy(MemRef dstMem, MemRef srcMem);
+        void Dup(MemRef mem);
 
         // Creates a new stack frame
         void PushStackFrame();
@@ -50,7 +50,7 @@ namespace Aria::Internal {
         void AddExtern(const std::string& signature, ExternFn fn);
 
         void Call(int32_t label);
-        void CallExtern(const std::string& signature);
+        void CallExtern(const std::string& signature, size_t argCount, size_t retCount);
         
         void StoreBool   (MemRef mem, bool b);
         void StoreChar   (MemRef mem, int8_t c);
@@ -60,8 +60,6 @@ namespace Aria::Internal {
         void StoreFloat  (MemRef mem, float f);
         void StoreDouble (MemRef mem, double d);
         void StorePointer(MemRef mem, void* p);
-
-        void Copy(MemRef dstMem, MemRef srcMem);
 
         bool    GetBool   (MemRef mem);
         int8_t  GetChar   (MemRef mem);

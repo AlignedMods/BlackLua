@@ -253,6 +253,12 @@ namespace Aria::Internal {
         std::string Label;
     };
 
+    struct OpCodeCall {
+        std::string Name;
+        size_t ArgCount = 0;
+        size_t RetCount = 0;
+    };
+
     struct OpCodeMath {
         MemRef LHSMem{};
         MemRef RHSMem{};
@@ -267,7 +273,7 @@ namespace Aria::Internal {
 
     struct OpCode {
         OpCodeType Type = OpCodeType::Nop;
-        std::variant<MemRef, std::string, OpCodeAlloca, OpCodeCopy, OpCodeLoad, OpCodeSetGlobal, OpCodeConditionalJump, OpCodeMath, OpCodeCast> Data;
+        std::variant<MemRef, std::string, OpCodeAlloca, OpCodeCopy, OpCodeLoad, OpCodeSetGlobal, OpCodeConditionalJump, OpCodeCall, OpCodeMath, OpCodeCast> Data;
         std::string DebugData; // Optional debug data the compiler can provide
     };
 
